@@ -54,6 +54,7 @@
 	},
 	"dependencies": {
 		"sv-agentation": "^0.4.0",
-		"svelte-idb": "0.1.6"
+		"svelte-idb": "0.1.6",
+		"valibot": "1.5.0"
 	}
 }
