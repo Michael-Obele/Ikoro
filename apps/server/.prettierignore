@@ -1,0 +1,5 @@
+
+# drizzle-kit's migration metadata is machine-generated. Reformatting it would
+# make every subsequent `drizzle-kit generate` produce a diff, so the journal and
+# its snapshots are left exactly as the tool writes them.
+drizzle/meta/

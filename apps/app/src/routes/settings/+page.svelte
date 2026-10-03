@@ -8,6 +8,7 @@
 	 */
 	import AlarmHealth from '$lib/components/ui/AlarmHealth.svelte';
 	import Backup from '$lib/components/ui/Backup.svelte';
+	import SyncPanel from '$lib/components/ui/SyncPanel.svelte';
 	import { liveLists, liveTasks } from '$lib/stores/view';
 
 	const lists = $derived(liveLists());
@@ -40,10 +41,7 @@
 
 		<section>
 			<h2 class="mb-1 text-sm font-medium">Sync</h2>
-			<p class="text-sm text-muted-foreground">
-				Optional sync across your own devices, with passkeys instead of a password. Opt-in:
-				everything stays on this device until you turn it on.
-			</p>
+			<SyncPanel />
 		</section>
 
 		<section>
