@@ -1,1 +1,55 @@
+# ── dependencies ──────────────────────────────────────────────────────────────
+node_modules/
+.bun/
+bun.lockb
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# ── SvelteKit ─────────────────────────────────────────────────────────────────
+.svelte-kit/
+# adapter-static output (apps/app, apps/landing). NOTE: apps/*/build/ only —
+# docs/build/ is tracked documentation.
+apps/*/build/
+
+# ── shared packages ───────────────────────────────────────────────────────────
+packages/*/dist/
+packages/*/.svelte-kit/
+
+# ── Tauri (apps/app) ──────────────────────────────────────────────────────────
+apps/app/src-tauri/target/
+apps/app/src-tauri/gen/
+
+# ── Capacitor / Android (apps/app) ────────────────────────────────────────────
+apps/app/android/.gradle/
+apps/app/android/build/
+apps/app/android/app/build/
+apps/app/android/local.properties
+apps/app/android/.idea/
+# cap sync copies the web build in here — never commit it
+apps/app/android/app/src/main/assets/public/
+apps/app/android/app/src/main/assets/capacitor.config.json
+apps/app/android/app/src/main/assets/capacitor.plugins.json
+
+# ── Prisma ────────────────────────────────────────────────────────────────────
+*.db
+*.db-journal
+
+# ── env / secrets ─────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── editors, OS, logs ─────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.log
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/mcp.json
+
+# ── local planning source ─────────────────────────────────────────────────────
+# The untracked working copy of the original plan. The tracked copy lives in
+# docs/design/ with corrections applied.
 /plan/

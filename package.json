@@ -1,0 +1,19 @@
+{
+  "name": "ikoro",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.4.0",
+  "workspaces": ["apps/*", "packages/*"],
+  "engines": {
+    "node": ">=22.17"
+  },
+  "scripts": {
+    "scaffold": "bun scripts/scaffold.mjs",
+    "check": "bun run --filter '*' check",
+    "test": "bun run --filter '*' test",
+    "lint": "bun run --filter '*' lint",
+    "build": "bun run --filter '*' build",
+    "format": "bunx prettier --write .",
+    "format:check": "bunx prettier --check ."
+  }
+}

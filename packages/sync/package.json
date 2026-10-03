@@ -1,0 +1,13 @@
+{
+  "name": "@ikoro/sync",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Wire protocol shared by apps/app and apps/server: Valibot schemas for change ops, LWW merge, tombstone rules. Populated at M10 — its tsconfig and vitest config arrive with its first source file.",
+  "exports": {
+    ".": {
+      "types": "./src/lib/index.ts",
+      "default": "./src/lib/index.ts"
+    }
+  }
+}
