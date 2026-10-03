@@ -10,7 +10,12 @@ export default defineConfig({
 	// subpath imports, so `$lib` is resolved here by Vite, while tsconfig `paths`
 	// covers the CLI's preflight check and `tsc`. Both are required.
 	resolve: {
-		alias: { $lib: path.resolve('./src/lib') }
+		alias: { $lib: path.resolve('./src/lib') },
+		// Under Vitest, `svelte` must resolve its CLIENT build. Without this,
+		// `mount()` comes from `svelte/internal/server` and every component test
+		// fails with `lifecycle_function_unavailable` — a green-looking suite that
+		// silently tests nothing. Gated on VITEST so the real build is untouched.
+		...(process.env.VITEST ? { conditions: ['browser'] } : {})
 	},
 	plugins: [
 		tailwindcss(),
