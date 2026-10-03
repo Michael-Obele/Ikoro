@@ -7,6 +7,7 @@
 	 * moment they needed it — which, for a reminder, is the moment they trusted it.
 	 */
 	import * as repo from '$lib/db/repo';
+	import AlarmHealth from '$lib/components/ui/AlarmHealth.svelte';
 	import { liveLists, liveTasks } from '$lib/stores/view';
 
 	const lists = $derived(liveLists());
@@ -15,11 +16,6 @@
 
 	// The app version is the one in package.json, not a second copy that drifts.
 	const VERSION = '0.1.0';
-
-	interface Section {
-		title: string;
-		body: string;
-	}
 </script>
 
 <svelte:head>
@@ -32,10 +28,7 @@
 	<div class="grid gap-8">
 		<section>
 			<h2 class="mb-1 text-sm font-medium">Notifications</h2>
-			<p class="text-sm text-muted-foreground">
-				Reminder permission and alarm health are reported here once the reminder engine
-				lands.
-			</p>
+			<AlarmHealth />
 		</section>
 
 		<section>

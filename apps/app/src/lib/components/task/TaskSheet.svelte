@@ -22,6 +22,7 @@
 	import * as Sheet from '$lib/components/ui/sheet';
 	import DuePicker from './DuePicker.svelte';
 	import PriorityPicker from './PriorityPicker.svelte';
+	import AlarmSheet from './AlarmSheet.svelte';
 	import * as repo from '$lib/db/repo';
 	import type { Task } from '$lib/db/schema';
 
@@ -151,9 +152,10 @@
 					<PriorityPicker bind:priority onchange={savePriority} />
 				</div>
 
-				<!-- M4 drops the reminder control here. It has to be the one field
-				     that arms a platform alarm, so it stays out of this milestone
-				     rather than being faked with a local state. -->
+				<!-- The reminder control. It has to be the one field that arms a
+				     platform alarm, so it lives with the scheduler rather than in
+				     this file's local state. -->
+				<AlarmSheet {task} />
 
 				<div class="mt-auto border-t pt-4">
 					{#if confirmingDelete}

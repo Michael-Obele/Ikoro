@@ -16,6 +16,8 @@
 		"test:watch": "vitest"
 	},
 	"devDependencies": {
+		"@capacitor/android": "8.5.2",
+		"@capacitor/cli": "8.5.2",
 		"@eslint/js": "^10.0.1",
 		"@fontsource-variable/jetbrains-mono": "^5.3.0",
 		"@sveltejs/adapter-static": "^4.0.0",
@@ -53,6 +55,9 @@
 		"#lib/*": "./src/lib/*"
 	},
 	"dependencies": {
+		"@capacitor/app": "8.1.2",
+		"@capacitor/core": "8.5.2",
+		"@capacitor/local-notifications": "8.3.1",
 		"@internationalized/date": "3.12.0",
 		"bits-ui": "2.19.5",
 		"runed": "0.37.1",

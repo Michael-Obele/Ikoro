@@ -7,8 +7,16 @@
 	import { PersistedState } from 'runed';
 	import Button from '$lib/components/ui/button/button.svelte';
 	import * as Sheet from '$lib/components/ui/sheet';
+	import PermissionBanner from '$lib/components/ui/PermissionBanner.svelte';
 	import ListSidebar from '$lib/components/lists/ListSidebar.svelte';
 	import { ensureSeeded } from '$lib/db/seed';
+	import {
+		onStatus,
+		wireAlarmLifecycle,
+		openExactAlarmSettings,
+		requestNotificationPermission
+	} from '$lib/alarms/lifecycle';
+	import type { AlarmPermissionStatus } from '$lib/alarms/types';
 
 	let { children } = $props();
 
@@ -16,12 +24,21 @@
 	// reactive, and syncs the collapsed state across tabs for free.
 	const sidebarCollapsed = new PersistedState('ikoro:sidebar-collapsed', false);
 	let sheetOpen = $state(false);
+	let status = $state<AlarmPermissionStatus | null>(null);
 
 	// A fresh install needs a list before any screen can render one. This is a
 	// static SPA with no server load, so seeding happens here — once, and only
 	// when the database is empty.
 	$effect(() => {
-		if (browser) void ensureSeeded();
+		if (!browser) return;
+		void ensureSeeded();
+
+		// The alarm lifecycle owns its own subscriptions; this component only
+		// needs the permission status to render the banner.
+		const stopStatus = onStatus((next) => (status = next));
+		void wireAlarmLifecycle();
+
+		return stopStatus;
 	});
 </script>
 
@@ -30,29 +47,42 @@
 	<meta name="color-scheme" content="light dark" />
 </svelte:head>
 
-<div class="flex h-dvh w-full overflow-hidden bg-background text-foreground">
-	<!-- Desktop gets a real sidebar. On narrow screens it collapses into a sheet so
-	     the task list gets the whole width — two columns on a phone wastes the one
-	     thing a phone has plenty of. -->
-	<aside
-		class="hidden shrink-0 overflow-hidden border-r md:block"
-		data-collapsed={sidebarCollapsed.current}
-		style="width: {sidebarCollapsed.current ? '4rem' : '16rem'}"
-	>
-		<ListSidebar />
-	</aside>
+<div class="flex h-dvh w-full flex-col overflow-hidden bg-background text-foreground">
+	<PermissionBanner
+		{status}
+		onfixexact={() => openExactAlarmSettings()}
+		onfixnotifications={() => requestNotificationPermission()}
+	/>
 
-	<div class="flex min-w-0 flex-1 flex-col">
-		<header class="flex items-center gap-2 border-b px-3 py-2 md:hidden">
-			<Button variant="ghost" size="icon" aria-label="Open navigation" onclick={() => (sheetOpen = true)}>
-				<Menu class="size-5" />
-			</Button>
-			<span class="text-sm font-semibold">Ikoro</span>
-		</header>
+	<div class="flex min-h-0 flex-1">
+		<!-- Desktop gets a real sidebar. On narrow screens it collapses into a sheet so
+		     the task list gets the whole width — two columns on a phone wastes the one
+		     thing a phone has plenty of. -->
+		<aside
+			class="hidden shrink-0 overflow-hidden border-r md:block"
+			data-collapsed={sidebarCollapsed.current}
+			style="width: {sidebarCollapsed.current ? '4rem' : '16rem'}"
+		>
+			<ListSidebar />
+		</aside>
 
-		<main class="min-h-0 flex-1 overflow-y-auto">
-			{@render children()}
-		</main>
+		<div class="flex min-w-0 flex-1 flex-col">
+			<header class="flex items-center gap-2 border-b px-3 py-2 md:hidden">
+				<Button
+					variant="ghost"
+					size="icon"
+					aria-label="Open navigation"
+					onclick={() => (sheetOpen = true)}
+				>
+					<Menu class="size-5" />
+				</Button>
+				<span class="text-sm font-semibold">Ikoro</span>
+			</header>
+
+			<main class="min-h-0 flex-1 overflow-y-auto">
+				{@render children()}
+			</main>
+		</div>
 	</div>
 </div>
 
