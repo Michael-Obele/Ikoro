@@ -2,8 +2,11 @@
 /**
  * Ikoro — directory scaffolder (idempotent).
  *
- * Creates every directory the build plan expects and drops a `.gitkeep` in each
+ * Creates every directory the repository expects and drops a `.gitkeep` in each
  * leaf so the tree survives a clone (git does not track empty directories).
+ *
+ * Deliberately does NOT touch `docs/` or `plan/`: the plan is local-only and
+ * gitignored, so a fresh clone has neither and needs neither.
  *
  * Safe to re-run at any time, including AFTER the generators run:
  *   sv create apps/app · sv create apps/landing · sv create apps/server
@@ -27,7 +30,6 @@ const DRY = process.argv.includes('--dry');
 
 /** Directories that hold generated/tool-owned config at their root — never seed them. */
 const TREES = {
-	docs: ['docs/design', 'docs/build'],
 	root: ['.github/workflows', '.vscode', 'scripts'],
 	/**
 	 * apps/app — the product. src-tauri/ and android/ are owned by

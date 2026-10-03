@@ -8,8 +8,7 @@ pnpm-lock.yaml
 
 # ── SvelteKit ─────────────────────────────────────────────────────────────────
 .svelte-kit/
-# adapter-static output (apps/app, apps/landing). NOTE: apps/*/build/ only —
-# docs/build/ is tracked documentation.
+# adapter-static output. Scoped to apps/ so it can never swallow docs/build/.
 apps/*/build/
 
 # ── shared packages ───────────────────────────────────────────────────────────
@@ -49,7 +48,9 @@ Thumbs.db
 !.vscode/settings.json
 !.vscode/mcp.json
 
-# ── local planning source ─────────────────────────────────────────────────────
-# The untracked working copy of the original plan. The tracked copy lives in
-# docs/design/ with corrections applied.
+# ── local, untracked planning material ──────────────────────────────────────
+# The plan travels with the machine, not the repository: /plan/ is the original
+# AI-Plans copy, /docs/ is the working tree derived from it. Both are local-only
+# on purpose — a fresh clone builds fine without either. See README.md.
 /plan/
+/docs/

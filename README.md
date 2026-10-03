@@ -4,17 +4,19 @@
 
 Local-first task/reminder app for **Android (Capacitor)** and **desktop (Tauri)**, in one **Bun-workspaces monorepo**, with a landing site and a self-hosted sync server.
 
-**Status:** scaffolded, not yet built. The build is executed from the plan in [`docs/`](./docs/README.md).
+**Status:** scaffolded, not yet built. The build is executed from the plan in `docs/` — **which is local-only and not tracked in this repository.**
 
-## Start here
+> ⚠️ **The plan is not in this repository.** `docs/` and `plan/` are gitignored — they live on the machine that authored the project, not on GitHub. Cloning and building works without them; you only need them if you are the one *executing* the plan.
 
-| If you are…                     | Read                                                                               |
-| ------------------------------- | ---------------------------------------------------------------------------------- |
-| **The builder (human or agent)**| [`docs/HANDOVER.md`](./docs/HANDOVER.md) — operating rules, commands, definition of done |
-| Looking for the next task       | [`docs/build/`](./docs/build/README.md) — M0 → M11, one file per milestone          |
-| Asking "why is it built this way?" | [`docs/design/`](./docs/design/README.md) — architecture, alarms, decisions, research |
-| Checking a dependency version   | [`docs/VERSIONS.md`](./docs/VERSIONS.md) — pinned versions + known drift traps       |
-| Wondering what changed recently | [`docs/RESEARCH-2026-10.md`](./docs/RESEARCH-2026-10.md) — findings that revised the plan |
+## Start here (local, untracked)
+
+| If you are…                     | Read                                                                 |
+| ------------------------------- | -------------------------------------------------------------------- |
+| **The builder (human or agent)**| `docs/HANDOVER.md` — operating rules, commands, definition of done    |
+| Looking for the next task       | `docs/build/README.md` — M0 → M11, one file per milestone             |
+| Asking "why is it built this way?" | `docs/design/README.md` — architecture, alarms, decisions, research |
+| Checking a dependency version   | `docs/VERSIONS.md` — pinned versions + known drift traps             |
+| Wondering what changed recently | `docs/RESEARCH-2026-10.md` — findings that revised the plan          |
 
 ## Shape
 
@@ -28,7 +30,7 @@ ikoro/
 │   ├── ui/        shadcn-svelte components shared by app + landing        (M9)
 │   ├── sync/      wire protocol: Valibot schemas + LWW merge              (M10)
 │   └── config/    shared tsconfig / eslint / prettier presets             (on demand)
-├── docs/          the plan (design docs + build plan)
+├── docs/          the plan — LOCAL ONLY, gitignored (see above)
 └── scripts/       repo tooling (scaffold.mjs)
 ```
 
@@ -39,7 +41,7 @@ bun install          # install all workspaces
 bun run scaffold     # create/repair the directory tree (idempotent)
 bun run check        # svelte-check + tsc across every workspace
 bun run test         # vitest across every workspace
-bun run --filter app dev   # start the product app dev server (ask first — see HANDOVER.md)
+bun run --filter app dev   # start the product app dev server — but ask first
 ```
 
 ## Ground rules

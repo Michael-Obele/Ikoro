@@ -3,7 +3,7 @@
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
-	"description": "Shared tsconfig / eslint / prettier presets. Created on demand — only if duplication actually hurts (see docs/build/00-conventions.md).",
+	"description": "Shared tsconfig / eslint / prettier presets. Created on demand — only if duplication actually hurts. The rule lives in the local, untracked build plan.",
 	"files": [
 		"tsconfig",
 		"eslint",
