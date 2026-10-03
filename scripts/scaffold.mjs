@@ -67,7 +67,10 @@ const TREES = {
 		'apps/server/src/routes/api/v1/changes',
 		'apps/server/src/routes/api/v1/stream',
 		'apps/server/src/routes/api/v1/health',
-		'apps/server/prisma'
+		// Drizzle, not Prisma (D19). The schema itself is hand-authored at
+		// src/lib/db/schema.ts and needs no directory of its own; this is where
+		// `drizzle-kit generate` writes its SQL migrations.
+		'apps/server/drizzle'
 	],
 	'packages/ui': ['packages/ui/src/lib/components/ui', 'packages/ui/src/lib/utils'],
 	'packages/sync': ['packages/sync/src/lib', 'packages/sync/tests'],
@@ -80,13 +83,20 @@ let keeps = 0;
 for (const paths of Object.values(TREES)) {
 	for (const rel of paths) {
 		const abs = join(ROOT, rel);
-		if (!existsSync(abs)) {
+		const missing = !existsSync(abs);
+		if (missing) {
 			if (!DRY) mkdirSync(abs, { recursive: true });
 			dirs++;
 			console.log(`  + ${rel}/`);
 		}
 		// Seed a .gitkeep only where the directory is actually empty — never in a
 		// directory a generator has already populated.
+		//
+		// In a dry run `missing` directories were never created, so readdirSync
+		// would throw ENOENT on the first one it reports. A dry run exists to tell
+		// you what a real run would do; it must not be the one command that
+		// crashes when the tree is incomplete.
+		if (!existsSync(abs)) continue;
 		if (readdirSync(abs).length === 0) {
 			const keep = join(abs, '.gitkeep');
 			if (!DRY) writeFileSync(keep, '');

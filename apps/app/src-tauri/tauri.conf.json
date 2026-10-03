@@ -1,0 +1,42 @@
+{
+	"$schema": "https://schema.tauri.app/config/2",
+	"productName": "Ikoro",
+	"version": "0.1.0",
+	"identifier": "com.michaelobele.ikoro",
+	"build": {
+		"frontendDist": "../build",
+		"devUrl": "http://localhost:5173",
+		"beforeDevCommand": "bun run dev",
+		"beforeBuildCommand": "bun run build"
+	},
+	"app": {
+		"windows": [
+			{
+				"title": "Ikoro",
+				"width": 1000,
+				"height": 720,
+				"minWidth": 420,
+				"minHeight": 480,
+				"resizable": true,
+				"fullscreen": false
+			}
+		],
+		"security": {
+			"csp": "default-src 'self'; img-src 'self' data: asset: http://asset.localhost; style-src 'self' 'unsafe-inline'"
+		}
+	},
+	"bundle": {
+		"active": true,
+		"targets": "all",
+		"icon": [
+			"icons/32x32.png",
+			"icons/128x128.png",
+			"icons/128x128@2x.png",
+			"icons/icon.icns",
+			"icons/icon.ico"
+		],
+		"category": "Productivity",
+		"shortDescription": "Reminders that fire when you said they would.",
+		"longDescription": "Ikoro is a local-first task and reminder app. Set a time and the notification arrives at that time — even with the app closed."
+	}
+}

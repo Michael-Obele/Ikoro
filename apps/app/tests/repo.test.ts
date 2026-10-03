@@ -182,7 +182,7 @@ describe('updateTask', () => {
 
 				const after = await repo.getTask(id);
 				expect(after?.title).toBe('y');
-				expect(after?.updatedAt > (before?.updatedAt ?? '')).toBe(true);
+				expect((after?.updatedAt ?? '') > (before?.updatedAt ?? '')).toBe(true);
 				expect(after?.dirty).toBe(1);
 		});
 });

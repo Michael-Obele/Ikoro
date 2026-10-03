@@ -1,0 +1,10 @@
+{
+	"$schema": "../gen/schemas/desktop-schema.json",
+	"identifier": "default",
+	"description": "Least privilege. Ikoro needs exactly one plugin permission — showing a notification — and nothing else. No wildcards: a capability that grants \"everything\" is a capability nobody has read.",
+	"windows": ["main"],
+	"permissions": [
+		"core:default",
+		"notification:default"
+	]
+}

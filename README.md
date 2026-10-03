@@ -10,8 +10,13 @@ Local-first task/reminder app for **Android (Capacitor)** and **desktop (Tauri)*
 
 ## Start here (local, untracked)
 
+**A coding agent should read [`AGENTS.md`](./AGENTS.md) first** — it is the only agent-instruction
+file in this repository, and it carries the rules inline precisely because the plan below is not
+committed.
+
 | If you are…                     | Read                                                                 |
 | ------------------------------- | -------------------------------------------------------------------- |
+| **A coding agent**              | [`AGENTS.md`](./AGENTS.md) — the working agreement, in the repo        |
 | **The builder (human or agent)**| `docs/HANDOVER.md` — operating rules, commands, definition of done    |
 | Looking for the next task       | `docs/build/README.md` — M0 → M11, one file per milestone             |
 | Asking "why is it built this way?" | `docs/design/README.md` — architecture, alarms, decisions, research |
@@ -31,6 +36,7 @@ ikoro/
 │   ├── sync/      wire protocol: Valibot schemas + LWW merge              (M10)
 │   └── config/    shared tsconfig / eslint / prettier presets             (on demand)
 ├── docs/          the plan — LOCAL ONLY, gitignored (see above)
+├── AGENTS.md      the agent working agreement — tracked, the only agent-instruction file
 └── scripts/       repo tooling (scaffold.mjs)
 ```
 

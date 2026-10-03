@@ -17,7 +17,11 @@
 	import CircleAlert from 'lucide-svelte/icons/circle-alert';
 	import RefreshCw from 'lucide-svelte/icons/refresh-cw';
 	import Button from '$lib/components/ui/button/button.svelte';
+	import DesktopAlarmMode from '$lib/components/ui/DesktopAlarmMode.svelte';
 	import { armedCount, pendingAlarms } from '$lib/alarms/reconcile';
+	import { detectPlatform } from '$lib/platform';
+	import { DesktopScheduler } from '$lib/alarms/desktop-scheduler';
+	import type { DesktopProbe } from '$lib/alarms/systemd';
 	import {
 		onReport,
 		onStatus,
@@ -32,6 +36,9 @@
 	let nextUp = $state<{ title: string; dueAt: string } | null>(null);
 	let missed = $state<{ title: string; dueAt: string }[]>([]);
 	let busy = $state(false);
+	let desktopProbe = $state<DesktopProbe | null>(null);
+
+	const isDesktop = detectPlatform() === 'desktop';
 
 	async function refresh() {
 		busy = true;
@@ -48,6 +55,11 @@
 			missed = (next?.missed ?? []).map((m) => ({ title: m.title, dueAt: m.dueAt }));
 		});
 		void refresh();
+		if (isDesktop) {
+			void new DesktopScheduler()
+				.currentMode()
+				.then((probe) => (desktopProbe = probe));
+		}
 		return () => {
 			stopStatus();
 			stopReport();
@@ -91,6 +103,10 @@
 			Next: <span class="text-foreground">{nextUp.title}</span> at
 			{new Date(nextUp.dueAt).toLocaleString()}
 		</p>
+	{/if}
+
+	{#if desktopProbe}
+		<DesktopAlarmMode probe={desktopProbe} />
 	{/if}
 
 	{#if missed.length > 0}
