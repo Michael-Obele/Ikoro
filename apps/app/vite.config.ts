@@ -1,8 +1,9 @@
 import tailwindcss from '@tailwindcss/vite';
-import adapter from '@sveltejs/adapter-static';
+import staticAdapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
 import path from 'node:path';
 import { defineConfig } from 'vitest/config';
+import pkg from './package.json' with { type: 'json' };
 
 export default defineConfig({
 	// shadcn-svelte's CLI and its generated components still speak `$lib/...`.
@@ -17,6 +18,13 @@ export default defineConfig({
 		// silently tests nothing. Gated on VITEST so the real build is untouched.
 		...(process.env.VITEST ? { conditions: ['browser'] } : {})
 	},
+	// Kit 3 has no `$app/version`, so the app version is baked in from
+	// package.json at build time. One source of truth: Settings, the About box,
+	// and the APK's `versionName` all read the same field, so they cannot drift
+	// into reporting different numbers for the same build.
+	define: {
+		__IKORO_VERSION__: JSON.stringify(pkg.version)
+	},
 	plugins: [
 		tailwindcss(),
 		sveltekit({
@@ -27,7 +35,7 @@ export default defineConfig({
 			},
 
 			// Static SPA: one build feeds both native shells (Capacitor webDir, Tauri frontendDist).
-			adapter: adapter({
+			adapter: staticAdapter({
 				pages: 'build',
 				assets: 'build',
 				fallback: 'index.html',

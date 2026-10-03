@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The same near-black as the web icon's plate, so the launcher icon and
+         the app chrome do not read as two different products. -->
+    <color name="ic_launcher_background">#171717</color>
+</resources>

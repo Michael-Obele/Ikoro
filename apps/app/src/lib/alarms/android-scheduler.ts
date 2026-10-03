@@ -38,8 +38,55 @@ const NOTIFICATION_TITLE = 'Ikoro';
 
 const KNOWN_PERMISSION_ERRORS = /permission|exact alarm|SCHEDULE_EXACT|not allowed|denied/i;
 
+/**
+ * Create the `reminders` notification channel, once.
+ *
+ * Android channels are NOT declared in the manifest — they are created at
+ * runtime, and a reminder posted to a channel that does not exist is silently
+ * dropped. That makes this the difference between "the alarm fired" and "the
+ * alarm did nothing and reported nothing".
+ *
+ * Importance is HIGH (5) so a reminder arrives as a heads-up banner while the
+ * device is unlocked — a task reminder that waits silently in the shade is a
+ * reminder that has already failed at its job. The user can lower it in system
+ * settings; we only set the default.
+ *
+ * Called through the scheduler rather than from a route, so
+ * `src/lib/alarms/` stays the only place that touches the plugin.
+ */
+export async function ensureReminderChannel(): Promise<void> {
+	try {
+		await LocalNotifications.createChannel({
+			id: REMINDER_CHANNEL_ID,
+			name: 'Reminders',
+			description: 'Task reminders',
+			// 5 = IMPORTANCE_HIGH. Verified against the plugin's own enum rather
+			// than assumed: a wrong constant here would quietly downgrade every
+			// reminder to a silent shade entry.
+			importance: 5,
+			sound: 'default',
+			vibration: true
+		});
+	} catch (error) {
+		console.warn('[ikoro] could not create the reminders channel', error);
+	}
+}
+
 export class AndroidScheduler implements AlarmScheduler {
 	readonly platform = 'android' as const;
+
+	#channelReady = false;
+
+	/**
+	 * Create the channel before anything can try to post to it. Called from
+	 * `ensureReady()`, so every path that arms an alarm has already guaranteed
+	 * the channel exists.
+	 */
+	async ensureChannel(): Promise<void> {
+		if (this.#channelReady) return;
+		await ensureReminderChannel();
+		this.#channelReady = true;
+	}
 
 	/**
 	 * Read the real state, and prompt for notifications if the user has not been
@@ -51,6 +98,8 @@ export class AndroidScheduler implements AlarmScheduler {
 	 * exposed for the banner, where the user has just tapped "fix this".
 	 */
 	async ensureReady(): Promise<AlarmPermissionStatus> {
+		await this.ensureChannel();
+
 		let notifications = await LocalNotifications.checkPermissions();
 
 		if (notifications.display === 'prompt') {
@@ -82,6 +131,8 @@ export class AndroidScheduler implements AlarmScheduler {
 	}
 
 	async schedule(alarm: AlarmRequest): Promise<ScheduleOutcome> {
+		await this.ensureChannel();
+
 		const at = new Date(alarm.at);
 		if (Number.isNaN(at.getTime()) || at.getTime() <= Date.now()) {
 			return { ok: false, reason: 'invalid' };
