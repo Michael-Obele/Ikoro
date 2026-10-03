@@ -8,14 +8,17 @@
 	 */
 	import * as repo from '$lib/db/repo';
 	import AlarmHealth from '$lib/components/ui/AlarmHealth.svelte';
+	import Backup from '$lib/components/ui/Backup.svelte';
 	import { liveLists, liveTasks } from '$lib/stores/view';
 
 	const lists = $derived(liveLists());
 	const tasks = $derived(liveTasks());
 	const completed = $derived(tasks.filter((t) => t.completedAt !== null).length);
 
-	// The app version is the one in package.json, not a second copy that drifts.
-	const VERSION = '0.1.0';
+	// Injected from package.json by vite.config.ts — Kit 3 has no `$app/version`,
+	// and a second hard-coded copy here is how Settings ends up disagreeing with
+	// the APK about which build this is.
+	const VERSION = __IKORO_VERSION__;
 </script>
 
 <svelte:head>
@@ -33,9 +36,7 @@
 
 		<section>
 			<h2 class="mb-1 text-sm font-medium">Backup</h2>
-			<p class="text-sm text-muted-foreground">
-				Export and import of your tasks as a JSON file arrives with the backup milestone.
-			</p>
+			<Backup />
 		</section>
 
 		<section>

@@ -5,9 +5,9 @@
 // by the time that runs or the import throws.
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { db } from '$lib/db/schema';
-import { ensureSeeded } from '$lib/db/seed';
-import * as repo from '$lib/db/repo';
+import { db } from '#lib/db/schema';
+import { ensureSeeded } from '#lib/db/seed';
+import * as repo from '#lib/db/repo';
 
 /**
  * These cases are the contract for the data layer. Three of them encode the

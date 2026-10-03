@@ -2,8 +2,8 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/svelte';
-import TaskRow from '$lib/components/task/TaskRow.svelte';
-import type { Task } from '$lib/db/schema';
+import TaskRow from '#lib/components/task/TaskRow.svelte';
+import type { Task } from '#lib/db/schema';
 
 /**
  * `repo` is mocked rather than driven against a real database: what this test is
@@ -11,11 +11,11 @@ import type { Task } from '$lib/db/schema';
  * with the right id — and a real IndexedDB round trip would only add timing noise
  * on top of that question.
  */
-vi.mock('$lib/db/repo', () => ({
+vi.mock('#lib/db/repo', () => ({
 	toggleTask: vi.fn(async () => {})
 }));
 
-import * as repo from '$lib/db/repo';
+import * as repo from '#lib/db/repo';
 
 function fixture(overrides: Partial<Task> = {}): Task {
 	return {

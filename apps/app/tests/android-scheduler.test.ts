@@ -25,8 +25,8 @@ const plugin = {
 
 vi.mock('@capacitor/local-notifications', () => ({ LocalNotifications: plugin }));
 
-const { AndroidScheduler } = await import('$lib/alarms/android-scheduler');
-const { hashId } = await import('$lib/utils/id');
+const { AndroidScheduler } = await import('#lib/alarms/android-scheduler');
+const { hashId } = await import('#lib/utils/id');
 
 const FUTURE = new Date(Date.now() + 3_600_000).toISOString();
 

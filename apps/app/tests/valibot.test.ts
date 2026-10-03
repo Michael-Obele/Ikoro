@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as v from 'valibot';
-import { exportSchema, taskInputSchema, taskSchema } from '$lib/valibot/task';
+import { exportSchema, taskInputSchema, taskSchema } from '#lib/valibot/task';
 
 /**
  * Pure logic — no database, no DOM — so it stays on the default `node`
@@ -93,13 +93,25 @@ describe('exportSchema', () => {
                 app: 'ikoro',
                 schemaVersion: 1,
                 exportedAt: '2026-10-03T12:00:00.000Z',
-                lists: [{ id: 'l1', name: 'Tasks', sortOrder: 0 }],
-                tasks: [{ id: 't1', listId: 'l1', title: 'x', notes: null, dueDate: null, dueTime: null, priority: 0, alarmAt: null }]
-        };
+			lists: [{ id: 'l1', name: 'Tasks', sortOrder: 0, updatedAt: '2026-10-03T12:00:00.000Z' }],
+			tasks: [
+				{
+					id: 't1',
+					listId: 'l1',
+					title: 'x',
+					notes: null,
+					dueDate: null,
+					dueTime: null,
+					priority: 0,
+					alarmAt: null,
+					updatedAt: '2026-10-03T12:00:00.000Z'
+				}
+			]
+		};
 
-        it('accepts a minimal valid envelope', () => {
-                expect(v.safeParse(exportSchema, envelope).success).toBe(true);
-        });
+		it('accepts a minimal valid envelope', () => {
+			expect(v.safeParse(exportSchema, envelope).success).toBe(true);
+		});
 
         it('rejects a future schemaVersion', () => {
                 expect(v.safeParse(exportSchema, { ...envelope, schemaVersion: 2 }).success).toBe(false);

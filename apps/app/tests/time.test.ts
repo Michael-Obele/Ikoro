@@ -7,8 +7,8 @@ import {
 	isPastDue,
 	todayISO,
 	todayWindowStart
-} from '$lib/utils/time';
-import type { Task } from '$lib/db/schema';
+} from '#lib/utils/time';
+import type { Task } from '#lib/db/schema';
 
 /**
  * Pure logic — no database, no DOM — so this stays on the default `node`

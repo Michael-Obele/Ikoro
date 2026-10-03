@@ -82,21 +82,28 @@ export const exportSchema = v.object({
                 v.object({
                         id: v.string(),
                         name: v.pipe(v.string(), v.minLength(1)),
-                        sortOrder: v.number()
-                })
-        ),
-        tasks: v.array(
-                v.object({
-                        id: v.string(),
-                        listId: v.string(),
-                        title: v.pipe(v.string(), v.minLength(1), v.maxLength(1024)),
-                        notes: v.nullable(v.string()),
-                        dueDate: v.nullable(v.string()),
-                        dueTime: v.nullable(v.string()),
-                        priority: v.picklist([0, 1, 2, 3]),
-                        alarmAt: v.nullable(v.string())
-                })
-        )
+			sortOrder: v.number(),
+			// Needed on the wire, not just locally: import merges by id and keeps
+			// the NEWER `updatedAt`, so without it in the file a backup could only
+			// ever overwrite, never defer to a newer local edit. Added after M1
+			// when M7 made that rule explicit; v1 has not shipped, so making it
+			// required breaks no real file.
+			updatedAt: v.pipe(v.string(), v.isoTimestamp())
+		})
+	),
+	tasks: v.array(
+		v.object({
+			id: v.string(),
+			listId: v.string(),
+			title: v.pipe(v.string(), v.minLength(1), v.maxLength(1024)),
+			notes: v.nullable(v.string()),
+			dueDate: v.nullable(v.string()),
+			dueTime: v.nullable(v.string()),
+			priority: v.picklist([0, 1, 2, 3]),
+			alarmAt: v.nullable(v.string()),
+			updatedAt: v.pipe(v.string(), v.isoTimestamp())
+		})
+	)
 });
 
 export type ExportFile = v.InferOutput<typeof exportSchema>;
