@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cn } from '$lib/utils.js';
+import { cn } from '#lib/utils.js';
 
 /**
  * Guards the one genuinely fragile part of the scaffold.
@@ -11,7 +11,7 @@ import { cn } from '$lib/utils.js';
  * `tsconfig.json` (for the shadcn CLI and `tsc`). If either regresses, this
  * file is the cheapest place to notice.
  */
-describe('$lib alias', () => {
+describe('#lib alias', () => {
 	it('resolves inside vitest', () => {
 		expect(typeof cn).toBe('function');
 	});

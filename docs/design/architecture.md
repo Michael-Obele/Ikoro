@@ -13,7 +13,7 @@ Decisions: [decisions.md](./decisions.md) §D2 (platforms), §D11 (monorepo), §
 flowchart TB
   subgraph repo["ikoro — Bun workspaces monorepo"]
     subgraph app["apps/app — THE product (SvelteKit, adapter-static, ssr=false)"]
-      UI[UI · Dexie · alarm engine]
+      UI[UI · svelte-idb · alarm engine]
       CAP["android/ — Capacitor shell"]
       TAU["src-tauri/ — Tauri v2 shell"]
     end
@@ -40,7 +40,7 @@ flowchart TB
 | Runtime / PM | **Bun** (`bun`, `bunx`) | everywhere |
 | Product app | **SvelteKit 3** (Svelte 5) + `@sveltejs/adapter-static`, `ssr=false` — kit config in `vite.config.ts`, **not** `svelte.config.js` | apps/app |
 | UI | Tailwind v4 + **shadcn-svelte** + Lucide → `packages/ui` | app + landing |
-| Storage | **Dexie 4 (IndexedDB)** — single source of truth | app |
+| Storage | **`svelte-idb` 0.1.6 (IndexedDB)** — single source of truth, the user's own package, dogfooded (D23) | app |
 | Mobile shell | **Capacitor 8** + `@capacitor/local-notifications` (≥ 8.3.0) + `@capacitor/app` | apps/app/android |
 | Desktop shell | **Tauri v2** + `@tauri-apps/plugin-notification` — immediate notifications only; **no desktop scheduling exists** (D16) | apps/app/src-tauri |
 | Landing | SvelteKit → static, deploy **Netlify** | apps/landing |
@@ -65,7 +65,7 @@ ikoro/
 ├── apps/
 │   ├── app/                      # ⭐ the product
 │   │   ├── src/lib/
-│   │   │   ├── db/               # Dexie schema.ts + repo.ts + seed.ts (app-local, NOT shared)
+│   │   │   ├── db/               # svelte-idb schema.ts + repo.ts + seed.ts (app-local, NOT shared)
 │   │   │   ├── alarms/           # types, scheduler, android-, desktop-, browser-scheduler, reconcile
 │   │   │   ├── sync/             # outbox.ts, client.ts (uses packages/sync), stream.ts
 │   │   │   ├── components/       # task/, lists/ + ui/ re-exported from packages/ui
@@ -88,9 +88,12 @@ ikoro/
 
 **Boundary rules (extended):** routes never touch Dexie (→ `db/repo.ts`); only `alarms/*` talks to Capacitor/Tauri notification APIs; only `apps/app/src/lib/sync/*` talks to `/api/v1` via `packages/sync`; only `apps/server` touches Prisma/Neon; `packages/*` must never import from `apps/*`; Google import ([google-tasks.md](./google-tasks.md)) lands inside the server, not the UI.
 
-## 4. Data model (Dexie schema — M1) + sync fields
+## 4. Data model — **SUPERSEDED**
+
+> The block below is the original **Dexie** design, kept as history only. The live schema is **`svelte-idb`** (D23) and lives in [`../build/00-conventions.md`](../build/00-conventions.md) §3.1. Three differences matter: there are no transactions (so every mutation is a single-record `put()`), deletes are soft (`deletedAt`), and the sync queue is a `dirty` flag on each record rather than a separate `outbox` store.
 
 ```ts
+// SUPERSEDED — Dexie. The live schema is svelte-idb; see build/00-conventions.md §3.1.
 // apps/app/src/lib/db/schema.ts
 import Dexie, { type Table } from 'dexie';
 
@@ -143,7 +146,7 @@ export const db = new IkoroDB();
 
 - Timestamps: ISO 8601 strings (sortable, export-friendly). IDs: `crypto.randomUUID()`.
 - Alarm notification ids: stable 32-bit hash of `taskId` (`utils/id.ts::hashId`) — re-scheduling never leaks duplicate notifications.
-- Migration policy: Dexie `version(n)` only; never edit an applied version.
+- Migration policy: **superseded.** The live policy is a frozen `version: 1` schema (D23); svelte-idb's `onUpgrade` is a raw hook, so the plan avoids upgrades entirely.
 - **Sync fields live here from day one** so M11 needs no migration: `deletedAt` (tombstone), `rev` (server cursor per row). Lists carry the same pair. **Never synced:** `alarmId`, `alarmFiredAt` (device-scoped — re-derived by `rescheduleAll()` after every pull). **Synced with full fidelity** through *our* server (unlike Google): `dueTime`, `priority`, `repeat`, `alarmAt`.
 
 ## 5. Platform detection & scheduler selection
@@ -166,7 +169,7 @@ export function detectPlatform(): Platform {
 | browser | `browser-scheduler.ts` | dev-preview only: in-page timer + SW notification, honest copy |
 
 - UI reads `detectPlatform()` only to swap copy (browser limitation note, desktop install nudge) and to gate the permission-health banner.
-- Reconcile (`reconcile.ts`) stays **platform-agnostic**: Dexie ↔ `getPending()` diffing per [alarms.md](./alarms.md) §2.4–2.5 — the desktop scheduler plugs into the same interface.
+- Reconcile (`reconcile.ts`) stays **platform-agnostic**: store ↔ `getPending()` diffing per [alarms.md](./alarms.md) §2.4–2.5 — the desktop scheduler plugs into the same interface.
 
 ## 6. Sync protocol (`packages/sync` + apps/server — M10/M11)
 
@@ -181,7 +184,7 @@ GET  /api/v1/stream                         → SSE: "change" { rev }, "hello", 
 GET  /api/v1/health                         → { status, rev } (no auth — health-page playbook)
 ```
 
-**Rules:** LWW per record — server accepts an op iff `op.updatedAt > row.updatedAt` (tie → server wins, op rejected back); deletes are tombstones (hard-purge only via maintenance); server assigns `rev` on every applied op → client persists cursor. **Client outbox** (`Dexie.outbox`: `{ id, op, entityId, payload, at, tries }`) flushes on: launch · resume · `online` · SSE signal. SSE handler = *refetch `since=cursor`* (no payload push — server stays dumb). One LWW merge implementation in `packages/sync`, consumed by both sides.
+**Rules:** LWW per record — server accepts an op iff `op.updatedAt > row.updatedAt` (tie → server wins, op rejected back); deletes are tombstones (hard-purge only via maintenance); server assigns `rev` on every applied op → client persists cursor. **Client queue = the `dirty` flag on each record** (`0 | 1`, indexed), *not* a separate `outbox` store — svelte-idb has no transactions, so a single `put()` has to mark the change and the need to push at the same time (D23, [build/M11](../build/M11-sync-client.md)). Flushes on: launch · resume · `online` · SSE signal. SSE handler = *refetch `since=cursor`* (no payload push — server stays dumb). One LWW merge implementation in `packages/sync`, consumed by both sides.
 
 ## 7. apps/server (M10)
 

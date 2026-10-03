@@ -26,7 +26,7 @@ Cross-cutting rules. Everything here is binding for every milestone. If a milest
 | Modules | `kebab-case.ts` | `android-scheduler.ts` |
 | Functions / variables | `camelCase` | `rescheduleAll()`, `todayOpenTasks()` |
 | Types / interfaces | `PascalCase` | `AlarmRequest`, `ChangeOp` |
-| Dexie tables | plural, `camelCase` | `lists`, `tasks`, `outbox` |
+| Stores | plural, `camelCase` | `lists`, `tasks`, `meta` |
 | Tests | `*.test.ts` under `tests/` | `tests/reconcile.test.ts` |
 
 ---
@@ -35,12 +35,15 @@ Cross-cutting rules. Everything here is binding for every milestone. If a milest
 
 These names and shapes are **fixed**. M1, M4, M10 and M11 all reference them. Do not rename, do not add fields casually, do not "improve" the shape.
 
-### 3.1 Dexie records (`apps/app/src/lib/db/schema.ts`)
+### 3.1 Records (`apps/app/src/lib/db/schema.ts`)
 
-Copy **verbatim** — including the sync fields, which exist from day one so M11 needs no migration.
+Storage is **`svelte-idb`** — the user's own package, dogfooded ([`../VERSIONS.md`](../VERSIONS.md) §2.6, decision D23). Not Dexie.
+
+Declare the **complete** schema at `version: 1`, including the sync-only fields, so Phase A never performs an upgrade. svelte-idb's `onUpgrade` is a raw IDB hook — it hands you `(db, oldVersion, newVersion, transaction)` and you write the upgrade yourself — and "migration sugar" is explicitly unfinished upstream. The cheapest way to never need it is to never change the schema.
 
 ```ts
-import Dexie, { type Table } from 'dexie';
+// apps/app/src/lib/db/schema.ts
+import { createReactiveDB } from 'svelte-idb/svelte';
 
 export type Priority = 0 | 1 | 2 | 3; // 0 none · 1 low · 2 medium · 3 high
 
@@ -50,8 +53,9 @@ export interface TaskList {
   sortOrder: number; // "My order"
   createdAt: string; // ISO 8601
   updatedAt: string;
-  deletedAt: string | null; // tombstone until the server acks (M11)
+  deletedAt: string | null; // tombstone — deletes are ALWAYS soft
   rev: number | null; // server revision of last sync (null = never synced)
+  dirty: 0 | 1; // 1 = needs pushing (M11)
   googleTaskId?: string; // reserved for the v2 import path
 }
 
@@ -74,29 +78,67 @@ export interface Task {
   updatedAt: string;
   deletedAt: string | null; // tombstone (M11)
   rev: number | null; // server cursor for this row (M11)
+  dirty: 0 | 1; // sync queue marker (M11)
   googleTaskId?: string;
 }
 
-export class IkoroDB extends Dexie {
-  lists!: Table<TaskList, string>;
-  tasks!: Table<Task, string>;
-
-  constructor() {
-    super('ikoro');
-    this.version(1).stores({
-      lists: 'id, sortOrder, updatedAt',
-      tasks: 'id, listId, completedAt, dueDate, alarmAt, updatedAt, parentId',
-    });
-  }
+export interface MetaRow {
+  key: string; // 'syncEnabled' | 'syncCursor' | 'lastSyncedAt'
+  value: unknown;
+  updatedAt: string;
 }
 
-export const db = new IkoroDB();
+/**
+ * The ONE database instance, and the only one.
+ *
+ * svelte-idb's change notifications do not cross connections, so a second
+ * `createReactiveDB()` for the reactive layer would open a separate connection
+ * that never observes `repo.ts`'s writes. Everything — reads, mutations and
+ * `liveAll()` subscriptions — goes through this object. That is also why
+ * `repo.ts` is exposed from here rather than from the core `svelte-idb` entry
+ * point: one instance means one event bus.
+ */
+export const db = createReactiveDB({
+  name: 'ikoro',
+  version: 1,
+  stores: {
+    lists: {
+      keyPath: 'id',
+      indexes: {
+        bySortOrder: { keyPath: 'sortOrder' },
+        byUpdatedAt: { keyPath: 'updatedAt' },
+        byDirty: { keyPath: 'dirty' },
+      },
+    },
+    tasks: {
+      keyPath: 'id',
+      indexes: {
+        byList: { keyPath: 'listId' },
+        byDue: { keyPath: 'dueDate' },
+        byAlarm: { keyPath: 'alarmAt' },
+        byCompleted: { keyPath: 'completedAt' },
+        byUpdatedAt: { keyPath: 'updatedAt' },
+        byParent: { keyPath: 'parentId' },
+        byDirty: { keyPath: 'dirty' },
+      },
+    },
+    // App-level scalars: the sync cursor, the enabled flag, the last sync time.
+    // Declared at v1 so M11 needs no schema change.
+    meta: { keyPath: 'key' },
+  },
+});
 ```
 
-**Never synced:** `alarmId`, `alarmFiredAt` (device-scoped; re-derived by `rescheduleAll()` after every pull).
-**Synced with full fidelity:** `dueTime`, `priority`, `repeat`, `alarmAt`.
+Rules that follow directly from the storage layer — each one exists because svelte-idb 0.1.6 has no transaction API:
 
-Migration policy: Dexie `version(n)` only. **Never edit an applied version.** M11 adds `version(2)` with the `outbox` table.
+- **Every mutation is a single-record `put()`.** Never write two records and reason about them as atomic; two writes are two independent operations.
+- **Deletes are soft.** `deleteTask` / `deleteList` set `deletedAt`; every read filters `deletedAt === null`. An interrupted cascade is therefore recoverable instead of half-applied. Hard purging is an explicit maintenance action only.
+- **`dirty` *is* the sync queue.** One `put()` marks a record changed *and* needing a push, so there is no second store to keep in step and no atomicity to lose. `where('byDirty').equals(1)` is the entire "what needs pushing" query.
+- **IndexedDB omits records whose index key is `null`.** A task with `dueDate: null` is simply absent from `byDue`. Usually a feature — but "how many tasks exist" is `count()`, not a `byDue` query.
+- **`meta` holds app-level scalars** (sync cursor, `syncEnabled`, `lastSyncedAt`). Reach it only through `repo.getMeta()` / `repo.setMeta()` / `repo.deleteMeta()` — never from a component, and never a second store for the same purpose.
+- **Never synced:** `alarmId`, `alarmFiredAt` (device-scoped — re-derived by `rescheduleAll()` after every pull), and `dirty` (transport bookkeeping).
+- **Synced with full fidelity:** `dueTime`, `priority`, `repeat`, `alarmAt`, `deletedAt`.
+- **Migration policy:** the schema is frozen at `version: 1` for Phase A. If it must change, bump `version`, write `onUpgrade` by hand, and check on a throwaway browser profile that existing data survived — svelte-idb will not infer it for you.
 
 ### 3.2 The scheduler interface (`apps/app/src/lib/alarms/types.ts`)
 
@@ -191,7 +233,7 @@ export declare function mergeRow<T extends { updatedAt: string }>(
   });
   ```
   Use `environment: 'jsdom'` for component tests (M2+) — set it per file with a `// @vitest-environment jsdom` docblock rather than globally, so pure-logic tests stay fast.
-- **Any test that touches Dexie must start with `import 'fake-indexeddb/auto';` as its first line**, before importing anything that imports Dexie. Otherwise the module resolves against a missing IndexedDB and the suite dies.
+- **DB tests need a DOM.** `schema.ts` imports `svelte-idb/svelte`, which is runes-based, so any test reaching it carries `// @vitest-environment jsdom` in its first lines. Order matters: `import 'fake-indexeddb/auto';` must come **before** the module under test, or IndexedDB will not exist at import time. If runes misbehave under jsdom, fall back to Vitest **browser mode** — that is how `svelte-idb` itself is tested. The pure-logic tests (`valibot`, `time`, `mergeRow`) keep the default `node` environment because they touch no database.
 - Logic first, components second. `repo.ts`, `reconcile.ts`, `mergeRow`, `time.ts` and the Valibot schemas are pure-ish and must be covered before any component test.
 - Component tests use `@testing-library/svelte`; render from a fixture, assert on what the user sees, never on internal state.
 - **Check the test count.** A suite that found zero files exits 0 and looks green. Confirm the number went up in the step you just wrote.

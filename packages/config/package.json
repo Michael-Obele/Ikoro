@@ -1,8 +1,12 @@
 {
-  "name": "@ikoro/config",
-  "version": "0.0.0",
-  "private": true,
-  "type": "module",
-  "description": "Shared tsconfig / eslint / prettier presets. Created on demand — only if duplication actually hurts (see docs/build/00-conventions.md).",
-  "files": ["tsconfig", "eslint", "prettier"]
+	"name": "@ikoro/config",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"description": "Shared tsconfig / eslint / prettier presets. Created on demand — only if duplication actually hurts (see docs/build/00-conventions.md).",
+	"files": [
+		"tsconfig",
+		"eslint",
+		"prettier"
+	]
 }

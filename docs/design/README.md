@@ -3,7 +3,7 @@ title: Ikoro — task lists with alarms that actually fire
 status: draft
 owner: Michael-Obele
 tags:
-  [sveltekit, svelte5, capacitor, tauri, monorepo, android, desktop, tailwind, shadcn-svelte, dexie, offline-first, notifications, tasks, neon, prisma, better-auth]
+  [sveltekit, svelte5, capacitor, tauri, monorepo, android, desktop, tailwind, shadcn-svelte, svelte-idb, offline-first, notifications, tasks, neon, drizzle, better-auth]
 estimated_time: 3-4 weeks (evenings)
 prototype: false
 ---
@@ -11,7 +11,7 @@ prototype: false
 # Ikoro
 
 > [!WARNING]
-> **Partially superseded.** Written 2026-09-25/26. Some statements below were later proven wrong or have drifted — notably desktop alarm scheduling, SvelteKit / Capacitor / Prisma versions, and passkey bootstrap. Before acting on this document, read [`RESEARCH-2026-10.md`](../RESEARCH-2026-10.md) §3 (Superseded statements) and use [`VERSIONS.md`](../VERSIONS.md) for versions. For execution, [`build/`](../build/README.md) is authoritative.
+> **Partially superseded.** Written 2026-09-25/26. Several statements below were later proven wrong or have drifted — notably desktop alarm scheduling, the SvelteKit / Capacitor versions, the server's data layer (**Drizzle**, not Prisma), and the storage layer (**`svelte-idb`**, not Dexie: read every "Dexie" below as "`svelte-idb`"), plus the passkey-bootstrap question, which is now answered. Before acting on this document, read [`RESEARCH-2026-10.md`](../RESEARCH-2026-10.md) §3 (Superseded statements) and use [`VERSIONS.md`](../VERSIONS.md) for versions. For execution, [`build/`](../build/README.md) is authoritative.
 
 > The gong that calls you. Task lists whose reminders actually fire — even with the app closed, the screen off, and Doze mode on.
 
@@ -36,7 +36,7 @@ Research (2026-09-25, full sources in [research.md](./research.md)):
 1. Multiple task lists; tasks with title, notes, due date+time, priority, complete/uncomplete.
 2. **A per-task alarm that fires at the exact time with the app killed** (Android, verified via adb Doze test).
 3. Three surfaces from one codebase: **Android APK** (Capacitor) + **desktop app** (Tauri: Windows/macOS/Linux), both fully offline; landing + optional sync server follow (M9–M11).
-4. Offline-first with zero accounts by default: everything in IndexedDB (Dexie) on device, JSON export/import backup. Optional self-hosted sync (passkeys + SSE) is opt-in, phase B.
+4. Offline-first with zero accounts by default: everything in IndexedDB (`svelte-idb`) on device, JSON export/import backup. Optional self-hosted sync (passkeys + SSE) is opt-in, phase B.
 5. Quality gate: `bun run check` clean, Vitest green, alarm QA checklist passed on mobile **and** desktop.
 
 ## Non-goals (v1)

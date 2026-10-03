@@ -44,7 +44,7 @@ export function groupByDay(tasks: Task[]): Array<{ day: string; tasks: Task[] }>
 export function todayWindowStart(now?: Date): string;
 ```
 
-Tests (`tests/time.test.ts`, no Dexie, no DOM):
+Tests (`tests/time.test.ts`, no database, no DOM):
 
 - [ ] `todayISO()` matches `/^\d{4}-\d{2}-\d{2}$/` and equals the local day even when the UTC day differs.
 - [ ] `isoDaysAgo(new Date('2026-03-01T12:00:00'), 1) === '2026-02-28'`.
@@ -114,7 +114,7 @@ git add -A && git commit -m "feat: today/upcoming/done/settings views (M3)"
 - [ ] A task due in 3 days appears on `/upcoming` under the right day header and **not** on `/today`.
 - [ ] Completing a task removes it from `/today` and `/upcoming` and adds it to `/done`; Restore reverses that.
 - [ ] `/` lands on `/today`.
-- [ ] `time.ts` has no imports from Dexie, Svelte, or Capacitor.
+- [ ] `time.ts` has no imports from `svelte-idb`, Svelte, or Capacitor.
 - [ ] All seven `time.ts` test cases pass.
 
 ## Findings
@@ -125,4 +125,4 @@ _(Append here if reality disagrees.)_
 
 > **Prompt for the builder**
 >
-> _«Execute M3 of the Ikoro build plan. Read `docs/build/M3-views.md` and `docs/design/google-tasks.md` §3 first. `utils/time.ts` must stay pure — no Dexie, no DOM — and every helper needs a test before the implementation. Run `bun run check && bun run test` from the repo root before committing.»_
+> _«Execute M3 of the Ikoro build plan. Read `docs/build/M3-views.md` and `docs/design/google-tasks.md` §3 first. `utils/time.ts` must stay pure — no database, no DOM — and every helper needs a test before the implementation. Filtered views read `stores/view.ts` accessors inside `$derived` (indexed queries are not reactive in svelte-idb). Run `bun run check && bun run test` from the repo root before committing.»_

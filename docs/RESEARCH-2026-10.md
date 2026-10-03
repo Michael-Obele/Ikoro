@@ -104,7 +104,7 @@ Because `pending()` is mobile-only (F1), the desktop equivalent of "still armed 
 
 ### F10 — Android revocation semantics unchanged
 
-Revoking exact-alarm permission still restarts the app and wipes scheduled exact notifications. Re-check on every resume, and `rescheduleAll()` from Dexie remains the self-healing backstop. No change to the plan — recorded because it is the failure the product must never hide.
+Revoking exact-alarm permission still restarts the app and wipes scheduled exact notifications. Re-check on every resume, and `rescheduleAll()` from the local store remains the self-healing backstop. No change to the plan — recorded because it is the failure the product must never hide.
 
 ### F11 — Google Tasks API constraints unchanged
 
@@ -119,6 +119,18 @@ Verified: with `apps/*` present as empty directories, `bun install` at the root 
 Checked 2026-10-03 on the dev machine: systemd **255**; a running **user** systemd instance (`systemctl --user is-system-running` → `running`); `/usr/bin/notify-send` present and working against the session bus (`DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus`); `/usr/bin/systemd-run` present; `~/.config/systemd/user/` already exists. **`at` and `atd` are not installed**, so an `at`-based scheduler is not an option.
 
 Consequence: Linux can get **real** OS-level scheduling from per-alarm **systemd user timer + oneshot service** units, with `Persistent=true` giving catch-up for alarms that came due while the machine was off. `Linger=no` on this machine, so timers die at logout unless the user runs `loginctl enable-linger $USER` — a documented, user-performed step that the app must not assume.
+
+### F14 — Storage is `svelte-idb` (the user's own package), and it has no transactions ⚠️ **design-affecting**
+
+> "we shouldn't use Dexie schema we already have a package we made we can dog feed that" — Michael, 2026-10-03
+
+`svelte-idb` **0.1.6** (<https://github.com/Michael-Obele/svelte-idb>) — zero-dependency, runes-native, SSR-safe IndexedDB wrapper, `peerDependencies: svelte ^5`, ~2 KB, MIT. Full API read from its published `.d.ts`; the details are in [`VERSIONS.md`](./VERSIONS.md) §2.6. Three facts changed the plan:
+
+1. **No transaction API** — zero references to `transaction` in the published bundle; it is on the project's own roadmap. This kills the original M11 design ("enqueue the op in the same Dexie transaction as the write"), because with no transactions a write and its queue entry are two independent operations and either can be the one that survives. The replacement is a **dirty flag on the row itself** ([`build/00-conventions.md`](./build/00-conventions.md) §3.1): one `put()` marks the record changed *and* needing a push, so atomicity is inherent and no second store exists. Deletes become **soft** from day one for the same reason.
+2. **Live queries are not index-aware** — only `liveAll()` / `liveGet()` / `liveCount()` are reactive; `where()` is core-only and labelled MVP. Filtered screens therefore subscribe with `liveAll()` and narrow with `$derived`, which is O(N) per mutation. Honest ceiling: low thousands of tasks. Isolated in `stores/view.ts` so upstream progress is a one-file change.
+3. **`onUpgrade` is a raw hook** — you write the upgrade, svelte-idb does not infer it, and "migration sugar" is unfinished. The plan sidesteps it by declaring the **complete** schema — sync fields included — at `version: 1` in M1, so Phase A performs no upgrade at all.
+
+→ **Decision D23.**
 
 ---
 
@@ -155,6 +167,8 @@ Patch these in place when you next touch the file; until then, this table is aut
 | `design/milestones.md` M6 Step 4–6 | `schedule.at`, verify a pending-query API, "OS-scheduled fire with app closed" | No desktop scheduling; `pending()` is mobile-only; the pending-query verification is unnecessary and the app-closed acceptance criterion is void (F1) |
 | `design/milestones.md` M10 Step 3 | `prisma@6`, `@prisma/client@6`, `@prisma/adapter-neon` | `drizzle-orm` + `drizzle-kit` + `@neondatabase/serverless`, Better Auth via `@better-auth/drizzle-adapter`, `pgTable` schema, `drizzle-kit generate`/`migrate` (D19) |
 | `design/decisions.md` D13 | "Prisma v6" | Drizzle + Neon, Better Auth via `@better-auth/drizzle-adapter` (D19) |
+| `design/decisions.md` D5 | "Dexie over `@capacitor-community/sqlite`" | **`svelte-idb` 0.1.6** — the user's own package (D23) |
+| `design/architecture.md` §2 and §4, `design/milestones.md` M1, M3, M7, M11 | Dexie 4 schema, `Table<>`, `liveQuery()`, `db.transaction()`, `version(2)` at M11 | `svelte-idb` `createReactiveDB` + `liveAll()`/`$derived`; no transactions; soft deletes; dirty-flag sync queue; **single** `version: 1` (D23) |
 | `design/decisions.md` R4 | "Desktop scheduling weak on Linux" | Superseded by D16 — it is not weak, it does not exist; the limitation is now all three desktop OSes |
 | `design/decisions.md` R9 / open questions | "does passkey-first sign-up exist?" | **Resolved: yes** (F5). Replaced by a narrower question — does `verifyBackupCode` work cold? (F6) |
 | `design/research.md` §8 | "Tauri v2 notification plugin schedules for real … Windows/macOS = OS-scheduled" | Mobile-only (F1) |

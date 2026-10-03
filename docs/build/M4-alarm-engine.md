@@ -94,7 +94,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 Cases:
 
-- [ ] Drift: Dexie says task A is armed for the future, `getPending()` does not contain its id → `rescheduleAll()` calls `schedule()` for A and persists the returned `platformId`.
+- [ ] Drift: the store says task A is armed for the future, `getPending()` does not contain its id → `rescheduleAll()` calls `schedule()` for A and persists the returned `platformId`.
 - [ ] Past + still pending: `alarmAt < now` and `getPending()` contains the id → reported as **missed**, and clearly distinguishable from a success.
 - [ ] Past + absent: `alarmAt < now` and the id is absent from `getPending()` → `alarmFiredAt` is set to the alarm's instant.
 - [ ] Completed: `completedAt !== null` → the alarm is cancelled and never re-armed.
@@ -129,7 +129,7 @@ cd apps/app && bun run test
 - [ ] `browser-scheduler.ts` — dev preview only: in-page `Notification` plus a capped `setTimeout`, re-armed on wake; `schedule()` returns `{ ok: true, platformId: 'browser', exact: false, warning: 'Browser reminders require the app to be open.' }`.
 - [ ] `scheduler.ts` — returns the implementation for `detectPlatform()`. This is the **only** module other code imports.
 - [ ] `reconcile.ts`:
-  - `rescheduleAll()` — diff Dexie (`alarmAt > now && completedAt === null`) against `getPending()`; cancel orphans; arm missing; persist `alarmId`; surface degraded outcomes.
+  - `rescheduleAll()` — diff the store (`alarmAt > now && completedAt === null && deletedAt === null`) against `getPending()`; cancel orphans; arm missing; persist `alarmId`; surface degraded outcomes. Use `where('byAlarm')` rather than `getAll()` — the index holds only rows that actually have an alarm.
   - `detectMissed()` — per Step 5.
   - Export `PAST_WINDOW`-style named constants rather than magic numbers.
 
@@ -172,10 +172,10 @@ git commit -m "feat: reminder engine — exact notifications + permission UX (M4
 - [ ] **The M4-S1 device result is recorded** in `## Findings`, including device model and Android version.
 - [ ] Scheduling uses `isExactNotification: true` **and** `isExactMandatory: true`; a degraded result is never reported as success.
 - [ ] Killing the app, entering Doze (`adb shell dumpsys deviceidle force-idle`), and waiting still fires the reminder at the scheduled minute.
-- [ ] Revoking the exact-alarm setting in system settings → on next resume the banner appears and `rescheduleAll()` re-arms from Dexie.
+- [ ] Revoking the exact-alarm setting in system settings → on next resume the banner appears and `rescheduleAll()` re-arms from the store.
 - [ ] A missed alarm is visible to the user, never silently lost.
 - [ ] `grep -rn "@capacitor/local-notifications" apps/app/src --include=*.svelte` → no results. Only `src/lib/alarms/` imports it.
-- [ ] `grep -rn "from 'dexie'" apps/app/src/lib/alarms` → no results.
+- [ ] `grep -rn "svelte-idb" apps/app/src/lib/alarms` → no results.
 - [ ] `spike/` is gone.
 
 ## Findings

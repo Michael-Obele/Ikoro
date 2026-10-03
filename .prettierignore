@@ -1,0 +1,27 @@
+# The plan: hand-aligned tables and long prose. Prettier reflows both badly.
+*.md
+docs/
+plan/
+
+# Each workspace owns its formatting and has its own prettier config, including
+# plugins (prettier-plugin-svelte, prettier-plugin-tailwindcss) that only
+# resolve from inside that workspace. Root prettier therefore never walks into
+# them — `bun run --filter '*' lint` and `bun run --filter '*' format` cover
+# each app with its own settings. Invoking root prettier over apps/ fails with
+# "Cannot find package 'prettier-plugin-svelte'".
+apps/
+packages/*/src/
+
+# Build output and dependencies
+node_modules/
+apps/*/build/
+apps/*/.svelte-kit/
+packages/*/dist/
+
+# Lockfiles — never reformat
+bun.lock
+bun.lockb
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+

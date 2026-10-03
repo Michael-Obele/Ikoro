@@ -50,7 +50,7 @@ Then implement `packages/sync/src/lib/index.ts` with the contracts from [`00-con
 bun run --filter '@ikoro/sync' test
 ```
 
-- [ ] Green. This package has no dependencies on Dexie, Svelte, or Prisma — keep it that way.
+- [ ] Green. This package has no dependencies on `svelte-idb`, Svelte, or Drizzle — keep it that way.
 
 ## Step 2 — scaffold `apps/server`
 

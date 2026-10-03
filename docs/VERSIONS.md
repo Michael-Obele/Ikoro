@@ -32,13 +32,13 @@ Verified against the npm registry on **2026-10-03**. Unless a milestone says oth
 | `vitest`                 | 5.0.3   | **major** vs the plan's assumption |
 | `@testing-library/svelte`| 5.4.2   | |
 | `jsdom`                  | 30.1.1  | |
-| `fake-indexeddb`         | 6.2.5   | `import 'fake-indexeddb/auto'` **first** in every Dexie test |
+| `fake-indexeddb`         | 6.2.5   | `import 'fake-indexeddb/auto'` **first**, before the module under test |
 
 ### apps/app
 
 | Package                            | Version | Notes |
 | ---------------------------------- | ------- | ----- |
-| `dexie`                            | 4.4.6   | IndexedDB, single source of truth |
+| `svelte-idb`                       | 0.1.6   | the user's own package, dogfooded (D23) — see §2.6 |
 | `valibot`                          | 1.5.0   | runtime validation |
 | `runed`                            | 0.37.1  | **direct** dependency; check here before hand-rolling a utility |
 | `svelte-dnd-action`                | 0.9.79  | drag-reorder (M2) |
@@ -139,7 +139,7 @@ Capacitor 8.3.0 added two schedule options that make the exact-alarm promise non
 
 Always read `ScheduleResult.warning` and persist it; a "successful" schedule with a warning means the promise is broken and the UI must say so.
 
-`checkExactNotificationSetting()` and `changeExactNotificationSetting()` still exist, and revoking the setting **restarts the app and deletes already-scheduled exact notifications** — so re-check on every resume, and `rescheduleAll()` from Dexie.
+`checkExactNotificationSetting()` and `changeExactNotificationSetting()` still exist, and revoking the setting **restarts the app and deletes already-scheduled exact notifications** — so re-check on every resume, and `rescheduleAll()` from the local store.
 
 Capacitor is **8.x**, not 7. `SCHEDULE_EXACT_ALARM` still has to be added to `AndroidManifest.xml` by hand.
 
@@ -171,8 +171,46 @@ Details that matter:
 - **Recovery codes** come from the `twoFactor` plugin, which by default demands a password — passwordless users need `twoFactor({ allowPasswordless: true })`. Then `twoFactor.generateBackupCodes()` / `verifyBackupCode({ code })` work. Backup codes are one-shot (deleted on use).
 - Still to verify at M10: whether `verifyBackupCode` can be called **cold** (no prior 2FA challenge) — i.e. whether it works as a standalone sign-in for a user who has lost their passkey. If it cannot, the documented fallback is **multiple passkeys** (require the user to register a second one) plus a self-hosted DB-level recovery note.
 
-### 2.6 Other drift worth knowing
+### 2.6 `svelte-idb` — the user's own package, and what it does *not* have yet
 
+Ikoro stores to **`svelte-idb` 0.1.6**, not Dexie (D23). It is Michael's own package (<https://github.com/Michael-Obele/svelte-idb>, docs at <http://idb.svelte-apps.me/>), zero-dependency, runes-native, ~2 KB, MIT, `peerDependencies: svelte ^5`. Install:
+
+```bash
+bun add svelte-idb@0.1.6
+```
+
+Two entry points, and the split matters for testing:
+
+| Import | Gives |
+| ------ | ----- |
+| `svelte-idb` | `createDB`, `QueryBuilder`, the `IDB*Error` classes, `isBrowser`, and types. **No runes** — safe to import from a plain Node test. |
+| `svelte-idb/svelte` | `createReactiveDB`, `ReactiveStore`, `LiveQuery`. Runes-based; needs a Svelte runtime. |
+
+**Verified surface (read from the published `.d.ts`, 2026-10-03):**
+
+```ts
+createDB<TSchema>({ name, version, stores, ssr?, onUpgrade?, onBlocked?, debug? }): Database<TSchema>
+
+StoreConfig  = { keyPath: string; autoIncrement?: boolean; indexes?: Record<string, IndexConfig> }
+IndexConfig  = { keyPath: string | string[]; unique?: boolean; multiEntry?: boolean }
+
+IStore<T>    = add · put · get · getAll · getAllFromIndex(index, query?, count?)
+               · where(index) · delete · clear · count
+IQueryBuilder<T> = equals · between(a, b, lowerOpen?, upperOpen?) · above · aboveOrEqual
+               · below · belowOrEqual  →  toArray() · first() · count()
+
+LiveQuery<T> = { current, loading, error, refresh(), destroy() }   // from svelte-idb/svelte
+```
+
+**Three gaps that shaped the plan — do not design around them existing:**
+
+1. **There is no transaction API.** `transaction` appears zero times in the published bundle, and it is on the project's own roadmap ("multi-store atomic operations with auto-rollback"). Consequences: (a) cascading deletes are done **idempotently in a fixed order**, not atomically; (b) the sync queue cannot be a separate `outbox` store written alongside the change — see §3.1 for the **dirty-flag** design, which needs no second write at all; (c) deletes are **soft** from day one, so an interrupted delete is recoverable rather than lost.
+2. **Live queries are not index-aware.** Only `liveAll()`, `liveGet(key)` and `liveCount()` are reactive; `where(...)` is core-only and explicitly "MVP". So a filtered screen (`/today`, one list) subscribes with `liveAll()` and narrows with `$derived`. That is O(N) per mutation — fine into the low thousands of tasks, and it is the ceiling to state honestly. When reactive indexed queries land upstream, only `stores/view.ts` changes.
+3. **`onUpgrade` is a raw hook, not automatic migration sugar.** It hands you `(db, oldVersion, newVersion, transaction)` so you write the upgrade yourself; the roadmap lists "migration sugar" as unfinished. **The plan's answer is to not need it:** the full schema — including the sync-only fields — is declared at `version: 1` in M1, so Phase A never performs an upgrade. If the schema must change, verify on a throwaway profile that data survives before trusting it.
+
+**Version/perception note:** `0.1.6`, last pushed 2026-05-21, one maintainer, 5 open issues. That is exactly why the plan funnels every read and write through `repo.ts` and every subscription through `stores/view.ts` — two files hold the entire library surface, so a 0.x breaking change or an upstream feature landing is a two-file edit.
+
+### 2.7 Other drift worth knowing
 - `tailwindcss` v4 has a **CSS-first** config — there is no `tailwind.config.js` by default; theme tokens live in CSS via `@theme`. Don't scaffold a v3 config.
 - `vitest` is at **5.x**; the plan's snippets were written against 2/3. The API used here (`describe`/`it`/`expect`, `test.include`) is unchanged.
 - `lucide-svelte` is at **1.0.1** — a 1.x release, not 0.x.

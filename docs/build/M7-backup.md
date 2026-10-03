@@ -84,7 +84,7 @@ cd apps/app && bun run test
   - `downloadJson(filename: string, data: unknown): void` — Blob + object URL, revoking the URL after the click.
   - `readJsonFile(file: File): Promise<unknown>` — throws a typed error on a JSON parse failure.
   - `fileNameFor(date: Date): string` → `ikoro-backup-YYYY-MM-DD.json`.
-- [ ] Export/import functions live beside `repo.ts` (`db/backup.ts`) — they touch Dexie, so they must not live in a route or a generic util.
+- [ ] Export/import functions live beside `repo.ts` (`db/backup.ts`) — they touch the database, so they must not live in a route or a generic util.
 - [ ] `settings/Backup.svelte`:
   - **Export** button → `downloadJson(fileNameFor(new Date()), await exportAll())`.
   - **Import** — a file input (`accept="application/json"`); on select, validate, merge, reschedule, then show the result counts. Failures render the path list, not a generic "invalid file".
@@ -101,7 +101,7 @@ bun run test
 
 Risk R7 in [`../design/decisions.md`](../design/decisions.md) — IndexedDB can be evicted. Surface it, quietly:
 
-- [ ] On the Settings page, if the newest export is older than **7 days** (track the last export instant in `localStorage`) and there is at least one task, show a dismissible line: *"Last backup: 12 days ago."*
+- [ ] On the Settings page, if the newest export is older than **7 days** and there is at least one live task, show a dismissible line: *"Last backup: 12 days ago."* Store the timestamp with `repo.setMeta('lastExportAt', …)` — the `meta` store exists for exactly this, so no `localStorage` and no schema change.
 - [ ] Never a modal. Never blocks anything.
 
 ### Step 4 — verify and commit
@@ -131,4 +131,4 @@ _(Append here if reality disagrees.)_
 
 > **Prompt for the builder**
 >
-> _«Execute M7 of the Ikoro build plan. Read `docs/build/M7-backup.md` first. Write `tests/export.test.ts` with `import 'fake-indexeddb/auto'` as its first line, confirm it fails for the right reason, then implement. Export/import touches Dexie, so it belongs in `src/lib/db/`, not in a route. Run `bun run check && bun run test` from the repo root before committing.»_
+> _«Execute M7 of the Ikoro build plan. Read `docs/build/M7-backup.md` first. Write `tests/export.test.ts` with `// @vitest-environment jsdom` and `import 'fake-indexeddb/auto'` before the module under test, confirm it fails for the right reason, then implement. Export/import touches the database, so it belongs in `src/lib/db/`, not in a route. Import soft-deleted rows correctly and report any task whose list is missing rather than dropping it silently. Run `bun run check && bun run test` from the repo root before committing.»_

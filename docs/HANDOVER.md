@@ -80,7 +80,7 @@ No invented screenshots, no invented test output, no "this should work" reported
 
 | Rule                                                                    | Why |
 | ----------------------------------------------------------------------- | --- |
-| Routes never import Dexie — only `src/lib/db/repo.ts` does.              | One seam for persistence; makes the sync rewrite local. |
+| Routes and components never import `svelte-idb` — only `src/lib/db/repo.ts` and `src/lib/stores/view.ts` do. | One seam for persistence and one for reactivity; makes a library change or the sync rewrite local. |
 | Only `src/lib/alarms/*` imports `@capacitor/local-notifications` or `@tauri-apps/plugin-notification`. | Platform quirks live in one place per platform. |
 | Only `src/lib/sync/*` talks to `/api/v1`, and only through `packages/sync` schemas. | The wire contract is shared with the server, so it cannot drift. |
 | Only `apps/server/*` imports Prisma.                                     | One process owns the database. |
@@ -157,7 +157,7 @@ A task is done only when **all** of these are true:
 Conventional Commits, one milestone per commit, exactly the message the milestone file gives:
 
 ```
-feat: Dexie data layer + repo + valibot schemas (M1)
+feat: svelte-idb data layer + repo + valibot schemas (M1)
 ```
 
 Body lists any new dependency and any deviation from the plan, with the reason.

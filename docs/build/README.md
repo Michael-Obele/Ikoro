@@ -31,7 +31,7 @@ At every `⚠️ GATE` marker: stop, report the verbatim command and output, wai
 | #   | Milestone | Delivers | Depends on | Phase |
 | --- | --------- | -------- | ---------- | ----- |
 | [M0](./M0-scaffold.md)  | Monorepo scaffold | Bun workspaces + `apps/app` (SvelteKit 3 static SPA, Tailwind 4, shadcn-svelte, Vitest) | — | A |
-| [M1](./M1-data-layer.md) | Data layer | Dexie schema + `repo.ts` + Valibot schemas + tests | M0 | A |
+| [M1](./M1-data-layer.md) | Data layer | `svelte-idb` schema + `repo.ts` + Valibot schemas + tests | M0 | A |
 | [M2](./M2-crud-ui.md) | Lists & task CRUD UI | Sidebar, task rows, task sheet, drag-reorder | M1 | A |
 | [M3](./M3-views.md) | Today / Upcoming / Done / Settings | Views + `utils/time.ts` | M2 | A |
 | [M4](./M4-alarm-engine.md) | **Reminder engine** ⭐ | Capacitor exact notifications, scheduler adapter, reconcile, permission UX — **with the device spike gate first** | M3 | A |
@@ -66,6 +66,6 @@ Paste that, swapping the milestone id. Do not summarise the milestone for the mo
 - Bun only. No npm/pnpm/yarn, ever.
 - Ask before starting a dev server or running a build/deploy that the step does not require.
 - The alarm promise is the product: no UI ships ahead of the device-verified spike (M4-S1).
-- Routes never touch Dexie; only `src/lib/alarms/*` touches notification APIs; only `src/lib/sync/*` talks to `/api/v1`; only `packages/sync` defines the wire format; `packages/*` never imports `apps/*`.
+- Routes never touch `svelte-idb`; only `src/lib/alarms/*` touches notification APIs; only `src/lib/sync/*` talks to `/api/v1`; only `packages/sync` defines the wire format; `packages/*` never imports `apps/*`.
 - Every new dependency is named in the commit body.
 - Never fabricate a result. A pending human step stays pending.

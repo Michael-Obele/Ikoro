@@ -26,31 +26,39 @@ apps/app/tests/task-row.test.ts
 
 ## Rules for this milestone
 
-- **Routes never import Dexie.** Every read goes through `repo.ts`; every live view wraps a `liveQuery` in a rune-backed store.
+- **Routes never import `svelte-idb`.** Every read goes through `repo.ts`, and every live view goes through `stores/view.ts` (§ below). Components consume those accessors and nothing else.
 - **Remote `form` before `command`:** the inline "add task" input is a `<form>` (it has an input); checkbox toggles and dialog confirms are input-less and may use `command`.
 - **runed before hand-rolling.** Debouncing the notes autosave, persisting the sidebar's collapsed state, element size — check runed first.
 - Inputs need `name` attributes; submitting reads `FormData` from the DOM.
 
 ## Reactive read models (`stores/view.ts`)
 
-Dexie's `liveQuery` is the subscription mechanism; runes are the delivery. Implement one small helper rather than repeating the pattern:
+`svelte-idb/svelte` is reactive, but only for `liveAll()`, `liveGet(key)` and `liveCount()`. **Indexed queries are not reactive** ([`../VERSIONS.md`](../VERSIONS.md) §2.6), so a filtered screen subscribes to the whole store and narrows with `$derived`. Keep that decision in one file so it can be revisited in one file:
 
 ```ts
-import { liveQuery } from 'dexie';
+// apps/app/src/lib/stores/view.ts
+import { db, type Task, type TaskList } from '$lib/db/schema';
 
-/** Subscribe a rune to a Dexie liveQuery. Returns an accessor.
- *  Cleanup belongs in an $effect's teardown. */
-export function fromLiveQuery<T>(fn: () => Promise<T>, initial: T): () => T;
+// One subscription per store, for the app's lifetime — there is exactly one
+// database instance, so one live query per store is enough.
+export const lists = db.lists.liveAll();
+export const tasks = db.tasks.liveAll();
+
+// Indexed queries are NOT reactive upstream, so filtering happens here in
+// plain code. Call these inside a $derived or a template expression; reading
+// `.current` is what registers the reactive dependency.
+export const liveLists = (): TaskList[] =>
+	lists.current.filter((l) => l.deletedAt === null).sort((a, b) => a.sortOrder - b.sortOrder);
+
+export const liveTasksByList = (listId: string): Task[] =>
+	tasks.current
+		.filter((t) => t.deletedAt === null && t.listId === listId && t.completedAt === null)
+		.sort((a, b) => a.sortOrder - b.sortOrder);
 ```
 
-Expose (each as an accessor over `fromLiveQuery`):
+That is O(n) per mutation. It is fine into the low thousands of tasks, and it is the honest ceiling of this approach — see [`../VERSIONS.md`](../VERSIONS.md) §2.6.
 
-```ts
-export const lists = () => TaskList[];
-export const tasksByList = (listId: string) => Task[];
-```
-
-- [ ] A single helper, used by every consumer. Do not copy the `$effect` + `subscribe` dance into components.
+- [ ] A single `stores/view.ts`, used by every consumer. Do not create `liveAll()` subscriptions inside components — a component that mounts and unmounts would leak one per mount.
 
 ---
 
@@ -68,7 +76,7 @@ export const tasksByList = (listId: string) => Task[];
 - [ ] `lists/[id]/+page.svelte`: resolve the id from the route params, render the list name, render `tasksByList(id)`.
 - [ ] Inline add-task `<form>` at the top: an input named `title`; submit → `repo.createTask({ listId, title })`; clear and refocus the input on success.
 - [ ] `TaskRow.svelte`: shadcn `Checkbox` on the left → `repo.toggleTask(id)`; the title is a button that opens `TaskSheet`; completed rows render struck-through with reduced emphasis.
-- [ ] Reorder: `bun add svelte-dnd-action`, drag within a list, on drop call `repo.updateTask(id, { sortOrder })` for each moved row (one transaction).
+- [ ] Reorder: `bun add svelte-dnd-action`, drag within a list, on drop call `repo.updateTask(id, { sortOrder })` for each moved row. **One `put()` per row, sequentially — there is no transaction to wrap them in** ([`../VERSIONS.md`](../VERSIONS.md) §2.6). Reordering is idempotent, so a partial apply is re-runnable.
 - [ ] Unknown list id → render an empty state with a link back to `/today`. Do not throw.
 
 ### Step 3 — the task sheet
@@ -99,8 +107,8 @@ cd apps/app && bun run test
 cd ../.. && bun run check && bun run test
 ```
 
-- [ ] No `dexie` import outside `src/lib/db/`:
-      `grep -rn "from 'dexie'" apps/app/src --include=*.svelte` → no results.
+- [ ] No `svelte-idb` import outside `src/lib/db/`:
+      `grep -rn "svelte-idb" apps/app/src --include=*.svelte` → no results.
 - [ ] No `@capacitor/*` or `@tauri-apps/*` import anywhere yet.
 
 ```bash
@@ -115,7 +123,7 @@ git commit -m "feat: lists + task CRUD UI (M2)"
 - [ ] Create list → add task → tick → untick → edit title/notes/due/priority → delete task. All persist across a reload.
 - [ ] Reordering lists and tasks persists.
 - [ ] Deleting a list deletes its tasks and navigates away from the deleted list's route.
-- [ ] No component imports Dexie or a notification API.
+- [ ] No component imports `svelte-idb` or a notification API — components read `stores/view.ts` and write `repo.ts`, nothing else.
 - [ ] Add-task and rename use `<form>`; the checkbox and delete-confirm do not.
 
 ## Findings
@@ -126,4 +134,4 @@ _(Append here if reality disagrees.)_
 
 > **Prompt for the builder**
 >
-> _«Execute M2 of the Ikoro build plan. Read `docs/build/M2-crud-ui.md`, `docs/HANDOVER.md` §2.5, and `docs/build/00-conventions.md` §3.1 first. Routes must never import Dexie — only `src/lib/db/repo.ts` does. Prefer remote `form` for anything with inputs and check runed.dev before hand-rolling a utility. Ask before starting a dev server. Run `bun run check && bun run test` from the repo root before committing.»_
+> _«Execute M2 of the Ikoro build plan. Read `docs/build/M2-crud-ui.md`, `docs/HANDOVER.md` §2.5, and `docs/build/00-conventions.md` §3.1 first. Storage is `svelte-idb` — routes and components must never import it; reads go through `repo.ts` and live subscriptions through `stores/view.ts`. Indexed queries are not reactive, so filtered views use `liveAll()` plus `$derived`. There are no transactions: one `put()` per record. Prefer remote `form` for anything with inputs and check runed.dev before hand-rolling a utility. Ask before starting a dev server. Run `bun run check && bun run test` from the repo root before committing.»_
