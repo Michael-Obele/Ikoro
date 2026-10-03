@@ -7,3 +7,12 @@ bun.lockb
 
 # Miscellaneous
 /static/
+
+# Native build output.
+# These are thousands of generated files — Gradle intermediates, merged assets,
+# the copied web bundle. Prettier does not read .gitignore, so without this it
+# tries to format build/ and "lint" reports hundreds of files it has no business
+# touching.
+/android/
+/src-tauri/target/
+/src-tauri/gen/

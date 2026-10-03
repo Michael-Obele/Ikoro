@@ -48,7 +48,8 @@ export class BrowserScheduler implements AlarmScheduler {
 		}
 		const permission = Notification.permission;
 		return {
-			notifications: permission === 'granted' ? 'granted' : permission === 'denied' ? 'denied' : 'prompt',
+			notifications:
+				permission === 'granted' ? 'granted' : permission === 'denied' ? 'denied' : 'prompt',
 			// No browser can promise an exact minute, so this is never 'granted'.
 			exact: 'unsupported'
 		};
@@ -65,13 +66,16 @@ export class BrowserScheduler implements AlarmScheduler {
 		const delay = new Date(alarm.at).getTime() - Date.now();
 		if (delay <= 0) return;
 
-		const timer = setTimeout(() => {
-			this.#timers.delete(platformId);
-			if (Notification.permission === 'granted') {
-				new Notification('Ikoro', { body: alarm.title, tag: platformId });
-			}
-			for (const handler of this.#handlers) handler(alarm.taskId);
-		}, Math.min(delay, STAGE_MS));
+		const timer = setTimeout(
+			() => {
+				this.#timers.delete(platformId);
+				if (Notification.permission === 'granted') {
+					new Notification('Ikoro', { body: alarm.title, tag: platformId });
+				}
+				for (const handler of this.#handlers) handler(alarm.taskId);
+			},
+			Math.min(delay, STAGE_MS)
+		);
 
 		this.#timers.set(platformId, timer);
 	}

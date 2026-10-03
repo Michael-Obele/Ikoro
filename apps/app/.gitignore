@@ -21,3 +21,17 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Native build output (Capacitor/Android, Tauri).
+# Duplicated from the root .gitignore on purpose: `eslint.config.js` reads THIS
+# file via includeIgnoreFile(), so without these lines eslint walks
+# android/app/build/ — thousands of generated files, including the copied web
+# bundle — and reports hundreds of errors in code nobody wrote.
+/android/.gradle/
+/android/build/
+/android/app/build/
+/android/local.properties
+/android/.idea/
+/android/app/src/main/assets/public/
+/src-tauri/target/
+/src-tauri/gen/

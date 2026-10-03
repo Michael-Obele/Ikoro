@@ -164,7 +164,12 @@ export class AndroidScheduler implements AlarmScheduler {
 			// and the notification was demoted to inexact — it WILL fire, but not
 			// when it was asked to. Surfaced as degraded, never as success.
 			if (result.warning) {
-				return { ok: true, platformId: String(platformId), exact: false, warning: result.warning.message };
+				return {
+					ok: true,
+					platformId: String(platformId),
+					exact: false,
+					warning: result.warning.message
+				};
 			}
 			return { ok: true, platformId: String(platformId), exact: true };
 		} catch (error) {

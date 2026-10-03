@@ -43,14 +43,22 @@
 		<div class="flex-1">
 			{#if notificationsDenied}
 				<p>Notifications are off — Ikoro can't reach you.</p>
-				<Button variant="link" class="h-auto p-0 text-sm underline underline-offset-4" onclick={onfixnotifications}>
+				<Button
+					variant="link"
+					class="h-auto p-0 text-sm underline underline-offset-4"
+					onclick={onfixnotifications}
+				>
 					Turn notifications on
 				</Button>
 			{/if}
 
 			{#if exactDenied}
 				<p>Exact timing is off — reminders may be late.</p>
-				<Button variant="link" class="h-auto p-0 text-sm underline underline-offset-4" onclick={onfixexact}>
+				<Button
+					variant="link"
+					class="h-auto p-0 text-sm underline underline-offset-4"
+					onclick={onfixexact}
+				>
 					Allow exact alarms
 				</Button>
 			{/if}

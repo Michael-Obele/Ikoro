@@ -78,7 +78,11 @@ describe('buildTimerUnit', () => {
 
 describe('buildServiceUnit', () => {
 	it('has exactly two ExecStart lines: notify, then stamp', () => {
-		const unit = buildServiceUnit({ hash: 'abc123', title: 'Call the dentist', home: '/home/tester' });
+		const unit = buildServiceUnit({
+			hash: 'abc123',
+			title: 'Call the dentist',
+			home: '/home/tester'
+		});
 		const execLines = unit.split('\n').filter((line) => line.startsWith('ExecStart='));
 
 		// Two, not one and not three. The second creates the state directory AND
@@ -128,7 +132,9 @@ describe('buildServiceUnit', () => {
 		// %h is systemd's home specifier. The stamp path is written by JS, which
 		// does not know the home directory, so it must be given an absolute one
 		// rather than smuggling a specifier through the escaping.
-		expect(buildServiceUnit({ hash: 'abc123', title: 'x', home: '/home/tester' })).not.toContain('%h');
+		expect(buildServiceUnit({ hash: 'abc123', title: 'x', home: '/home/tester' })).not.toContain(
+			'%h'
+		);
 		expect(buildServiceUnit({ hash: 'abc123', title: 'x', home: '/home/tester' })).toContain(
 			'/home/tester/.local/state/ikoro/fired'
 		);

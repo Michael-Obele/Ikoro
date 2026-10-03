@@ -169,7 +169,12 @@
 							<Button variant="destructive" size="sm" onclick={remove}>Delete</Button>
 						</div>
 					{:else}
-						<Button variant="ghost" size="sm" class="text-destructive" onclick={() => (confirmingDelete = true)}>
+						<Button
+							variant="ghost"
+							size="sm"
+							class="text-destructive"
+							onclick={() => (confirmingDelete = true)}
+						>
 							Delete task
 						</Button>
 					{/if}

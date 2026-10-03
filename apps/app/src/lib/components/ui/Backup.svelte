@@ -101,17 +101,21 @@
 	</div>
 
 	<p class="text-xs text-muted-foreground">
-		The backup is a plain JSON file containing your task titles, notes, dates and alarms in
-		the clear. Anyone who has it can read it.
+		The backup is a plain JSON file containing your task titles, notes, dates and alarms in the
+		clear. Anyone who has it can read it.
 	</p>
 
 	{#if stale && !dismissed}
-		<div class="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-2.5 text-sm dark:bg-amber-950/30">
+		<div
+			class="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-2.5 text-sm dark:bg-amber-950/30"
+		>
 			<TriangleAlert class="mt-0.5 size-4 shrink-0" />
 			<p class="flex-1">
 				Last backup: {daysSinceExport}
 				{daysSinceExport === 1 ? 'day' : 'days'} ago.
-				<button class="underline underline-offset-4" onclick={() => (dismissed = true)}>Dismiss</button>
+				<button class="underline underline-offset-4" onclick={() => (dismissed = true)}
+					>Dismiss</button
+				>
 			</p>
 		</div>
 	{/if}
@@ -120,8 +124,8 @@
 		<div class="rounded-md border p-3 text-sm">
 			<p class="font-medium">Restore from “{pending.name}”?</p>
 			<p class="mt-1 text-muted-foreground">
-				Records already on this device keep their newer edits. Only fields missing or older
-				than the local copy are replaced.
+				Records already on this device keep their newer edits. Only fields missing or older than the
+				local copy are replaced.
 			</p>
 			<div class="mt-3 flex gap-2">
 				<Button size="sm" onclick={confirmImport} disabled={busy}>Restore</Button>

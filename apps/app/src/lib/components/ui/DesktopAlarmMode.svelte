@@ -40,8 +40,8 @@
 		<p class="flex items-start gap-2 text-xs text-muted-foreground">
 			<Info class="mt-0.5 size-3.5 shrink-0" />
 			<span>
-				Notifications from a scheduled alarm do not open Ikoro — the system shows them on its
-				own. Open the app to see the task.
+				Notifications from a scheduled alarm do not open Ikoro — the system shows them on its own.
+				Open the app to see the task.
 			</span>
 		</p>
 	{/if}

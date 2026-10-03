@@ -16,7 +16,11 @@
  * Rust toolchain.
  */
 import { invoke } from '@tauri-apps/api/core';
-import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
+import {
+	isPermissionGranted,
+	requestPermission,
+	sendNotification
+} from '@tauri-apps/plugin-notification';
 import type { AlarmPermissionStatus, AlarmRequest, AlarmScheduler, ScheduleOutcome } from './types';
 import { hashId } from '$lib/utils/id';
 import {
@@ -157,13 +161,16 @@ export class DesktopScheduler implements AlarmScheduler {
 		if (delay <= 0) return { ok: false, reason: 'invalid' };
 
 		const arm = () => {
-			const timer = setTimeout(() => {
-				this.#timers.delete(platformId);
-				void sendNotification({ title: 'Ikoro', body: alarm.title });
-				for (const handler of this.#handlers) handler(alarm.taskId);
-				// Re-arm for anything still in the future beyond the timer ceiling.
-				if (new Date(alarm.at).getTime() > Date.now()) arm();
-			}, Math.min(delay, STAGE_MS));
+			const timer = setTimeout(
+				() => {
+					this.#timers.delete(platformId);
+					void sendNotification({ title: 'Ikoro', body: alarm.title });
+					for (const handler of this.#handlers) handler(alarm.taskId);
+					// Re-arm for anything still in the future beyond the timer ceiling.
+					if (new Date(alarm.at).getTime() > Date.now()) arm();
+				},
+				Math.min(delay, STAGE_MS)
+			);
 			this.#timers.set(platformId, timer);
 		};
 		arm();

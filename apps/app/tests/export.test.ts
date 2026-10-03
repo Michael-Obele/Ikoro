@@ -30,7 +30,12 @@ async function seed() {
 	const errands = await createList('Errands');
 	const home = await createList('Home');
 	await createTask({ listId: errands.id, title: 'Buy milk', notes: 'Semi-skimmed', priority: 2 });
-	await createTask({ listId: home.id, title: 'Fix the gate', dueDate: '2026-10-05', dueTime: '09:30' });
+	await createTask({
+		listId: home.id,
+		title: 'Fix the gate',
+		dueDate: '2026-10-05',
+		dueTime: '09:30'
+	});
 	return { errands, home };
 }
 
@@ -43,7 +48,11 @@ describe('exportAll', () => {
 
 	it('contains no device-scoped or sync-bookkeeping key anywhere', async () => {
 		const list = await createList('Tasks');
-		const task = await createTask({ listId: list.id, title: 'x', alarmAt: '2026-10-05T09:30:00.000Z' });
+		const task = await createTask({
+			listId: list.id,
+			title: 'x',
+			alarmAt: '2026-10-05T09:30:00.000Z'
+		});
 
 		// Give it exactly the fields that must never ship.
 		await db.tasks.put({
@@ -119,7 +128,11 @@ describe('importAll', () => {
 
 		// Make the local copy newer than the file's.
 		const now = new Date(Date.now() + 60_000).toISOString();
-		await db.tasks.put({ ...((await db.tasks.get(task.id)) as object), title: 'newest title', updatedAt: now } as never);
+		await db.tasks.put({
+			...((await db.tasks.get(task.id)) as object),
+			title: 'newest title',
+			updatedAt: now
+		} as never);
 
 		await importAll(dump);
 
@@ -140,7 +153,11 @@ describe('importAll', () => {
 	it('clears device-scoped fields on every imported task', async () => {
 		const list = await createList('Tasks');
 		const task = await createTask({ listId: list.id, title: 'x' });
-		await db.tasks.put({ ...((await db.tasks.get(task.id)) as object), alarmId: '999', alarmFiredAt: '2026-01-01T00:00:00.000Z' } as never);
+		await db.tasks.put({
+			...((await db.tasks.get(task.id)) as object),
+			alarmId: '999',
+			alarmFiredAt: '2026-01-01T00:00:00.000Z'
+		} as never);
 
 		const dump = await exportAll();
 

@@ -54,7 +54,9 @@ for (const target of TARGETS) {
 	const path = join(OUT, target.file);
 	await mkdir(dirname(path), { recursive: true });
 	await writeFile(path, png);
-	console.log(`  ✓ static/icons/${target.file}  ${target.size}×${target.size}  ${(png.length / 1024).toFixed(1)} kB`);
+	console.log(
+		`  ✓ static/icons/${target.file}  ${target.size}×${target.size}  ${(png.length / 1024).toFixed(1)} kB`
+	);
 }
 
 console.log(`\ndone — ${TARGETS.length} icons in static/icons/`);

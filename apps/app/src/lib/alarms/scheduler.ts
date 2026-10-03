@@ -12,7 +12,13 @@ import { BrowserScheduler } from './browser-scheduler';
 import { DesktopScheduler } from './desktop-scheduler';
 import type { AlarmPermissionStatus, AlarmRequest, AlarmScheduler, ScheduleOutcome } from './types';
 
-export type { AlarmPermissionStatus, AlarmRequest, AlarmScheduler, ScheduleOutcome, Platform } from './types';
+export type {
+	AlarmPermissionStatus,
+	AlarmRequest,
+	AlarmScheduler,
+	ScheduleOutcome,
+	Platform
+} from './types';
 export { REMINDER_CHANNEL_ID } from './android-scheduler';
 export { BROWSER_LIMITATION } from './browser-scheduler';
 export { DesktopScheduler, probeDesktop, resetDesktopProbe } from './desktop-scheduler';
@@ -50,7 +56,10 @@ export function setScheduler(next: AlarmScheduler | null): void {
 export { AndroidScheduler, BrowserScheduler };
 
 /** A shorthand for the common "arm this and tell me honestly what happened" call. */
-export async function armAlarm(scheduler: AlarmScheduler, alarm: AlarmRequest): Promise<ScheduleOutcome> {
+export async function armAlarm(
+	scheduler: AlarmScheduler,
+	alarm: AlarmRequest
+): Promise<ScheduleOutcome> {
 	const ready = await scheduler.ensureReady();
 	if (ready.notifications === 'denied') return { ok: false, reason: 'permission' };
 	return scheduler.schedule(alarm);

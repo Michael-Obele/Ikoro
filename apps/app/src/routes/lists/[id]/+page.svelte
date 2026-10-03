@@ -68,10 +68,10 @@
 	{#if !list}
 		<div class="py-24 text-center">
 			<h1 class="text-lg font-medium">This list no longer exists</h1>
-			<p class="mt-1 text-sm text-muted-foreground">
-				It may have been deleted on another screen.
-			</p>
-			<a href="/today" class="mt-4 inline-block text-sm underline underline-offset-4">Back to Today</a>
+			<p class="mt-1 text-sm text-muted-foreground">It may have been deleted on another screen.</p>
+			<a href="/today" class="mt-4 inline-block text-sm underline underline-offset-4"
+				>Back to Today</a
+			>
 		</div>
 	{:else}
 		<header class="mb-4 flex items-center gap-3">

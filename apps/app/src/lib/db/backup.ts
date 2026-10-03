@@ -195,7 +195,11 @@ function parseEnvelope(input: unknown): ExportFile {
 
 /** Recorded so Settings can nudge when the last backup is stale. */
 export async function markExported(): Promise<void> {
-	await db.meta.put({ key: 'lastExportAt', value: nowIso(), updatedAt: nowIso() } as unknown as Record<string, unknown>);
+	await db.meta.put({
+		key: 'lastExportAt',
+		value: nowIso(),
+		updatedAt: nowIso()
+	} as unknown as Record<string, unknown>);
 }
 
 export async function lastExportAt(): Promise<string | null> {

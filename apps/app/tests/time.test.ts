@@ -19,8 +19,6 @@ import type { Task } from '#lib/db/schema';
  * calendar day against a UTC instant. Every case below is chosen to break that.
  */
 
-const DAY = 86_400_000;
-
 function task(overrides: Partial<Task> = {}): Task {
 	return {
 		id: 't1',
@@ -119,7 +117,9 @@ describe('isPastDue', () => {
 
 	it('is false for a completed task, however late', () => {
 		expect(
-			isPastDue(task({ dueDate: isoDaysAgo(new Date(), 40), completedAt: '2026-01-01T00:00:00.000Z' }))
+			isPastDue(
+				task({ dueDate: isoDaysAgo(new Date(), 40), completedAt: '2026-01-01T00:00:00.000Z' })
+			)
 		).toBe(false);
 	});
 

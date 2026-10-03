@@ -9,15 +9,15 @@ import { db } from './schema';
  * back on the next launch. Idempotent: the second call is a no-op.
  */
 export async function ensureSeeded(): Promise<void> {
-        if ((await db.lists.count()) > 0) return;
-        await db.lists.add({
-                id: crypto.randomUUID(),
-                name: 'Tasks',
-                sortOrder: 0,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                deletedAt: null,
-                rev: null,
-                dirty: 1
-        });
+	if ((await db.lists.count()) > 0) return;
+	await db.lists.add({
+		id: crypto.randomUUID(),
+		name: 'Tasks',
+		sortOrder: 0,
+		createdAt: new Date().toISOString(),
+		updatedAt: new Date().toISOString(),
+		deletedAt: null,
+		rev: null,
+		dirty: 1
+	});
 }

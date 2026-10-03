@@ -97,7 +97,12 @@
 			<form method="dialog" class="grid gap-4" onsubmit={submit}>
 				<div class="grid gap-1.5">
 					<Label for="list-name">Name</Label>
-					<Input id="list-name" name="name" value={name} oninput={(e) => (name = e.currentTarget.value)} />
+					<Input
+						id="list-name"
+						name="name"
+						value={name}
+						oninput={(e) => (name = e.currentTarget.value)}
+					/>
 				</div>
 				<Dialog.Footer>
 					<Button type="button" variant="ghost" onclick={close}>Cancel</Button>

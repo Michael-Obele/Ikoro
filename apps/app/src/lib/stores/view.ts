@@ -39,5 +39,7 @@ export function liveTasks(): Task[] {
 }
 
 export function liveListById(id: string): TaskList | undefined {
-	return (listsQuery.current as unknown as TaskList[]).find((l) => l.id === id && l.deletedAt === null);
+	return (listsQuery.current as unknown as TaskList[]).find(
+		(l) => l.id === id && l.deletedAt === null
+	);
 }

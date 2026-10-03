@@ -6,7 +6,6 @@
 	 * work is worse than an honest "not yet", because the user finds out at the
 	 * moment they needed it — which, for a reminder, is the moment they trusted it.
 	 */
-	import * as repo from '$lib/db/repo';
 	import AlarmHealth from '$lib/components/ui/AlarmHealth.svelte';
 	import Backup from '$lib/components/ui/Backup.svelte';
 	import { liveLists, liveTasks } from '$lib/stores/view';
@@ -63,10 +62,9 @@
 		<section>
 			<h2 class="mb-1 text-sm font-medium">About</h2>
 			<p class="text-sm text-muted-foreground">
-				<span class="font-medium text-foreground">Ikoro</span> — an Ịbani is the slit
-				gong its striker carries: it is sounded by hand, and it is heard when it is
-				sounded, and not a moment before. This app is named for the same promise. You set a
-				time; the notification arrives at that time.
+				<span class="font-medium text-foreground">Ikoro</span> — an Ịbani is the slit gong its striker
+				carries: it is sounded by hand, and it is heard when it is sounded, and not a moment before. This
+				app is named for the same promise. You set a time; the notification arrives at that time.
 			</p>
 			<p class="mt-2 text-xs text-muted-foreground">Version {VERSION}</p>
 		</section>

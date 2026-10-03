@@ -80,9 +80,7 @@
 	</header>
 
 	{#if quiet}
-		<p class="py-24 text-center text-sm text-muted-foreground">
-			Nothing due — Ikoro is quiet.
-		</p>
+		<p class="py-24 text-center text-sm text-muted-foreground">Nothing due — Ikoro is quiet.</p>
 	{:else}
 		<TaskGroup heading="Past" tasks={overdue} onopen={openTask} />
 		<TaskGroup heading="Today" tasks={dueToday} onopen={openTask} />

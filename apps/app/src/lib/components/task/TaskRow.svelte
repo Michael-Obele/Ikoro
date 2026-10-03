@@ -70,7 +70,11 @@
 		</span>
 
 		{#if due?.label}
-			<span class="mt-0.5 block text-xs {overdue ? 'font-medium text-rose-600' : 'text-muted-foreground'}">
+			<span
+				class="mt-0.5 block text-xs {overdue
+					? 'font-medium text-rose-600'
+					: 'text-muted-foreground'}"
+			>
 				{due.label}
 			</span>
 		{/if}

@@ -39,7 +39,10 @@ const ADAPTIVE_DP = 108;
 const SAFE_ZONE_INSET = 134;
 
 const render = (svg: string, size: number) =>
-	new Resvg(svg, { fitTo: { mode: 'width', value: Math.max(1, Math.round(size)) }, background: SHELL })
+	new Resvg(svg, {
+		fitTo: { mode: 'width', value: Math.max(1, Math.round(size)) },
+		background: SHELL
+	})
 		.render()
 		.asPng();
 

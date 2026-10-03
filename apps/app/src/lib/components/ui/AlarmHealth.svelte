@@ -56,9 +56,7 @@
 		});
 		void refresh();
 		if (isDesktop) {
-			void new DesktopScheduler()
-				.currentMode()
-				.then((probe) => (desktopProbe = probe));
+			void new DesktopScheduler().currentMode().then((probe) => (desktopProbe = probe));
 		}
 		return () => {
 			stopStatus();
@@ -130,7 +128,9 @@
 			</Button>
 		{/if}
 		{#if !exactOk}
-			<Button variant="outline" size="sm" onclick={openExactAlarmSettings}>Allow exact alarms</Button>
+			<Button variant="outline" size="sm" onclick={openExactAlarmSettings}
+				>Allow exact alarms</Button
+			>
 		{/if}
 	</div>
 </div>

@@ -43,7 +43,11 @@ beforeEach(() => {
 
 describe('schedule', () => {
 	it('asks for an EXACT, while-idle alarm and marks exactness mandatory', async () => {
-		await new AndroidScheduler().schedule({ taskId: 'task-1', title: 'Call the dentist', at: FUTURE });
+		await new AndroidScheduler().schedule({
+			taskId: 'task-1',
+			title: 'Call the dentist',
+			at: FUTURE
+		});
 
 		const sent = plugin.schedule.mock.calls[0][0].notifications[0];
 		// These live on the notification, NOT inside `schedule` — see the finding
@@ -112,7 +116,9 @@ describe('schedule', () => {
 	});
 
 	it('refuses an unparseable instant', async () => {
-		expect(await new AndroidScheduler().schedule({ taskId: 't', title: 'x', at: 'not-a-date' })).toEqual({
+		expect(
+			await new AndroidScheduler().schedule({ taskId: 't', title: 'x', at: 'not-a-date' })
+		).toEqual({
 			ok: false,
 			reason: 'invalid'
 		});

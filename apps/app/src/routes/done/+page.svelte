@@ -58,8 +58,13 @@
 				<ul class="grid gap-0.5">
 					{#each group.tasks as task (task.id)}
 						<li class="group flex items-center gap-1 rounded-md px-2 hover:bg-accent/40">
-							<button type="button" class="min-w-0 flex-1 text-left" onclick={() => ((editing = task), (sheetOpen = true))}>
-								<span class="truncate text-sm text-muted-foreground line-through">{task.title}</span>
+							<button
+								type="button"
+								class="min-w-0 flex-1 text-left"
+								onclick={() => ((editing = task), (sheetOpen = true))}
+							>
+								<span class="truncate text-sm text-muted-foreground line-through">{task.title}</span
+								>
 							</button>
 							<Button
 								variant="ghost"

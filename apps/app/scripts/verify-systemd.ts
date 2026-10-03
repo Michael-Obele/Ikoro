@@ -28,13 +28,18 @@ const UNIT_DIR = join(HOME, '.config/systemd/user');
 const FIRED_DIR = join(HOME, '.local/state/ikoro/fired');
 
 const waitMinutes = Number(
-	process.argv.find((a) => a.startsWith('--wait'))?.split('=')[1]?.replace(/^--wait$/, '') ??
-		2
+	process.argv
+		.find((a) => a.startsWith('--wait'))
+		?.split('=')[1]
+		?.replace(/^--wait$/, '') ?? 2
 );
 
 function sh(cmd: string, args: string[]): { ok: boolean; out: string } {
 	try {
-		return { ok: true, out: execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }) };
+		return {
+			ok: true,
+			out: execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+		};
 	} catch (error) {
 		const e = error as { stdout?: string; stderr?: string };
 		return { ok: false, out: `${e.stdout ?? ''}${e.stderr ?? ''}` };
@@ -84,7 +89,9 @@ console.log(
 
 const injected = service.split('\n').filter((l) => l.startsWith('ExecStart=')).length;
 console.log(`\n  ExecStart lines after a newline-injection attempt: ${injected} (must be 2)`);
-console.log(`  raw "%" survives in the unit?                     ${service.includes('50% done') ? 'YES — BROKEN' : 'no'}`);
+console.log(
+	`  raw "%" survives in the unit?                     ${service.includes('50% done') ? 'YES — BROKEN' : 'no'}`
+);
 
 console.log('\n── 3. Write + arm ────────────────────────────────────────');
 mkdirSync(UNIT_DIR, { recursive: true });

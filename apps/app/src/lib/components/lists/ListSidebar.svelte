@@ -83,7 +83,12 @@
 
 	<div class="mt-5 flex items-center justify-between px-2">
 		<span class="text-xs font-medium tracking-wide text-muted-foreground uppercase">Lists</span>
-		<Button variant="ghost" size="icon-sm" aria-label="New list" onclick={() => openDialog('create', null)}>
+		<Button
+			variant="ghost"
+			size="icon-sm"
+			aria-label="New list"
+			onclick={() => openDialog('create', null)}
+		>
 			<Plus class="size-4" />
 		</Button>
 	</div>
@@ -120,10 +125,7 @@
 						<DropdownMenu.Item onclick={() => openDialog('rename', list.id)}>
 							<Pencil class="size-4" /> Rename
 						</DropdownMenu.Item>
-						<DropdownMenu.Item
-							variant="destructive"
-							onclick={() => openDialog('delete', list.id)}
-						>
+						<DropdownMenu.Item variant="destructive" onclick={() => openDialog('delete', list.id)}>
 							<Trash2 class="size-4" /> Delete
 						</DropdownMenu.Item>
 					</DropdownMenu.Content>
@@ -137,4 +139,9 @@
 	</ul>
 </nav>
 
-<ListDialog bind:mode={dialog} bind:listId={dialogListId} listName={dialogListId ? (liveListById(dialogListId)?.name ?? '') : ''} ondone={onDialogDone} />
+<ListDialog
+	bind:mode={dialog}
+	bind:listId={dialogListId}
+	listName={dialogListId ? (liveListById(dialogListId)?.name ?? '') : ''}
+	ondone={onDialogDone}
+/>

@@ -26,9 +26,9 @@
 
 	let armed = $state(false);
 	let time = $state('');
-	let outcome = $state<{ ok: true; exact: boolean; warning?: string } | { ok: false; reason: string } | null>(
-		null
-	);
+	let outcome = $state<
+		{ ok: true; exact: boolean; warning?: string } | { ok: false; reason: string } | null
+	>(null);
 	let busy = $state(false);
 	let loadedId: string | null = null;
 
@@ -36,7 +36,7 @@
 		if (task.id !== loadedId) {
 			loadedId = task.id;
 			armed = task.alarmAt !== null;
-			time = task.dueTime ?? defaultTime(task);
+			time = task.dueTime ?? defaultTime();
 			outcome = null;
 		}
 	});
@@ -44,8 +44,12 @@
 	/**
 	 * With no time on the task, the least surprising default is one hour from
 	 * now — not "now", which would fire before the user has closed the sheet.
+	 *
+	 * Deliberately not derived from the task: a task with no `dueTime` has no
+	 * natural reminder time, and borrowing its due date to invent one would
+	 * schedule an alarm the user never agreed to.
 	 */
-	function defaultTime(t: Task): string {
+	function defaultTime(): string {
 		const d = new Date(Date.now() + 3_600_000);
 		return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 	}

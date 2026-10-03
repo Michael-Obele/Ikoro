@@ -18,7 +18,11 @@
 	} = $props();
 
 	const OPTIONS: { value: Priority; label: string; class: string }[] = [
-		{ value: 0, label: 'None', class: 'data-[on=true]:bg-accent data-[on=true]:text-accent-foreground' },
+		{
+			value: 0,
+			label: 'None',
+			class: 'data-[on=true]:bg-accent data-[on=true]:text-accent-foreground'
+		},
 		{ value: 1, label: 'Low', class: 'data-[on=true]:bg-sky-500 data-[on=true]:text-white' },
 		{ value: 2, label: 'Medium', class: 'data-[on=true]:bg-amber-500 data-[on=true]:text-white' },
 		{ value: 3, label: 'High', class: 'data-[on=true]:bg-rose-600 data-[on=true]:text-white' }
@@ -38,7 +42,7 @@
 			aria-checked={priority === option.value}
 			data-on={priority === option.value}
 			class="rounded-full border px-2.5 py-1 text-xs transition-colors {option.class}
-			       data-[on=true]:border-transparent data-[on=false]:border-border data-[on=false]:text-muted-foreground"
+			       data-[on=false]:border-border data-[on=false]:text-muted-foreground data-[on=true]:border-transparent"
 			onclick={() => pick(option.value)}
 		>
 			{option.label}

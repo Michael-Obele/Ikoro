@@ -29,7 +29,6 @@ export const ACCENT = '#e11d48'; // the striker: one alarm-red, and nothing else
  * clips it.
  */
 const MARK_CX = 546;
-const MARK_CY = 512;
 
 export interface MarkOptions {
 	/** Scale the artwork down to clear a launcher mask's safe zone. 0 = full bleed. */

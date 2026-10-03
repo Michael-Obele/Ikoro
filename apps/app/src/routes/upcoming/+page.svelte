@@ -10,7 +10,7 @@
 	import TaskSheet from '$lib/components/task/TaskSheet.svelte';
 	import type { Task } from '$lib/db/schema';
 	import { liveTasks } from '$lib/stores/view';
-	import { formatDayHeading, groupByDay, isoDaysAgo, todayISO } from '$lib/utils/time';
+	import { formatDayHeading, groupByDay, isoDaysAgo } from '$lib/utils/time';
 
 	const DAYS_AHEAD = 7;
 

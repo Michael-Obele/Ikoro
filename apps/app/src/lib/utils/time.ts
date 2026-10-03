@@ -176,6 +176,7 @@ export function formatDue(
 
 	if (delta === 0) return { label: `Today${at}`, tone: 'today' };
 	if (delta === 1) return { label: `Tomorrow${at}`, tone: 'soon' };
-	if (delta <= 7) return { label: `${WEEKDAYS[parseLocalDay(task.dueDate).getDay()]}${at}`, tone: 'soon' };
+	if (delta <= 7)
+		return { label: `${WEEKDAYS[parseLocalDay(task.dueDate).getDay()]}${at}`, tone: 'soon' };
 	return { label: shortDate(task.dueDate, now), tone: 'future' };
 }

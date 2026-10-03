@@ -43,7 +43,7 @@ const timerProbe = {
 
 /** Route `invoke` by command name, the way the real bridge does. */
 function bridge(overrides: Record<string, unknown> = {}) {
-	invoke.mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+	invoke.mockImplementation(async (cmd: string) => {
 		if (cmd in overrides) return overrides[cmd];
 		switch (cmd) {
 			case 'alarm_probe':
@@ -68,13 +68,21 @@ beforeEach(() => {
 
 describe('mode: systemd', () => {
 	it('arms a real OS timer and reports it EXACT', async () => {
-		const outcome = await new DesktopScheduler().schedule({ taskId: 't1', title: 'Call the dentist', at: FUTURE });
+		const outcome = await new DesktopScheduler().schedule({
+			taskId: 't1',
+			title: 'Call the dentist',
+			at: FUTURE
+		});
 
 		expect(invoke).toHaveBeenCalledWith(
 			'alarm_arm',
 			expect.objectContaining({ hash: expect.stringMatching(/^\d+$/) })
 		);
-		expect(outcome).toEqual({ ok: true, platformId: `systemd:${String(outcome.ok && outcome.platformId.split(':')[1])}`, exact: true });
+		expect(outcome).toEqual({
+			ok: true,
+			platformId: `systemd:${String(outcome.ok && outcome.platformId.split(':')[1])}`,
+			exact: true
+		});
 	});
 
 	it('sends the ESCAPED unit content to Rust, never a raw title', async () => {
@@ -101,7 +109,9 @@ describe('mode: systemd', () => {
 	});
 
 	it('reports pending timers from systemd, namespaced', async () => {
-		expect(await new DesktopScheduler().getPending()).toEqual(new Set(['systemd:123', 'systemd:456']));
+		expect(await new DesktopScheduler().getPending()).toEqual(
+			new Set(['systemd:123', 'systemd:456'])
+		);
 	});
 
 	it('NEVER falls back to an in-process timer when arming fails', async () => {

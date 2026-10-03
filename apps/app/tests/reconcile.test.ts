@@ -1,9 +1,14 @@
 // @vitest-environment jsdom
 import 'fake-indexeddb/auto';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from '#lib/db/schema';
 import { reconcile } from '#lib/alarms/reconcile';
-import type { AlarmPermissionStatus, AlarmRequest, AlarmScheduler, ScheduleOutcome } from '#lib/alarms/types';
+import type {
+	AlarmPermissionStatus,
+	AlarmRequest,
+	AlarmScheduler,
+	ScheduleOutcome
+} from '#lib/alarms/types';
 
 /**
  * No Capacitor here, and no device. The tests drive a hand-written fake

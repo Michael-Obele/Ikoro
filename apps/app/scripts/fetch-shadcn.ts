@@ -16,11 +16,11 @@ const ROOT = resolve(import.meta.dir, '..');
 
 /** components.json aliases → where files actually land on disk. */
 const ALIASES: Record<string, string> = {
-		components: 'src/lib/components',
-		ui: 'src/lib/components/ui',
-		lib: 'src/lib',
-		hooks: 'src/lib/hooks',
-		utils: 'src/lib/utils'
+	components: 'src/lib/components',
+	ui: 'src/lib/components/ui',
+	lib: 'src/lib',
+	hooks: 'src/lib/hooks',
+	utils: 'src/lib/utils'
 };
 
 interface RegistryFile {

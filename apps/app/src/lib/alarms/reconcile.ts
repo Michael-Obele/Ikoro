@@ -217,13 +217,18 @@ async function markFired(taskId: string, at: string): Promise<void> {
 /** How many alarms the store currently believes are armed — for the health panel. */
 export async function armedCount(): Promise<number> {
 	const tasks = await loadAlarmableTasks();
-	return tasks.filter((t) => wantsAlarm(t) && t.alarmId !== null && new Date(t.alarmAt as string).getTime() > Date.now()).length;
+	return tasks.filter(
+		(t) =>
+			wantsAlarm(t) && t.alarmId !== null && new Date(t.alarmAt as string).getTime() > Date.now()
+	).length;
 }
 
 /** Everything the user should be told about right now. */
 export async function pendingAlarms(): Promise<Task[]> {
 	const tasks = await loadAlarmableTasks();
 	return tasks
-		.filter((t) => wantsAlarm(t) && t.alarmAt !== null && new Date(t.alarmAt).getTime() > Date.now())
+		.filter(
+			(t) => wantsAlarm(t) && t.alarmAt !== null && new Date(t.alarmAt).getTime() > Date.now()
+		)
 		.sort((a, b) => (a.alarmAt ?? '').localeCompare(b.alarmAt ?? ''));
 }
