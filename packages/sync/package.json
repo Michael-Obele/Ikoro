@@ -1,13 +1,24 @@
 {
 	"name": "@ikoro/sync",
-	"version": "0.0.0",
+	"version": "0.0.1",
 	"private": true,
 	"type": "module",
-	"description": "Wire protocol shared by apps/app and apps/server: Valibot schemas for change ops, LWW merge, tombstone rules. Populated at M10 — its tsconfig and vitest config arrive with its first source file.",
+	"description": "The wire protocol shared by apps/app and apps/server: Valibot schemas for change ops, LWW merge, tombstone rules. ONE implementation, used by both sides — two implementations of conflict resolution is two behaviours.",
 	"exports": {
 		".": {
 			"types": "./src/lib/index.ts",
 			"default": "./src/lib/index.ts"
 		}
+	},
+	"scripts": {
+		"check": "tsc --noEmit -p tsconfig.json",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"valibot": "^1.5.0"
+	},
+	"devDependencies": {
+		"typescript": "^6.0.3",
+		"vitest": "^5.0.3"
 	}
 }
