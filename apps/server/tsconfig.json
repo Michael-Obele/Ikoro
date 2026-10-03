@@ -1,0 +1,24 @@
+{
+	"extends": "$app/tsconfig",
+	"compilerOptions": {
+		"allowJs": true,
+		"checkJs": true,
+		"esModuleInterop": true,
+		"forceConsistentCasingInFileNames": true,
+		"resolveJsonModule": true,
+		"skipLibCheck": true,
+		"sourceMap": true,
+		"strict": true,
+		"moduleResolution": "bundler",
+		"module": "esnext",
+		"target": "esnext",
+		"types": ["node", "vitest/globals", "$app/types"],
+		"paths": {
+			"$lib": ["./src/lib"],
+			"$lib/*": ["./src/lib/*"],
+			"#lib": ["./src/lib/index.ts"],
+			"#lib/*": ["./src/lib/*"]
+		}
+	},
+	"include": ["src", "tests", "vite.config.ts", "drizzle.config.ts"]
+}
