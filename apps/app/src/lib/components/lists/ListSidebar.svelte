@@ -13,6 +13,7 @@
 	import CalendarClock from 'lucide-svelte/icons/calendar-clock';
 	import CalendarDays from 'lucide-svelte/icons/calendar-days';
 	import CheckCheck from 'lucide-svelte/icons/check-check';
+	import SettingsIcon from 'lucide-svelte/icons/settings';
 	import Plus from 'lucide-svelte/icons/plus';
 	import MoreHorizontal from 'lucide-svelte/icons/more-horizontal';
 	import Trash2 from 'lucide-svelte/icons/trash-2';
@@ -34,7 +35,8 @@
 	const VIEWS = [
 		{ href: '/today', label: 'Today', icon: CalendarClock },
 		{ href: '/upcoming', label: 'Upcoming', icon: CalendarDays },
-		{ href: '/done', label: 'Done', icon: CheckCheck }
+		{ href: '/done', label: 'Done', icon: CheckCheck },
+		{ href: '/settings', label: 'Settings', icon: SettingsIcon }
 	] as const;
 
 	function isActive(href: string): boolean {
