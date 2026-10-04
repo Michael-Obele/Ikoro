@@ -17,15 +17,43 @@
 		onchange?: () => void;
 	} = $props();
 
+	/**
+	 * Each chip is a token pairing this palette already measures, so a chip cannot
+	 * drift into a colour nothing audits. The picker only ever renders inside a
+	 * Sheet or a Dialog, and both paint `bg-popover`.
+	 *
+	 *   None     accent      + accent-foreground      15.0:1 / 14.5:1
+	 *   Low      input/50    + foreground             10.8:1 /  9.1:1
+	 *   Medium   primary     + primary-foreground     17.2:1 / 14.2:1
+	 *   High     destructive + destructive-foreground  8.8:1 / 12.6:1
+	 *
+	 * (light / dark.) It is a four-step ramp — pale, grey, ink, red — rather than
+	 * four hues, because `destructive` is the only chromatic token in the palette;
+	 * three hues would mean raw Tailwind colours, which is what used to be here
+	 * (2.77 / 2.15 / 4.70:1, identical in both themes because a hardcoded hex
+	 * never changes).
+	 */
 	const OPTIONS: { value: Priority; label: string; class: string }[] = [
 		{
 			value: 0,
 			label: 'None',
 			class: 'data-[on=true]:bg-accent data-[on=true]:text-accent-foreground'
 		},
-		{ value: 1, label: 'Low', class: 'data-[on=true]:bg-sky-500 data-[on=true]:text-white' },
-		{ value: 2, label: 'Medium', class: 'data-[on=true]:bg-amber-500 data-[on=true]:text-white' },
-		{ value: 3, label: 'High', class: 'data-[on=true]:bg-rose-600 data-[on=true]:text-white' }
+		{
+			value: 1,
+			label: 'Low',
+			class: 'data-[on=true]:bg-input/50 data-[on=true]:text-foreground'
+		},
+		{
+			value: 2,
+			label: 'Medium',
+			class: 'data-[on=true]:bg-primary data-[on=true]:text-primary-foreground'
+		},
+		{
+			value: 3,
+			label: 'High',
+			class: 'data-[on=true]:bg-destructive data-[on=true]:text-destructive-foreground'
+		}
 	];
 
 	function pick(value: Priority) {

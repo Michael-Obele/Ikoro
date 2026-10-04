@@ -68,9 +68,12 @@
 
 	<!--
 		Announcing the RESOLVED theme matters as much as the choice: "System" on its
-		own says nothing about what is on screen right now.
+		own says nothing about what is on screen right now. The choice itself does not
+		need repeating — the toggle directly above is a labelled control that already
+		shows which option is pressed — and stating it twice only made this wrap onto
+		two lines in the sidebar footer.
 	-->
 	<p class="text-xs text-muted-foreground" aria-live="polite">
-		{LABELS[themeChoice.current]} · currently showing the {resolvedTheme} theme
+		Showing the {resolvedTheme()} theme
 	</p>
 </div>

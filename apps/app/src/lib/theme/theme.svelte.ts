@@ -53,10 +53,23 @@ export const themeChoice = new PersistedState<ThemeChoice>(THEME_STORAGE_KEY, 's
  */
 let systemPrefersDark = $state(false);
 
-/** The single source of truth for what the user actually sees. */
-export const resolvedTheme = $derived<ResolvedTheme>(
-	themeChoice.current === 'system' ? (systemPrefersDark ? 'dark' : 'light') : themeChoice.current
-);
+/**
+ * The single source of truth for what the user actually sees.
+ *
+ * A FUNCTION, not an exported `$derived`. Svelte 5 refuses to export derived
+ * state from a module — a module-level `$derived` belongs to no component, so
+ * `vite build` fails with `derived_invalid_export` while `vitest` and
+ * `svelte-check` both stay green. Exporting the READ as a function is
+ * equivalent for callers: calling it from a template or from a `$derived` still
+ * subscribes to the runes it touches.
+ */
+export function resolvedTheme(): ResolvedTheme {
+	return themeChoice.current === 'system'
+		? systemPrefersDark
+			? 'dark'
+			: 'light'
+		: themeChoice.current;
+}
 
 /**
  * Write the resolved theme onto `<html>`.
@@ -69,7 +82,7 @@ export const resolvedTheme = $derived<ResolvedTheme>(
 export function applyTheme(): void {
 	if (typeof document === 'undefined') return;
 	const root = document.documentElement;
-	const dark = resolvedTheme === 'dark';
+	const dark = resolvedTheme() === 'dark';
 	root.classList.toggle(DARK_CLASS, dark);
 	root.style.colorScheme = dark ? 'dark' : 'light';
 }
