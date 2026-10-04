@@ -6,13 +6,21 @@
 		<meta name="text-scale" content="scale" />
 		<script>
 			/*
-			 * PRE-PAINT THEME. Runs before %sveltekit.head% injects the stylesheet,
-			 * which is the only position where "before the first paint" is true.
+			 * PRE-PAINT THEME. Runs before SvelteKit fills in the head placeholder
+			 * further down this element, which is the only position where "before the
+			 * first paint" is true.
 			 *
-			 * It has to be inline. An imported module is fetched, parsed and
-			 * executed AFTER the CSS has already painted, which is precisely the
-			 * white flash this exists to prevent — a full-screen strobe for anyone
-			 * loading the app in a dark room.
+			 * Do NOT name that placeholder in a comment. SvelteKit substitutes the
+			 * FIRST occurrence of it in this file, not the only one, so an earlier
+			 * mention silently swallows the substitution and leaves the real token in
+			 * the markup — where the HTML parser hoists it out of <head> and renders it
+			 * as visible text at the top of every screen. Hit for real; the suite now
+			 * asserts this file mentions it exactly once.
+			 *
+			 * It has to be INLINE. An imported module is fetched, parsed and executed
+			 * AFTER the CSS has already painted, which is precisely the white flash
+			 * this exists to prevent — a full-screen strobe for anyone loading the app
+			 * in a dark room.
 			 *
 			 * This duplicates THEME_STORAGE_KEY, the JSON shape and the resolution
 			 * rule from src/lib/theme/theme.svelte.ts. That is the cost of not

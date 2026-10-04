@@ -45,6 +45,22 @@ const script = inlineScript();
 const headPlaceholder = appHtml.search(/^\s*%sveltekit\.head%\s*$/m);
 expect(headPlaceholder, 'app.html must contain %sveltekit.head%').toBeGreaterThan(-1);
 
+/**
+ * EXACTLY ONCE — the trap that caught this repo for real.
+ *
+ * SvelteKit substitutes the FIRST occurrence of the placeholder in the file, not
+ * every one. A second mention anywhere earlier — a comment explaining what the
+ * placeholder is, which is the natural thing to write — is therefore the one
+ * that gets replaced, and the real placeholder survives into the served HTML,
+ * where the HTML parser hoists a bare text node out of <head> and paints it as
+ * literal "%sveltekit.head%" across the top of every screen. That is what the
+ * served page looked like: the whole head injection silently gone, plus the
+ * token on screen.
+ */
+it('names the head placeholder exactly once, so nothing earlier can absorb it', () => {
+	expect(appHtml.match(/%sveltekit\.head%/g) ?? []).toHaveLength(1);
+});
+
 describe('pre-paint theme script', () => {
 	it('is inline in <head>, before %sveltekit.head% injects the stylesheet', () => {
 		// Placement is the entire feature. After the stylesheet link it is a no-op.
