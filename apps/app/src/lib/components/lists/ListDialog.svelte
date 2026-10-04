@@ -12,12 +12,17 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as repo from '$lib/db/repo';
 
+	// `open` is what shows the dialog; `mode` only says what it is for. They are
+	// separate because 'create' is a real mode, and overloading it as "closed"
+	// made opening the create dialog set the very value that kept it shut.
 	let {
+		open = $bindable(false),
 		mode = $bindable<'create' | 'rename' | 'delete'>('create'),
 		listId = $bindable(null),
 		listName = $bindable(''),
 		ondone
 	}: {
+		open?: boolean;
 		mode?: 'create' | 'rename' | 'delete';
 		listId?: string | null;
 		listName?: string;
@@ -37,6 +42,8 @@
 	});
 
 	function close() {
+		open = false;
+		// Drop the identity too, so the next open cannot render a stale name.
 		mode = 'create';
 		listId = null;
 	}
@@ -73,7 +80,7 @@
 	}
 </script>
 
-<Dialog.Root open={mode !== 'create'} onOpenChange={(next) => !next && close()}>
+<Dialog.Root open={open} onOpenChange={(next) => !next && close()}>
 	<Dialog.Content>
 		<Dialog.Header>
 			<Dialog.Title>

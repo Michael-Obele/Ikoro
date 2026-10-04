@@ -20,6 +20,7 @@
 	import Pencil from 'lucide-svelte/icons/pencil';
 	import Button from '$lib/components/ui/button/button.svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import ThemeToggle from '$lib/components/theme/ThemeToggle.svelte';
 	import ListDialog from './ListDialog.svelte';
 	import { liveListById, liveLists } from '$lib/stores/view';
 
@@ -28,6 +29,8 @@
 
 	let dialog = $state<'create' | 'rename' | 'delete'>('create');
 	let dialogListId = $state<string | null>(null);
+	// Visibility is tracked apart from `dialog`: 'create' is a mode, not "closed".
+	let dialogOpen = $state(false);
 
 	const lists = $derived(liveLists());
 	const path = $derived(page.url.pathname);
@@ -46,6 +49,7 @@
 	function openDialog(mode: 'create' | 'rename' | 'delete', id: string | null) {
 		dialog = mode;
 		dialogListId = id;
+		dialogOpen = true;
 	}
 
 	function onDialogDone(result: { created?: string; renamed?: string; deleted?: string }) {
@@ -73,6 +77,7 @@
 					class="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors
 					       hover:bg-accent/60 data-[active=true]:bg-accent data-[active=true]:font-medium"
 					data-active={isActive(view.href)}
+					
 				>
 					<view.icon class="size-4 shrink-0 opacity-70" />
 					{view.label}
@@ -113,7 +118,7 @@
 							<Button
 								variant="ghost"
 								size="icon-sm"
-								class="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+								class="pointer-fine:opacity-0 transition-opacity pointer-fine:group-hover:opacity-100 focus-visible:opacity-100"
 								aria-label="Actions for {list.name}"
 								{...props}
 							>
@@ -137,9 +142,21 @@
 			<li class="px-2 py-1.5 text-xs text-muted-foreground">No lists yet</li>
 		{/if}
 	</ul>
+
+	<!--
+		The theme switch lives here, not only in Settings, because this component
+		IS the navigation: it renders as the desktop sidebar and — inside the sheet
+		in +layout.svelte — as the phone's nav drawer. One placement covers both
+		breakpoints. `mt-auto` pins it to the bottom, where a global setting is
+		expected to be.
+	-->
+	<div class="mt-auto pt-4">
+		<ThemeToggle />
+	</div>
 </nav>
 
 <ListDialog
+	bind:open={dialogOpen}
 	bind:mode={dialog}
 	bind:listId={dialogListId}
 	listName={dialogListId ? (liveListById(dialogListId)?.name ?? '') : ''}
