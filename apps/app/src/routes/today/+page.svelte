@@ -18,6 +18,7 @@
 	 * `dueDate`, so they are not in the `byDue` index these rows come from.
 	 */
 	import TaskGroup from '$lib/components/task/TaskGroup.svelte';
+	import AddTaskRow from '$lib/components/task/AddTaskRow.svelte';
 	import TaskSheet from '$lib/components/task/TaskSheet.svelte';
 	import type { Task } from '$lib/db/schema';
 	import { PAST_WINDOW_DAYS } from '$lib/db/repo';
@@ -69,7 +70,7 @@
 </svelte:head>
 
 <div class="mx-auto w-full max-w-2xl px-4 py-6">
-	<header class="mb-1 flex items-baseline gap-3">
+	<header class="mb-3 flex items-baseline gap-3">
 		<h1 class="text-xl font-semibold tracking-tight">Today</h1>
 		{#if !quiet}
 			<span class="text-xs text-muted-foreground">
@@ -79,8 +80,16 @@
 		{/if}
 	</header>
 
+	<!--
+		The add row. Before this, the ONLY way to create a task in the whole app was on
+		a list screen, so the default route was a dead end: an empty Today said nothing
+		was due and offered nothing to do about it. It files against the user's first
+		list and pre-fills today, which is what makes the new task appear right here.
+	-->
+	<AddTaskRow dueDate={today} />
+
 	{#if quiet}
-		<p class="py-24 text-center text-sm text-muted-foreground">Nothing due — Ikoro is quiet.</p>
+		<p class="py-16 text-center text-sm text-muted-foreground">Nothing due — Ikoro is quiet.</p>
 	{:else}
 		<TaskGroup heading="Past" tasks={overdue} onopen={openTask} />
 		<TaskGroup heading="Today" tasks={dueToday} onopen={openTask} />

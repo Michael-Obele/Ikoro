@@ -7,6 +7,7 @@
 	 * on the very next tab — which reads as a bug even though it is not.
 	 */
 	import TaskGroup from '$lib/components/task/TaskGroup.svelte';
+	import AddTaskRow from '$lib/components/task/AddTaskRow.svelte';
 	import TaskSheet from '$lib/components/task/TaskSheet.svelte';
 	import type { Task } from '$lib/db/schema';
 	import { liveTasks } from '$lib/stores/view';
@@ -50,20 +51,31 @@
 </svelte:head>
 
 <div class="mx-auto w-full max-w-2xl px-4 py-6">
-	<header class="mb-1 flex items-baseline gap-3">
+	<header class="mb-3 flex items-baseline gap-3">
 		<h1 class="text-xl font-semibold tracking-tight">Upcoming</h1>
 		{#if !quiet}
 			<span class="text-xs text-muted-foreground">next {DAYS_AHEAD} days</span>
 		{/if}
 	</header>
 
+	<!-- Files against the first list and pre-fills tomorrow, so a task added here
+	     appears in the group the user is looking at. -->
+	<AddTaskRow dueDate={firstDay} />
+
 	{#if quiet}
-		<p class="py-24 text-center text-sm text-muted-foreground">
+		<p class="py-16 text-center text-sm text-muted-foreground">
 			Nothing in the next {DAYS_AHEAD} days.
 		</p>
 	{:else}
 		{#each groups as group (group.day)}
-			<TaskGroup heading={formatDayHeading(group.day)} tasks={group.tasks} onopen={openTask} />
+			<!-- `dateLabel="time"`: the heading already names the day, so a row only
+			     needs the clock. -->
+			<TaskGroup
+				heading={formatDayHeading(group.day)}
+				tasks={group.tasks}
+				onopen={openTask}
+				dateLabel="time"
+			/>
 		{/each}
 	{/if}
 </div>

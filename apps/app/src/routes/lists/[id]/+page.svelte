@@ -10,8 +10,7 @@
 	import { flip } from 'svelte/animate';
 	import { page } from '$app/state';
 	import { dndzone } from 'svelte-dnd-action';
-	import PlusIcon from 'lucide-svelte/icons/plus';
-	import Input from '$lib/components/ui/input/input.svelte';
+	import AddTaskRow from '$lib/components/task/AddTaskRow.svelte';
 	import TaskRow from '$lib/components/task/TaskRow.svelte';
 	import TaskSheet from '$lib/components/task/TaskSheet.svelte';
 	import * as repo from '$lib/db/repo';
@@ -24,29 +23,10 @@
 
 	let editing = $state<Task | null>(null);
 	let sheetOpen = $state(false);
-	let adding = $state(false);
 
 	function openTask(task: Task) {
 		editing = task;
 		sheetOpen = true;
-	}
-
-	// A form because it has an input. `command` is only for input-less actions.
-	async function addTask(event: SubmitEvent) {
-		event.preventDefault();
-		const form = event.currentTarget as HTMLFormElement;
-		const data = new FormData(form);
-		const title = String(data.get('title') ?? '').trim();
-		if (!title) return;
-		await repo.createTask({ listId, title });
-		form.reset();
-		form.querySelector('input')?.focus();
-	}
-
-	async function clearAdd(event: FocusEvent) {
-		const form = event.currentTarget as HTMLFormElement;
-		if (String(new FormData(form).get('title') ?? '').trim()) return;
-		adding = false;
 	}
 
 	// Reordering writes one `put()` per row, sequentially — svelte-idb has no
@@ -82,28 +62,8 @@
 			</span>
 		</header>
 
-		{#if adding}
-			<form class="mb-2" onsubmit={addTask}>
-				<Input
-					name="title"
-					placeholder="Task title"
-					autofocus
-					onblur={clearAdd}
-					onkeydown={(e) => e.key === 'Escape' && (adding = false)}
-				/>
-				<!-- A hidden submit button: Enter in a single-input form submits it in
-				     every browser, and autofocus must land here rather than nowhere. -->
-				<button type="submit" class="sr-only" tabindex="-1" aria-hidden="true">Add</button>
-			</form>
-		{:else}
-			<button
-				type="button"
-				class="mb-2 flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
-				onclick={() => (adding = true)}
-			>
-				<PlusIcon class="size-4" /> Add a task
-			</button>
-		{/if}
+		<!-- The same add row Today and Upcoming render, bound to this list. -->
+		<AddTaskRow listId={listId} />
 
 		{#if tasks.length === 0}
 			<p class="py-16 text-center text-sm text-muted-foreground">
