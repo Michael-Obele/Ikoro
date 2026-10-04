@@ -199,7 +199,11 @@ describe('notification permission', () => {
 
 		expect(await new DesktopScheduler().ensureReady()).toEqual({
 			notifications: 'granted',
-			exact: 'unsupported'
+			exact: 'unsupported',
+			// Desktop has no full-screen-takeover concept at all -- see the
+			// comment in desktop-scheduler.ts. 'unsupported' is what keeps the
+			// banner from offering a settings screen that cannot exist here.
+			fullScreenIntent: 'unsupported'
 		});
 		expect(requestPermission).toHaveBeenCalled();
 	});

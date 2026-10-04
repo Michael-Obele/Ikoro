@@ -165,9 +165,9 @@
 
 		{#if scheduleError}
 			<section>
-				<h2 class="mb-1 font-sans text-sm font-medium text-rose-600">Error (verbatim)</h2>
+				<h2 class="mb-1 font-sans text-sm font-medium text-destructive">Error (verbatim)</h2>
 				<pre
-					class="overflow-x-auto rounded-md bg-rose-50 p-3 text-rose-900 dark:bg-rose-950/40 dark:text-rose-100">{scheduleError}</pre>
+					class="overflow-x-auto rounded-md bg-destructive/10 p-3 text-destructive dark:bg-destructive/20">{scheduleError}</pre>
 			</section>
 		{/if}
 	</div>

@@ -4,4 +4,9 @@
     <string name="title_activity_main">Ikoro</string>
     <string name="package_name">com.michaelobele.ikoro</string>
     <string name="custom_url_scheme">com.michaelobele.ikoro</string>
+    <!-- The ringing screen's two buttons. Named here rather than inline in the
+         layout so a translator can find them, and so the alarm screen never
+         hardcodes user-facing text. -->
+    <string name="alarm_snooze">Snooze 5 min</string>
+    <string name="alarm_dismiss">Dismiss</string>
 </resources>

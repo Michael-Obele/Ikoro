@@ -31,7 +31,11 @@ class FakeScheduler implements AlarmScheduler {
 	outcomes: ScheduleOutcome[] = [];
 	scheduled: AlarmRequest[] = [];
 	cancelled: string[] = [];
-	permission: AlarmPermissionStatus = { notifications: 'granted', exact: 'granted' };
+	permission: AlarmPermissionStatus = {
+		notifications: 'granted',
+		exact: 'granted',
+		fullScreenIntent: 'granted'
+	};
 
 	async ensureReady() {
 		return this.permission;
@@ -94,7 +98,11 @@ beforeEach(async () => {
 	scheduler.outcomes = [];
 	scheduler.scheduled = [];
 	scheduler.cancelled = [];
-	scheduler.permission = { notifications: 'granted', exact: 'granted' };
+	scheduler.permission = {
+		notifications: 'granted',
+		exact: 'granted',
+		fullScreenIntent: 'granted'
+	};
 });
 
 describe('reconcile — drift', () => {

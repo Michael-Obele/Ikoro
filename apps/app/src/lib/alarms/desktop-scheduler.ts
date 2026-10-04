@@ -110,7 +110,17 @@ export class DesktopScheduler implements AlarmScheduler {
 		// There is no "exact" concept on desktop — either the OS scheduled it
 		// (systemd) or it is in-process. That distinction is carried by
 		// `ScheduleOutcome.exact`, not by this status.
-		return { notifications: granted ? 'granted' : 'denied', exact: 'unsupported' };
+		// `fullScreenIntent: 'unsupported'` for the same reason there is no
+		// exact permission here: a desktop reminder is a notification popup,
+		// and no desktop mechanism lets it seize the screen. So there is no
+		// permission to grant, no settings screen to open, and no degradation
+		// to warn about. 'denied' would be a lie that makes the UI offer a fix
+		// which cannot exist.
+		return {
+			notifications: granted ? 'granted' : 'denied',
+			exact: 'unsupported',
+			fullScreenIntent: 'unsupported'
+		};
 	}
 
 	async schedule(alarm: AlarmRequest): Promise<ScheduleOutcome> {

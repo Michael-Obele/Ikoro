@@ -19,7 +19,6 @@ export type {
 	ScheduleOutcome,
 	Platform
 } from './types';
-export { REMINDER_CHANNEL_ID } from './android-scheduler';
 export { BROWSER_LIMITATION } from './browser-scheduler';
 export { DesktopScheduler, probeDesktop, resetDesktopProbe } from './desktop-scheduler';
 export type { DesktopMode, DesktopProbe } from './systemd';

@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  WHY THIS FILE EXISTS
+
+  The full-screen ringing screen, inflated by IkoroAlarmActivity. It is read at
+  arm's length, in the dark, by somebody who was asleep, so it does three things
+  and nothing else: say which task this is, offer Snooze, offer Dismiss.
+
+  Plain framework widgets on purpose. There is no Material dependency in this
+  build, so Theme.Material3 / com.google.android.material attributes would not
+  resolve, and a ringing alarm that fails to inflate is worse than a plain one.
+
+  Colours are literal rather than theme colours. This screen must look the same
+  over a lock screen, in dark mode and in light mode, so it sets its own solid
+  background instead of inheriting DayNight, which could paint a white page at
+  6am.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FF0B0B0F"
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
+    android:padding="32dp">
+
+    <!-- Two weighted spacers centre the text block vertically and keep the
+         buttons pinned near the bottom, within thumb reach. -->
+    <Space
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:letterSpacing="0.3"
+        android:text="@string/app_name"
+        android:textAllCaps="true"
+        android:textColor="#FF8A8A99"
+        android:textSize="16sp" />
+
+    <TextView
+        android:id="@+id/alarm_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:gravity="center"
+        android:textColor="#FFF2F2F7"
+        android:textSize="32sp"
+        android:textStyle="bold" />
+
+    <Space
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <!-- Snooze is the quieter of the two: it is the reversible choice, so it
+         reads as the secondary action even though it comes first. -->
+    <Button
+        android:id="@+id/alarm_snooze"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:backgroundTint="#FF23232B"
+        android:text="@string/alarm_snooze"
+        android:textAllCaps="false"
+        android:textColor="#FFF2F2F7"
+        android:textSize="16sp" />
+
+    <!-- Dismiss is the irreversible one, so it is the one that gets the
+         emphasis and the extra margin that separates the pair. -->
+    <Button
+        android:id="@+id/alarm_dismiss"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:layout_marginTop="12dp"
+        android:backgroundTint="#FF3F51B5"
+        android:text="@string/alarm_dismiss"
+        android:textAllCaps="false"
+        android:textColor="#FFFFFFFF"
+        android:textSize="16sp" />
+
+</LinearLayout>

@@ -23,6 +23,23 @@ export interface AlarmRequest {
 export interface AlarmPermissionStatus {
 	notifications: 'granted' | 'denied' | 'prompt';
 	exact: 'granted' | 'denied' | 'unsupported';
+	/**
+	 * Whether a ringing alarm may actually TAKE OVER THE SCREEN.
+	 *
+	 * Android 14 made this a user-revocable permission, and revoking it does not
+	 * mute the alarm -- it downgrades the full-screen screen to a heads-up banner
+	 * in the shade. That is a silent degradation of the one promise this app
+	 * exists to keep, so it is reported here rather than absorbed.
+	 *
+	 *  - `granted`     a full-screen intent will be honoured
+	 *  - `denied`      it will not; the user can still fix it from Settings
+	 *  - `unsupported` this platform has no such concept. Desktop and browser
+	 *                  reminders are tray popups with no takeover step, so there
+	 *                  is nothing to grant and nothing to fix. Answering
+	 *                  `denied` there would offer the user a settings screen that
+	 *                  does not exist.
+	 */
+	fullScreenIntent: 'granted' | 'denied' | 'unsupported';
 }
 
 export type Platform = 'android' | 'desktop' | 'browser';

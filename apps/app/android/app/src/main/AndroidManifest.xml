@@ -19,6 +19,41 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!--
+      The five below exist because the alarm is a real alarm owned by the app,
+      not a notification that happens to be loud.
+
+      USE_FULL_SCREEN_INTENT  lets a ringing alarm take over the screen instead
+                            of waiting in the shade as a banner. Android 14+
+                            lets the user revoke it, which is why the JS
+                            `checkStatus()` reports it and the UI actually acts
+                            on it: `AlarmHealth.svelte` / `PermissionBanner.svelte`
+                            show a "cannot take over the screen" message with a
+                            button that calls `requestFullScreenIntentPermission()`.
+                            An alarm that silently degrades to a banner is
+                            indistinguishable from a working one until it fails in
+                            front of the user, the exact failure this rewrite
+                            exists to prevent.
+      WAKE_LOCK             the ringing service holds a partial wake lock so the
+                            ringtone does not stop the instant the screen sleeps.
+      FOREGROUND_SERVICE    the ringing alarm runs as a foreground service: that
+                            is the only thing that keeps it alive, and audible,
+                            while the user is not looking at the app.
+      FOREGROUND_SERVICE_SYSTEM_EXEMPTED
+                            Android 14+ requires the type-specific permission to
+                            match the `systemExempted` service type declared
+                            below. Without it startForeground() throws
+                            SecurityException.
+      VIBRATE               the alarm vibrates while it rings. Without the
+                            permission the vibrate() calls are dropped in
+                            silence, which is an alarm nobody hears over a pocket.
+    -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -51,6 +86,65 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!--
+          The alarm pipeline. AlarmManager fires IkoroAlarmReceiver, which starts
+          IkoroAlarmService to make the noise; IkoroAlarmActivity is the
+          full-screen screen the notification points at. Every one of them is
+          internal: nothing outside this app may start an alarm, and an exported
+          receiver here would let any app on the device ring ours.
+        -->
+        <receiver
+            android:name=".alarm.IkoroAlarmReceiver"
+            android:exported="false" />
+
+        <!-- Re-arms everything still in the future. AlarmManager's own alarms do
+             not survive a reboot or an app update, so without this every reminder
+             is quietly lost the next time the phone restarts. -->
+        <receiver
+            android:name=".alarm.IkoroBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- The thing that actually rings.
+             `systemExempted`, NOT `mediaPlayback`. This app plays no user media:
+             it is CONTINUING an alarm the user scheduled, and Android 14 lists
+             exactly that as a systemExempted criterion: "Apps holding
+             SCHEDULE_EXACT_ALARM or USE_EXACT_ALARM permission and are using
+             Foreground Service to continue alarms in the background, including
+             haptics-only alarms"
+             (developer.android.com/about/versions/14/changes/fgs-types-required).
+             Ikoro holds SCHEDULE_EXACT_ALARM, so the criterion is met. That is
+             load-bearing, not decoration: declaring this type WITHOUT meeting a
+             listed criterion makes the system throw
+             ForegroundServiceTypeNotAllowedException. Equally, claiming
+             `mediaPlayback` would assert a media-playback session the app never
+             starts. The declared type must match the permission above. -->
+        <service
+            android:name=".alarm.IkoroAlarmService"
+            android:exported="false"
+            android:foregroundServiceType="systemExempted" />
+
+        <!-- The ringing screen. showWhenLocked/turnScreenOn put it over the lock
+             screen with the display already on; excludeFromRecents so dismissing
+             an alarm does not leave a stray task in the recents stack.
+             `singleInstance` keeps this screen the only member of its task, so a
+             SECOND alarm arriving while it is up does not stack a second copy;
+             it reuses this instance and lands in onNewIntent(), which re-binds
+             the title and the button payloads. That override is what makes the
+             reuse safe; without it the screen keeps showing the first alarm. -->
+        <activity
+            android:name=".alarm.IkoroAlarmActivity"
+            android:exported="false"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:theme="@style/AppTheme.NoActionBar" />
     </application>
 
 </manifest>

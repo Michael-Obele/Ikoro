@@ -44,14 +44,25 @@ export class BrowserScheduler implements AlarmScheduler {
 
 	async ensureReady(): Promise<AlarmPermissionStatus> {
 		if (typeof Notification === 'undefined') {
-			return { notifications: 'denied', exact: 'unsupported' };
+			return {
+				notifications: 'denied',
+				exact: 'unsupported',
+				// A page cannot take over the screen either, so this is not a
+				// revocation the user could undo.
+				fullScreenIntent: 'unsupported'
+			};
 		}
 		const permission = Notification.permission;
 		return {
 			notifications:
 				permission === 'granted' ? 'granted' : permission === 'denied' ? 'denied' : 'prompt',
 			// No browser can promise an exact minute, so this is never 'granted'.
-			exact: 'unsupported'
+			exact: 'unsupported',
+			// And no browser can take over the screen: a page's notification is a
+			// notification. There is no equivalent to grant or revoke, so this is
+			// 'unsupported' rather than 'denied' -- there is nothing for the user
+			// to go and fix.
+			fullScreenIntent: 'unsupported'
 		};
 	}
 

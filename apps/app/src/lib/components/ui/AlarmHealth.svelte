@@ -21,6 +21,7 @@
 	import DesktopAlarmMode from '$lib/components/ui/DesktopAlarmMode.svelte';
 	import { armedCount, pendingAlarms } from '$lib/alarms/reconcile';
 	import { detectPlatform } from '$lib/platform';
+	import { AndroidScheduler } from '$lib/alarms/android-scheduler';
 	import { DesktopScheduler } from '$lib/alarms/desktop-scheduler';
 	import type { DesktopProbe } from '$lib/alarms/systemd';
 	import {
@@ -67,6 +68,30 @@
 
 	const exactOk = $derived(status?.exact === 'granted' || status?.exact === 'unsupported');
 	const notificationsOk = $derived(status?.notifications === 'granted');
+
+	/**
+	 * Only Android can ever answer `'denied'` here. The desktop and browser
+	 * schedulers answer `'unsupported'`, which is deliberately NOT `'denied'`, so
+	 * the warning row below never appears for them.
+	 */
+	const fullScreenDenied = $derived(status?.fullScreenIntent === 'denied');
+
+	/**
+	 * Open the Android 14+ screen that permits full-screen intents.
+	 *
+	 * Mirrors `openExactAlarmSettings` in the lifecycle: a hand-off to system
+	 * Settings, run from a click, so a plain function — never an effect. The
+	 * lifecycle re-reads the status on the next resume, so this row clears itself
+	 * once the user comes back having granted it.
+	 */
+	async function fixFullScreenIntent() {
+		try {
+			await new AndroidScheduler().openFullScreenIntentSettings();
+		} catch (error) {
+			// A failed hand-off must not throw out of a click handler.
+			console.warn('[ikoro] could not open the full-screen intent settings', error);
+		}
+	}
 </script>
 
 <div class="grid gap-3">
@@ -90,6 +115,13 @@
 				<span>Exact timing is off — Ikoro won't schedule reminders at all.</span>
 			{/if}
 		</li>
+
+		{#if fullScreenDenied}
+			<li class="flex items-center gap-2">
+				<CircleAlert class="size-4 text-amber-600" />
+				<span>Alarms can't take over the screen — yours will ring, but only as a banner.</span>
+			</li>
+		{/if}
 
 		<li class="flex items-center gap-2 text-muted-foreground">
 			<span class="size-4"></span>
@@ -140,6 +172,11 @@
 			<Button variant="outline" size="sm" onclick={openExactAlarmSettings}
 				>Allow exact alarms</Button
 			>
+		{/if}
+		{#if fullScreenDenied}
+			<Button variant="outline" size="sm" onclick={fixFullScreenIntent}>
+				Allow full-screen alarms
+			</Button>
 		{/if}
 	</div>
 </div>

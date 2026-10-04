@@ -1,5 +1,12 @@
 apply plugin: 'com.android.application'
 
+// The Kotlin toolchain, applied alongside the Android one. Its plugin
+// (declared in the root buildscript) also puts kotlin-stdlib on this
+// module's compile classpath, so nothing else in dependencies has to
+// change. Everything under src/main/java/com/michaelobele/ikoro/alarm
+// is Kotlin; the pre-existing Java sources are untouched.
+apply plugin: 'kotlin-android'
+
 // The APK's version is the app's version. Read from package.json rather than
 // hard-coded here, because the two drifting apart is how a release ships with
 // Settings reporting "0.1.0" and the package manager reporting "1.0".
@@ -32,6 +39,24 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+}
+
+// Kotlin and Java MUST agree on a JVM target, and this is NOT optional:
+// Gradle 8.14 + AGP 8.13 report a mismatch as an ERROR, not a warning --
+// `Inconsistent JVM-target compatibility detected for tasks
+// 'compileDebugJavaWithJavac' (21) and 'compileDebugKotlin' (1.8)`. The Java
+// side is pinned to 21 by the generated capacitor.build.gradle
+// (sourceCompatibility/targetCompatibility JavaVersion.VERSION_21), while the
+// Kotlin Gradle Plugin 2.2.0 still defaults its jvmTarget to 1.8, so without
+// this block the debug build fails outright and no Kotlin file in
+// src/main/java/com/michaelobele/ikoro/alarm ever compiles.
+//
+// jvmToolchain(21) is the preferred form: it pins Kotlin's jvmTarget AND the
+// Java toolchain that javac runs under to the same JDK 21, so the two can never
+// drift apart again. `kotlinOptions { jvmTarget = '21' }` would fix only the
+// Kotlin side and is deprecated on KGP 2.x anyway.
+kotlin {
+    jvmToolchain(21)
 }
 
 repositories {

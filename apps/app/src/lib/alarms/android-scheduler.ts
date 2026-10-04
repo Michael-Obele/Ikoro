@@ -1,180 +1,140 @@
 /**
- * Android alarms, via `@capacitor/local-notifications`.
+ * Android alarms, via the native `IkoroAlarm` plugin.
  *
- * THE ONLY FILE IN THE APP THAT IMPORTS THAT PLUGIN. Everything else goes
- * through `AlarmScheduler`, so a Capacitor API change — or a decision to make
- * the desktop build use a different mechanism entirely — is a one-file edit.
+ * WHY THE TRANSPORT CHANGED: `@capacitor/local-notifications` can only POST a
+ * notification — one channel sound, no looping, no full-screen takeover. That is
+ * a reminder, not an alarm, and it is why the promise this product exists for
+ * ("you set a time, and it fires at that time") was only ever as strong as the
+ * user's next glance at the shade. `IkoroAlarm` arms a real `setAlarmClock()`
+ * alarm with its own ringing screen, so the promise survives the screen being
+ * off. The `AlarmScheduler` seam is UNCHANGED: everything above this file still
+ * asks the same five questions and gets the same five answers.
  *
- * The scheduling options are the point of this file, so they are spelled out:
+ * What this file owns is TRANSLATION: the native contract reports a rejection as
+ * a plain message, and the seam reports an outcome. So the two things that
+ * matter are (1) which rejection is a fixable permission problem and which is a
+ * genuine failure, and (2) never reporting a failure as a success.
  *
- *   allowWhileIdle        fires through Doze. Android throttles these to once per
- *                         9 minutes per app, which is the platform's price for
- *                         not being allowed to run all night.
- *   isExactNotification  asks for an exact alarm. On API 31+ with no permission,
- *                         Capacitor opens the "Alarms & reminders" screen.
- *   isExactMandatory     true — so if the user declines, `schedule()` REJECTS
- *                         instead of quietly scheduling an inexact alarm.
+ * There is deliberately NO degraded branch here. The native plugin refuses to
+ * arm an inexact alarm instead of quietly demoting one, so it has no "it will
+ * fire, just late" channel to report — a resolved `schedule()` IS the exact
+ * alarm the product promises.
  *
- * That last flag is the difference between a product that keeps its promise and
- * one that does not. Without it a denied permission produces a notification that
- * arrives whenever Android feels like it, and the user has no way to tell.
- *
- * FINDING (2026-10-03): the build plan put these three options inside the nested
- * `schedule` object. In the shipped 8.3.1 typings `isExactNotification` and
- * `isExactMandatory` are properties of `LocalNotificationSchema` — the
- * notification itself, a SIBLING of `schedule`, not fields of it. Nesting them
- * where the plan showed is a type error, and dropping them to make it compile
- * would have quietly turned every reminder into an inexact one.
+ * TODO: `@capacitor/local-notifications` is no longer used by the shipping alarm
+ * path — this file was its last consumer. It cannot be removed from
+ * `package.json` yet: deletion needs a `cap sync` to regenerate
+ * `capacitor.build.gradle` / `capacitor.settings.gradle`, which has not been
+ * authorised, AND `src/routes/spike/+page.svelte` (the M4-S1 device-gate
+ * instrument, which must not be deleted) still imports it directly for the
+ * manual exact-alarm check. Remove the dependency once both are done.
  */
-import { LocalNotifications } from '@capacitor/local-notifications';
+import { IkoroAlarm } from './plugin';
 import { hashId } from '$lib/utils/id';
 import type { AlarmPermissionStatus, AlarmRequest, AlarmScheduler, ScheduleOutcome } from './types';
 
-/** The Android notification channel alarms are posted on. Created in M5. */
-export const REMINDER_CHANNEL_ID = 'reminders';
-
-/** The notification title. The body is the task — that is what the user needs. */
-const NOTIFICATION_TITLE = 'Ikoro';
-
-const KNOWN_PERMISSION_ERRORS = /permission|exact alarm|SCHEDULE_EXACT|not allowed|denied/i;
-
 /**
- * Create the `reminders` notification channel, once.
+ * The literal phrase the native plugin puts in a permission rejection.
  *
- * Android channels are NOT declared in the manifest — they are created at
- * runtime, and a reminder posted to a channel that does not exist is silently
- * dropped. That makes this the difference between "the alarm fired" and "the
- * alarm did nothing and reported nothing".
- *
- * Importance is HIGH (5) so a reminder arrives as a heads-up banner while the
- * device is unlocked — a task reminder that waits silently in the shade is a
- * reminder that has already failed at its job. The user can lower it in system
- * settings; we only set the default.
- *
- * Called through the scheduler rather than from a route, so
- * `src/lib/alarms/` stays the only place that touches the plugin.
+ * Case-insensitive because the Kotlin message is prose that may legitimately be
+ * reworded — the PHRASE is the contract, the surrounding sentence is not. The
+ * plugin emits it both when the permission is missing up front and when arming
+ * is refused at the last moment, so one pattern covers both.
  */
-export async function ensureReminderChannel(): Promise<void> {
-	try {
-		await LocalNotifications.createChannel({
-			id: REMINDER_CHANNEL_ID,
-			name: 'Reminders',
-			description: 'Task reminders',
-			// 5 = IMPORTANCE_HIGH. Verified against the plugin's own enum rather
-			// than assumed: a wrong constant here would quietly downgrade every
-			// reminder to a silent shade entry.
-			importance: 5,
-			sound: 'default',
-			vibration: true
-		});
-	} catch (error) {
-		console.warn('[ikoro] could not create the reminders channel', error);
-	}
-}
+const EXACT_ALARM_PERMISSION = /exact alarm permission/i;
 
 export class AndroidScheduler implements AlarmScheduler {
 	readonly platform = 'android' as const;
-
-	#channelReady = false;
-
-	/**
-	 * Create the channel before anything can try to post to it. Called from
-	 * `ensureReady()`, so every path that arms an alarm has already guaranteed
-	 * the channel exists.
-	 */
-	async ensureChannel(): Promise<void> {
-		if (this.#channelReady) return;
-		await ensureReminderChannel();
-		this.#channelReady = true;
-	}
 
 	/**
 	 * Read the real state, and prompt for notifications if the user has not been
 	 * asked yet.
 	 *
-	 * Never opens the exact-alarm settings screen on its own: on Android 13+ that
+	 * Never opens the exact-alarm settings screen on its own: on Android 12+ that
 	 * screen is a system settings page, and throwing somebody into Settings
 	 * because they opened a task feels like a trap. `openExactAlarmSettings()` is
 	 * exposed for the banner, where the user has just tapped "fix this".
 	 */
 	async ensureReady(): Promise<AlarmPermissionStatus> {
-		await this.ensureChannel();
+		const status = await IkoroAlarm.checkStatus();
 
-		let notifications = await LocalNotifications.checkPermissions();
-
-		if (notifications.display === 'prompt') {
-			notifications = await LocalNotifications.requestPermissions();
+		let notifications = status.notifications;
+		if (notifications === 'prompt') {
+			// Asking here is honest: POST_NOTIFICATIONS is a normal runtime
+			// permission, this runs the first time an alarm is actually armed
+			// rather than on launch, and the native side resolves with the state it
+			// can actually read instead of hanging if the dialog is gone for good.
+			notifications = (await IkoroAlarm.requestNotifications()).notifications;
 		}
 
-		// Pre-Android 12 there is no exact-alarm permission to check, and the
-		// plugin reports `prompt`; there, alarms are exact by default.
-		const exact = await LocalNotifications.checkExactNotificationSetting();
-
 		return {
-			notifications: normalisePermission(notifications.display),
-			// FINDING: `PermissionState` is 'granted' | 'denied' | 'prompt' |
-			// 'prompt-with-rationale' — there is no 'unsupported'. So on Android,
-			// anything that is not 'granted' means the alarm will not be exact, and
-			// that includes the pre-Android-12 case where no such permission exists
-			// (the plugin answers 'prompt' there, and those alarms ARE exact).
-			// The banner only distinguishes granted from not-granted, so mapping
-			// both to 'denied' is honest without inventing a state the OS cannot
-			// report. `unsupported` stays reserved for platforms that genuinely
-			// cannot schedule (the browser).
-			exact: exact.exact_alarm === 'granted' ? 'granted' : 'denied'
+			notifications,
+			// `checkStatus().exact` is already a BOOLEAN, not a permission string:
+			// the native side answers `true` below API 31, where no such permission
+			// exists because those alarms are exact by default. So anything that is
+			// not `true` means the alarm will not be exact, and the banner only
+			// distinguishes granted from not-granted. Collapsing both to 'denied' is
+			// honest without inventing a state the OS cannot report; `unsupported`
+			// stays reserved for platforms that genuinely cannot schedule (the
+			// browser).
+			exact: status.exact ? 'granted' : 'denied',
+			// Same shape, same reasoning: the native side answers a BOOLEAN, and
+			// `false` here is not 'unsupported' -- on Android 14 the permission
+			// genuinely exists and the user can turn it back on from Settings,
+			// which is exactly what 'denied' tells the banner to offer.
+			fullScreenIntent: status.fullScreenIntent ? 'granted' : 'denied'
 		};
 	}
 
 	/** Take the user to the system screen that can grant exact alarms. */
 	async openExactAlarmSettings(): Promise<void> {
-		await LocalNotifications.changeExactNotificationSetting();
+		await IkoroAlarm.openExactAlarmSettings();
+	}
+
+	/**
+	 * Take the user to the Android 14+ screen that allows full-screen intents.
+	 *
+	 * Mirrors `openExactAlarmSettings()`: a hand-off to system Settings rather
+	 * than a request, because this permission is granted by the user there and
+	 * cannot be asked for with a dialog. It is deliberately NOT on the
+	 * `AlarmScheduler` interface, for the same reason the exact-alarm method is
+	 * not: only Android has the screen, so the interface stays free of a
+	 * capability two of its three implementations cannot have.
+	 *
+	 * Only reachable from the UI when `ensureReady()` answered
+	 * `fullScreenIntent: 'denied'`, which the desktop and browser schedulers
+	 * never answer -- so this can never route a non-Android user to an Android
+	 * settings page.
+	 */
+	async openFullScreenIntentSettings(): Promise<void> {
+		await IkoroAlarm.requestFullScreenIntentPermission();
 	}
 
 	async schedule(alarm: AlarmRequest): Promise<ScheduleOutcome> {
-		await this.ensureChannel();
-
+		// Checked here as well as natively: the plugin rejects a past or
+		// unparseable instant too, but `invalid` is a distinct, actionable answer
+		// the UI shows as "pick a time in the future", and a round trip to Android
+		// to be told what we already know is a wasted IPC.
 		const at = new Date(alarm.at);
 		if (Number.isNaN(at.getTime()) || at.getTime() <= Date.now()) {
 			return { ok: false, reason: 'invalid' };
 		}
 
+		// DERIVED, not allocated: re-arming the same task must land on the same
+		// native id, or every reschedule leaves a duplicate alarm behind — which is
+		// the "reminder fires twice" failure this product cannot have.
 		const platformId = hashId(alarm.taskId);
 
 		try {
-			const result = await LocalNotifications.schedule({
-				notifications: [
-					{
-						id: platformId,
-						title: NOTIFICATION_TITLE,
-						body: alarm.title,
-						channelId: REMINDER_CHANNEL_ID,
-						// Carried back on the action event, so tapping the
-						// notification opens the right task rather than the app.
-						extra: { taskId: alarm.taskId },
-						// SIBLINGS of `schedule`, not fields inside it — see the
-						// finding at the top of this file.
-						isExactNotification: true,
-						isExactMandatory: true,
-						schedule: { at, allowWhileIdle: true }
-					}
-				]
+			await IkoroAlarm.schedule({
+				id: platformId,
+				taskId: alarm.taskId,
+				title: alarm.title,
+				at: alarm.at
 			});
-
-			// A top-level `warning` means the exact-alarm permission was not granted
-			// and the notification was demoted to inexact — it WILL fire, but not
-			// when it was asked to. Surfaced as degraded, never as success.
-			if (result.warning) {
-				return {
-					ok: true,
-					platformId: String(platformId),
-					exact: false,
-					warning: result.warning.message
-				};
-			}
 			return { ok: true, platformId: String(platformId), exact: true };
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
-			if (KNOWN_PERMISSION_ERRORS.test(message)) {
+			if (EXACT_ALARM_PERMISSION.test(message)) {
 				return { ok: false, reason: 'permission' };
 			}
 			// An unexpected rejection is still a failure to arm; reporting it as
@@ -186,7 +146,7 @@ export class AndroidScheduler implements AlarmScheduler {
 
 	async cancel(platformId: string): Promise<void> {
 		try {
-			await LocalNotifications.cancel({ notifications: [{ id: Number(platformId) }] });
+			await IkoroAlarm.cancel({ platformId });
 		} catch (error) {
 			// Cancelling something the platform already dropped is not an error
 			// worth surfacing — reconcile treats absence as "not armed" anyway.
@@ -196,37 +156,45 @@ export class AndroidScheduler implements AlarmScheduler {
 
 	async getPending(): Promise<Set<string>> {
 		try {
-			const { notifications } = await LocalNotifications.getPending();
-			return new Set(notifications.map((n) => String(n.id)));
+			const { pending } = await IkoroAlarm.getPending();
+			return new Set(pending);
 		} catch (error) {
 			console.warn('[ikoro] getPending() failed', error);
 			return new Set();
 		}
 	}
 
-	/** Fired when the user TAPS a notification. */
+	/**
+	 * Fired when the user DISMISSES a ringing alarm.
+	 *
+	 * The old implementation fired on a notification TAP, which is the same user
+	 * action: the alarm is over and the task they were reminded of is the one to
+	 * open. `alarmDismissed` is the native event for that, and it carries the
+	 * taskId so the store can be updated without knowing about notification ids.
+	 */
 	onAction(handler: (taskId: string) => void): void {
-		void LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
-			const taskId = (action.notification.extra as { taskId?: string } | undefined)?.taskId;
+		void IkoroAlarm.addListener('alarmDismissed', ({ taskId }) => {
 			if (taskId) handler(taskId);
 		});
 	}
 
 	/**
-	 * Fired when the notification is DELIVERED.
+	 * Fired when the alarm STARTS RINGING — the native equivalent of the old
+	 * plugin's "notification delivered".
 	 *
-	 * Only reaches us when the app is alive (a killed app is woken by the tap,
-	 * not the delivery), which is exactly why `reconcile()` exists: on the next
-	 * resume, anything whose instant passed with no event is a genuine miss.
+	 * Kept even though `AlarmScheduler` does not require it, because the lifecycle
+	 * uses it (optionally, via `onDelivery?.`) to stamp `alarmFiredAt`. It only
+	 * reaches us while the app is alive — a killed app is woken by the ringing
+	 * screen, not by this event — which is exactly why `reconcile()` exists: on the
+	 * next resume, anything whose instant passed with no event is a genuine miss.
+	 *
+	 * `alarmSnoozed` is deliberately NOT wired: snooze re-arms the same native id
+	 * inside Kotlin, so there is nothing for JS to schedule. Listening would be a
+	 * no-op handler pretending to work.
 	 */
 	onDelivery(handler: (taskId: string, firedAt: string) => void): void {
-		void LocalNotifications.addListener('localNotificationReceived', (notification) => {
-			const taskId = (notification.extra as { taskId?: string } | undefined)?.taskId;
+		void IkoroAlarm.addListener('alarmRinging', ({ taskId }) => {
 			if (taskId) handler(taskId, new Date().toISOString());
 		});
 	}
-}
-
-function normalisePermission(display: string): 'granted' | 'denied' | 'prompt' {
-	return display === 'granted' ? 'granted' : display === 'denied' ? 'denied' : 'prompt';
 }
