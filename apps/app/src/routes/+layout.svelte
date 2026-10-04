@@ -2,12 +2,12 @@
 	import './layout.css';
 	import favicon from '#lib/assets/favicon.svg';
 	import { browser, dev } from '$app/env';
+	import { onNavigate } from '$app/navigation';
 	import { Agentation } from 'sv-agentation';
-	import Menu from 'lucide-svelte/icons/menu';
 	import { PersistedState } from 'runed';
-	import Button from '$lib/components/ui/button/button.svelte';
 	import * as Sheet from '$lib/components/ui/sheet';
 	import PermissionBanner from '$lib/components/ui/PermissionBanner.svelte';
+	import BottomNav from '$lib/components/shell/BottomNav.svelte';
 	import ListSidebar from '$lib/components/lists/ListSidebar.svelte';
 	import { ensureSeeded } from '$lib/db/seed';
 	import { applyTheme, watchSystemTheme } from '#lib/theme/theme.svelte';
@@ -26,6 +26,17 @@
 	const sidebarCollapsed = new PersistedState('ikoro:sidebar-collapsed', false);
 	let sheetOpen = $state(false);
 	let status = $state<AlarmPermissionStatus | null>(null);
+
+	// A navigation must close the phone's nav drawer. Without this you tap a list
+	// and the page underneath changes while the drawer sits on top of the screen
+	// you just asked for. `onNavigate` is the right hook rather than a click
+	// handler: it is one rule for every source of navigation — a sidebar tap, a
+	// link inside a page, and the Android back button, which arrives as a
+	// popstate and never touches the sidebar at all. On desktop the drawer is
+	// never open, so this writes false over false and costs nothing.
+	onNavigate(() => {
+		sheetOpen = false;
+	});
 
 	// The theme. `document.documentElement` is a node Svelte does not own, so
 	// writing the `dark` class and `color-scheme` onto it is a genuine external
@@ -72,9 +83,9 @@
 	/>
 
 	<div class="flex min-h-0 flex-1">
-		<!-- Desktop gets a real sidebar. On narrow screens it collapses into a sheet so
-		     the task list gets the whole width — two columns on a phone wastes the one
-		     thing a phone has plenty of. -->
+		<!-- Desktop gets a real sidebar. On a phone the same component renders inside
+		     the sheet, which the bottom bar's "Lists" slot opens — two columns on a
+		     phone would waste the one thing a phone has plenty of. -->
 		<aside
 			class="hidden shrink-0 overflow-hidden border-r md:block"
 			data-collapsed={sidebarCollapsed.current}
@@ -84,23 +95,20 @@
 		</aside>
 
 		<div class="flex min-w-0 flex-1 flex-col">
-			<header class="flex items-center gap-2 border-b px-3 py-2 md:hidden">
-				<Button
-					variant="ghost"
-					size="icon"
-					aria-label="Open navigation"
-					onclick={() => (sheetOpen = true)}
-				>
-					<Menu class="size-5" />
-				</Button>
-				<span class="text-sm font-semibold">Ikoro</span>
-			</header>
-
 			<main class="min-h-0 flex-1 overflow-y-auto">
 				{@render children()}
 			</main>
 		</div>
 	</div>
+
+	<!--
+		The phone's navigation, as a sibling of the content row so it spans the full
+		width, and outside the scroll container so it never scrolls away. It hides
+		itself above `md`, where the sidebar takes over. There is no phone header any
+		more: the bar carries the navigation, and each screen already has an h1 naming
+		itself, so a header holding only the wordmark was 44px of nothing.
+	-->
+	<BottomNav onopenlists={() => (sheetOpen = true)} />
 </div>
 
 <Sheet.Root bind:open={sheetOpen}>
