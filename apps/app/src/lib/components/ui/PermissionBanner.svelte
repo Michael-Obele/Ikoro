@@ -53,7 +53,7 @@
 			{/if}
 
 			{#if exactDenied}
-				<p>Exact timing is off — reminders may be late.</p>
+				<p>Exact timing is off — Ikoro won't schedule your reminders at all.</p>
 				<Button
 					variant="link"
 					class="h-auto p-0 text-sm underline underline-offset-4"
@@ -62,6 +62,12 @@
 					Allow exact alarms
 				</Button>
 			{/if}
+
+			<p class="mt-1 text-xs opacity-80">
+				<strong>Never use "Force stop"</strong> on Ikoro — Android deletes the reminders it had already
+				scheduled, and the app can't tell you they're gone. Turn notifications off instead to silence
+				it.
+			</p>
 		</div>
 	</div>
 {/if}

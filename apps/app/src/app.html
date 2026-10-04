@@ -4,6 +4,47 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
+		<script>
+			/*
+			 * PRE-PAINT THEME. Runs before %sveltekit.head% injects the stylesheet,
+			 * which is the only position where "before the first paint" is true.
+			 *
+			 * It has to be inline. An imported module is fetched, parsed and
+			 * executed AFTER the CSS has already painted, which is precisely the
+			 * white flash this exists to prevent — a full-screen strobe for anyone
+			 * loading the app in a dark room.
+			 *
+			 * This duplicates THEME_STORAGE_KEY, the JSON shape and the resolution
+			 * rule from src/lib/theme/theme.svelte.ts. That is the cost of not
+			 * flashing, and it is worth it. tests/theme-store.test.ts asserts the two
+			 * copies agree, so a rename on one side fails the suite.
+			 */
+			(() => {
+				const KEY = 'ikoro:theme';
+				const DARK = 'dark';
+				let choice = 'system';
+				try {
+					// runed's PersistedState serialises with JSON.stringify, so the
+					// stored value is '"dark"', not 'dark'.
+					const raw = localStorage.getItem(KEY);
+					if (raw) {
+						const parsed = JSON.parse(raw);
+						if (parsed === 'light' || parsed === 'dark' || parsed === 'system') {
+							choice = parsed;
+						}
+					}
+				} catch {
+					// Private mode, a corrupt value, storage disabled. 'system' is a
+					// safe answer: it is what a first run would do anyway.
+				}
+				const dark =
+					choice === DARK ||
+					(choice === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+				const root = document.documentElement;
+				root.classList.toggle(DARK, dark);
+				root.style.colorScheme = dark ? 'dark' : 'light';
+			})();
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

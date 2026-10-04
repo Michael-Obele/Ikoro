@@ -17,6 +17,7 @@
 	import CircleAlert from 'lucide-svelte/icons/circle-alert';
 	import RefreshCw from 'lucide-svelte/icons/refresh-cw';
 	import Button from '$lib/components/ui/button/button.svelte';
+	import TriangleAlert from 'lucide-svelte/icons/triangle-alert';
 	import DesktopAlarmMode from '$lib/components/ui/DesktopAlarmMode.svelte';
 	import { armedCount, pendingAlarms } from '$lib/alarms/reconcile';
 	import { detectPlatform } from '$lib/platform';
@@ -86,13 +87,21 @@
 				<span>Reminders fire at the exact minute</span>
 			{:else}
 				<CircleAlert class="size-4 text-amber-600" />
-				<span>Exact timing is off — reminders may be late.</span>
+				<span>Exact timing is off — Ikoro won't schedule reminders at all.</span>
 			{/if}
 		</li>
 
 		<li class="flex items-center gap-2 text-muted-foreground">
 			<span class="size-4"></span>
 			<span>{armed} armed reminder{armed === 1 ? '' : 's'}</span>
+		</li>
+		<li class="flex items-start gap-2 text-xs text-muted-foreground">
+			<TriangleAlert class="mt-0.5 size-3.5 shrink-0" />
+			<span>
+				<strong>Never use "Force stop"</strong> on Ikoro. Android deletes the reminders it had already
+				scheduled and the app cannot tell you they are gone — turn notifications off instead to silence
+				it.
+			</span>
 		</li>
 	</ul>
 

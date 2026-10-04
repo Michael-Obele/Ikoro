@@ -10,6 +10,7 @@
 	import PermissionBanner from '$lib/components/ui/PermissionBanner.svelte';
 	import ListSidebar from '$lib/components/lists/ListSidebar.svelte';
 	import { ensureSeeded } from '$lib/db/seed';
+	import { applyTheme, watchSystemTheme } from '#lib/theme/theme.svelte';
 	import {
 		onStatus,
 		wireAlarmLifecycle,
@@ -25,6 +26,22 @@
 	const sidebarCollapsed = new PersistedState('ikoro:sidebar-collapsed', false);
 	let sheetOpen = $state(false);
 	let status = $state<AlarmPermissionStatus | null>(null);
+
+	// The theme. `document.documentElement` is a node Svelte does not own, so
+	// writing the `dark` class and `color-scheme` onto it is a genuine external
+	// side effect — the case `$effect` is actually for. It re-runs whenever
+	// `resolvedTheme` changes, which covers both an explicit choice and the OS
+	// flipping at dusk while the app is open, and it hands back the listener's
+	// teardown.
+	//
+	// This runs FIRST because it is idempotent and cheap, and because everything
+	// else here touches storage. The inline script in app.html has already put the
+	// class on <html> before first paint; this is the reactive half that keeps it
+	// correct after mount.
+	$effect(() => {
+		applyTheme();
+		return watchSystemTheme();
+	});
 
 	// A fresh install needs a list before any screen can render one. This is a
 	// static SPA with no server load, so seeding happens here — once, and only

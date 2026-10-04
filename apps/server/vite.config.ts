@@ -40,6 +40,20 @@ export default defineConfig({
 		// The whole server is pure logic plus SQL string-building. No jsdom file in
 		// this workspace needs it, and opting in per file costs a whole extra
 		// environment for nothing.
-		environment: 'node'
+		environment: 'node',
+
+		// `tests/lazy-init.test.ts` deliberately calls `vi.resetModules()` before
+		// every import, because the memoised DB/auth instances live in module scope
+		// and a stale one would make every later test depend on alphabetical order.
+		// The cost is that Better Auth's module graph is re-imported from scratch
+		// for each of those tests — which sits right on vitest's 5000 ms default,
+		// so the suite passed on an idle machine and failed under load.
+		//
+		// 20 s is an honest budget for "transitively import a large auth library
+		// eleven times". Raising it is the fix; deleting or skipping the tests
+		// would remove the only guard against a lazy getter being "simplified"
+		// back into a top-level read that breaks `vite build` on an unconfigured
+		// machine.
+		testTimeout: 20_000
 	}
 });

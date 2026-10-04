@@ -9,6 +9,7 @@
 	import AlarmHealth from '$lib/components/ui/AlarmHealth.svelte';
 	import Backup from '$lib/components/ui/Backup.svelte';
 	import SyncPanel from '$lib/components/ui/SyncPanel.svelte';
+	import ThemeToggle from '$lib/components/theme/ThemeToggle.svelte';
 	import { liveLists, liveTasks } from '$lib/stores/view';
 
 	const lists = $derived(liveLists());
@@ -29,6 +30,16 @@
 	<h1 class="mb-6 text-xl font-semibold tracking-tight">Settings</h1>
 
 	<div class="grid gap-8">
+		<section>
+			<h2 class="mb-1 text-sm font-medium">Appearance</h2>
+			<p class="mb-3 text-sm text-muted-foreground">
+				Ikoro ships both themes at WCAG AAA contrast. Text is at least 7:1 against its background in
+				either, which is well past the 4.5:1 most apps settle for — if reading this screen feels
+				like work, that is a bug, not a setting.
+			</p>
+			<ThemeToggle />
+		</section>
+
 		<section>
 			<h2 class="mb-1 text-sm font-medium">Notifications</h2>
 			<AlarmHealth />
