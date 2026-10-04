@@ -1,7 +1,0 @@
-{
-	"$schema": "../gen/schemas/mobile-schema.json",
-	"identifier": "default",
-	"description": "Mobile is not the desktop shell. The Android build ships through Capacitor, so this capability exists only so the Rust crate still compiles for mobile targets.",
-	"windows": ["main"],
-	"permissions": ["core:default"]
-}
