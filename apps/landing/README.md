@@ -39,6 +39,7 @@ components are fetched from the public registry directly:
 bun scripts/fetch-shadcn.ts button badge card
 ```
 
-They land in `packages/ui`, not here — the components belong to the package, and
-this app only ever imports them from `@ikoro/ui`. Add the component's name to
-`packages/ui/src/lib/index.ts` in the same commit.
+They land in `src/lib/components/ui/`, and this app owns that copy — there is no
+shared UI package, because shadcn-svelte has no monorepo CLI routing, so a
+central one bought only indirection. Add the component's name to
+`src/lib/components/ui/index.ts` in the same commit.
