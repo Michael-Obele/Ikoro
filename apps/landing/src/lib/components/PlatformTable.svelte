@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Badge, type BadgeVariant } from '@ikoro/ui';
+	import { Badge, type BadgeVariant } from '$lib/components/ui';
 	import { platforms, type Platform } from '$lib/content';
 
 	/**

@@ -15,7 +15,7 @@
 		CardContent,
 		CardHeader,
 		CardTitle
-	} from '@ikoro/ui';
+	} from '$lib/components/ui';
 	import { CircleAlert, Download, ExternalLink } from '@lucide/svelte';
 	import Section from '$lib/components/Section.svelte';
 	import {

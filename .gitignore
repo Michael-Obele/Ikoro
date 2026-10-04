@@ -48,9 +48,23 @@ Thumbs.db
 !.vscode/settings.json
 !.vscode/mcp.json
 
+# ── analysis tooling ─────────────────────────────────────────────────────────
+# fallow writes its cache here. Untracked and regenerable.
+.fallow/
+
+# ── agent scratch ─────────────────────────────────────────────────────────────
+# The subagent-driven-development progress ledger and review packages. Working
+# state for one session, not repository content — a fresh clone has no sessions
+# to recover, and a stale ledger is worse than none.
+.superpowers/
+
 # ── local, untracked planning material ──────────────────────────────────────
 # The plan travels with the machine, not the repository: /plan/ is the original
 # AI-Plans copy, /docs/ is the working tree derived from it. Both are local-only
 # on purpose — a fresh clone builds fine without either. See README.md.
 /plan/
 /docs/
+
+# agent browser scratch
+.playwright-mcp/
+.browser-use/

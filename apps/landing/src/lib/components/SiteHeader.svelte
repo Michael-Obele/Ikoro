@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button } from '@ikoro/ui';
+	import { Button } from '$lib/components/ui';
 	import { Download } from '@lucide/svelte';
 	import { page } from '$app/state';
 	import { site } from '$lib/content';

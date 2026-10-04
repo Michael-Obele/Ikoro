@@ -1,19 +1,14 @@
 /**
  * Fetches shadcn-svelte components straight from the public registry, and writes
- * them into `@ikoro/ui` — not into an app.
+ * them into this app's own `src/lib/components/ui/`.
  *
  * Why not `bunx shadcn-svelte add`? The CLI hangs in this environment (verified
  * 2026-10-03: it never prints, it never writes). The registry is the same source
  * the CLI reads, so fetching it directly is deterministic, reviewable, and keeps
  * the Bun-only rule. This is the same technique as
- * `apps/app/scripts/fetch-shadcn.ts`, with two differences that the extraction
- * forces:
- *
- *   1. **Destination.** The components belong to `packages/ui`, which is now the
- *      single copy of them, so they land in `packages/ui/src/lib/...`.
- *   2. **Imports.** A shared package cannot use an app-local alias. Every
- *      `$lib/...` specifier is rewritten to a path relative to the file that
- *      imports it, so the package compiles with no alias configured anywhere.
+ * `apps/app/scripts/fetch-shadcn.ts`, with one difference: every `$lib/...`
+ * specifier is rewritten to a path relative to the file that imports it, so
+ * what lands here matches the components already in `src/lib/components/ui/`.
  *
  *   bun scripts/fetch-shadcn.ts button badge card separator alert
  */
@@ -22,8 +17,8 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 
 const REGISTRY = 'https://shadcn-svelte.com/registry/styles/lyra';
 
-/** The package's `src/lib`, i.e. what a `$lib` import would have meant. */
-const LIB = resolve(import.meta.dir, '../../../packages/ui/src/lib');
+/** This app's `src/lib`, i.e. what a `$lib` import means inside this app. */
+const LIB = resolve(import.meta.dir, '../src/lib');
 
 /** components.json aliases → where files actually land on disk, inside LIB. */
 const ALIASES: Record<string, string> = {
@@ -135,7 +130,7 @@ while (queue.length > 0) {
 		await mkdir(dirname(target), { recursive: true });
 		const body = substitute(file.content, dirname(target));
 		await writeFile(target, body.endsWith('\n') ? body : `${body}\n`, 'utf8');
-		console.log(`  ✓ ${target.replace(`${LIB}/`, 'packages/ui/src/lib/')}`);
+		console.log(`  ✓ ${target.replace(`${LIB}/`, 'src/lib/')}`);
 	}
 
 	for (const [key, value] of Object.entries(item.cssVars?.theme ?? {})) {

@@ -1,5 +1,12 @@
 <script lang="ts">
-	import { Alert, AlertDescription, AlertTitle, Button, Card, CardContent } from '@ikoro/ui';
+	import {
+		Alert,
+		AlertDescription,
+		AlertTitle,
+		Button,
+		Card,
+		CardContent
+	} from '$lib/components/ui';
 	import { CircleAlert, Download } from '@lucide/svelte';
 	import PlatformTable from '$lib/components/PlatformTable.svelte';
 	import Section from '$lib/components/Section.svelte';

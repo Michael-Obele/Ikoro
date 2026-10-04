@@ -54,7 +54,9 @@
 	},
 	"imports": {
 		"#lib": "./src/lib/index.js",
-		"#lib/*": "./src/lib/*"
+		"#lib/*": "./src/lib/*",
+		"$lib": "./src/lib/index.js",
+		"$lib/*": "./src/lib/*"
 	},
 	"dependencies": {
 		"@capacitor/app": "8.1.2",

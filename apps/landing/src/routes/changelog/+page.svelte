@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Badge } from '@ikoro/ui';
+	import { Badge } from '$lib/components/ui';
 	import Section from '$lib/components/Section.svelte';
 	import { releases, site } from '$lib/content';
 </script>

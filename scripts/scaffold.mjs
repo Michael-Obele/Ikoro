@@ -72,9 +72,7 @@ const TREES = {
 		// `drizzle-kit generate` writes its SQL migrations.
 		'apps/server/drizzle'
 	],
-	'packages/ui': ['packages/ui/src/lib/components/ui', 'packages/ui/src/lib/utils'],
-	'packages/sync': ['packages/sync/src/lib', 'packages/sync/tests'],
-	'packages/config': ['packages/config']
+	'packages/sync': ['packages/sync/src/lib', 'packages/sync/tests']
 };
 
 let dirs = 0;
