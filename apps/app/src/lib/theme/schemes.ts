@@ -27,6 +27,14 @@
  *   - Chroma is preserved exactly. A hue rotation that also re-tuned chroma would
  *     be a second, unaudited palette.
  *
+ * WHY A ROTATION IS ENOUGH TO RE-THEME THE WHOLE APP. It is only enough because
+ * the crimson reference is itself tinted: `layout.css` carries neutral chroma
+ * 0.012 and neutral-variant 0.024, so page, cards, borders and secondary text all
+ * move when the hue does. Rotating a reference whose neutrals were grey would
+ * have repainted the buttons and left every surface behind — six swatches, one
+ * app. The tint is the reference's, not this module's, which is why it is written
+ * down (and justified) in the stylesheet and only consumed here.
+ *
  * THE ONE HONEST CAVEAT. A hue can be out of sRGB gamut at a given L and C even
  * though the crimson reference was inside it — sRGB is not a circle. Where that
  * happens the browser gamut-maps the colour (CSS Color 4: hold L and H, reduce C),
@@ -263,12 +271,62 @@ export function getSeedSchemes(id: SeedSchemeId): MonetSchemes {
 }
 
 /**
- * The swatch colour for a seed: its light-theme primary.
+ * The colours a picker needs to draw a miniature of the app.
  *
- * Read from the generated scheme rather than from a hand-written hex, so the
- * swatch is literally the colour the app will paint — a swatch that disagrees
- * with the result is the one bug a colour picker cannot afford.
+ * A single swatch cannot answer "what will this do to my app?" — and the primary
+ * alone answers it wrongly, because the primary is tone 11 in the light theme (it
+ * is `--ring`, see the header of `layout.css`) and therefore renders as a
+ * near-black square in every scheme. Six near-black squares is what the picker
+ * used to show.
+ *
+ * What actually changes between schemes is the SURFACE — page, card, secondary
+ * text — so those are most of the values. `primary` is still here, but as the
+ * action bar in the miniature rather than as the whole swatch.
+ *
+ * The values are read out of the generated scheme rather than restated as hexes,
+ * so the preview cannot drift from the result when a tone is retuned.
  */
-export function seedSwatch(id: SeedSchemeId): string {
-	return getSeedSchemes(id).light['--primary'] ?? 'oklch(0.5 0.1 0)';
+export interface SchemePreview {
+	/** The page. */
+	surface: string;
+	/** A card sitting on the page. */
+	container: string;
+	/** Buttons, focus ring, the checked switch. */
+	primary: string;
+	/** Body text. */
+	onSurface: string;
+	/** Secondary text: timestamps, counts, hints. */
+	onSurfaceVariant: string;
+	/** Control boundaries — the trim of the whole miniature. */
+	outline: string;
+}
+
+const PREVIEW_FALLBACK: SchemePreview = {
+	surface: 'oklch(0.983 0.012 17.58)',
+	container: 'oklch(0.949 0.012 17.58)',
+	primary: 'oklch(0.246 0.105 17.58)',
+	onSurface: 'oklch(0.225 0.012 17.58)',
+	onSurfaceVariant: 'oklch(0.398 0.024 17.58)',
+	outline: 'oklch(0.588 0.024 17.58)'
+};
+
+/**
+ * The preview in the mode the app is actually painting.
+ *
+ * `mode` is not decoration. A dark-mode user looking at six LIGHT miniatures is
+ * being shown a screen they will never see, and could reasonably conclude that
+ * picking Green makes the app light green. Showing the resolved mode makes the
+ * card literally what happens on click — the picker stops being a swatch and
+ * starts being a preview.
+ */
+export function schemePreview(id: SeedSchemeId, mode: 'light' | 'dark'): SchemePreview {
+	const scheme = getSeedSchemes(id)[mode];
+	return {
+		surface: scheme['--background'] ?? PREVIEW_FALLBACK.surface,
+		container: scheme['--card'] ?? PREVIEW_FALLBACK.container,
+		primary: scheme['--primary'] ?? PREVIEW_FALLBACK.primary,
+		onSurface: scheme['--foreground'] ?? PREVIEW_FALLBACK.onSurface,
+		onSurfaceVariant: scheme['--muted-foreground'] ?? PREVIEW_FALLBACK.onSurfaceVariant,
+		outline: scheme['--border'] ?? PREVIEW_FALLBACK.outline
+	};
 }

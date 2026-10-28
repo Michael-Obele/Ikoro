@@ -7,8 +7,7 @@ import {
 	SEED_SCHEMES,
 	getSeedSchemes,
 	referencePalette,
-	rotatePalette,
-	seedSwatch
+	rotatePalette
 } from '#lib/theme/schemes';
 import type { TokenMap } from '#lib/theme/monet';
 import type { SeedSchemeId } from '#lib/theme/schemes';
@@ -68,10 +67,7 @@ import type { SeedSchemeId } from '#lib/theme/schemes';
  * ------------------------------------------------------------------ */
 
 vi.mock('../src/routes/layout.css?raw', () => ({
-	default: readFileSync(
-		fileURLToPath(new URL('../src/routes/layout.css', import.meta.url)),
-		'utf8'
-	)
+	default: readFileSync(fileURLToPath(new URL('../src/routes/layout.css', import.meta.url)), 'utf8')
 }));
 
 /* ------------------------------------------------------------------ *
@@ -404,38 +400,27 @@ const NON_TEXT_PAIRS: Pair[] = [
 const ALL_PAIRS: Pair[] = [...TEXT_PAIRS, ...NON_TEXT_PAIRS];
 
 /**
- * Pairs that miss their floor in one specific scheme, after gamut mapping.
+ * THERE ARE NO EXCEPTIONS, AND THAT IS THE POINT.
  *
- * THE ONE ENTRY, AND WHY IT EXISTS. Teal light, `ring/50 on muted` measures
- * 2.995:1 against the 3:1 non-text floor — a 0.2 % miss, and the ONLY pair
- * of the 516 audited here that lands below its floor. It is not a bug in
- * `schemes.ts`: the rotation really does preserve OKLCH L and C, and the
- * token is inside sRGB (no gamut mapping involved). The miss is inherent to
- * the approach — WCAG relative luminance weights the RGB channels
- * (0.2126 / 0.7152 / 0.0722), so rotating the hue shifts WCAG luminance a
- * little even with OKLCH L frozen, and teal's green-heavy mix at 50 % alpha
- * over `muted` lands just short. `schemes.ts`'s header claims contrast is "a
- * function of LIGHTNESS, not hue"; that is true of OKLCH L and very nearly
- * true of WCAG luminance — this pair is where "very nearly" shows.
+ * This used to carry one: teal light, `ring/50 on muted`, at 2.995:1 against
+ * the 3:1 non-text floor. It was never a bug in `schemes.ts` — the rotation
+ * does preserve OKLCH L and C — it was the rotation's own limit. WCAG relative
+ * luminance weights the channels (0.2126 / 0.7152 / 0.0722), so rotating the
+ * hue shifts it a little even with OKLCH L frozen, and teal's green-heavy mix at
+ * 50 % alpha over `muted` landed just short. `schemes.ts` claims contrast is "a
+ * function of LIGHTNESS, not hue"; true of OKLCH L, very nearly true of WCAG
+ * luminance, and that pair was where "very nearly" showed.
  *
- * The floor for this entry is 2.95:1 — tight enough that a real regression
- * (a re-tuned `muted`, a lighter ring) still fails, loose enough to hold the
- * measured 2.995. Beware the printed number: `toFixed(2)` renders it as
- * "3.00:1", which reads as a pass and is not — the same rounding trap
- * `theme-contrast.test.ts` guards against explicitly.
+ * It is fixed rather than excused. The light `primary` in `layout.css` now sits
+ * at M3 tone 11 instead of 13, which puts every seed over 3:1 — worst case teal
+ * at 3.07:1. So the escape hatch is gone: every pair of every scheme is asserted
+ * against the same floor, with no per-scheme carve-out. A future hue that cannot
+ * meet its floor must be re-tuned in the stylesheet, not exempted here.
  *
- * If the palette is ever re-tuned so this pair clears 3:1 outright, DELETE
- * the entry; the universal assertion reclaims the pair automatically.
+ * Beware the printed numbers: `toFixed(2)` renders 2.995 as "3.00:1", which
+ * reads as a pass and is not — the rounding trap `theme-contrast.test.ts`
+ * guards against explicitly, and the reason the assertions below print raw ratios.
  */
-const MEASURED_EXCEPTIONS: Record<
-	string,
-	{ floor: number; why: string }
-> = {
-	'teal/light/ring/50 on muted (as painted on focus)': {
-		floor: 2.95,
-		why: 'measures 2.995:1 — hue rotation shifts WCAG luminance slightly; see comment above'
-	}
-};
 
 /** Same compositing order as theme-contrast: tint the backdrop first, then the ink. */
 function measure(map: TokenMap, pair: Pair): { ratio: number } {
@@ -528,9 +513,7 @@ describe('seed schemes — lightness and chroma survive the rotation', () => {
 						`${id}/${mode}/--${name}: effective C ${out.effectiveChroma} exceeds declared ${colour.C}`
 					).toBeLessThanOrEqual(colour.C + 1e-9);
 					if (out.effectiveChroma < colour.C - 1e-6) {
-						mapped.push(
-							`${id}/${mode} --${name} ${colour.C} -> ${out.effectiveChroma.toFixed(3)}`
-						);
+						mapped.push(`${id}/${mode} --${name} ${colour.C} -> ${out.effectiveChroma.toFixed(3)}`);
 					}
 				}
 			}
@@ -570,12 +553,6 @@ describe('seed schemes — crimson is the reference, delta 0', () => {
 				const actual = Object.keys(getSeedSchemes(id)[mode]).sort();
 				expect(actual, `${id}/${mode}`).toEqual(expected);
 			}
-		}
-	});
-
-	it('seedSwatch is the light --primary of the scheme it names', () => {
-		for (const id of SCHEME_IDS) {
-			expect(seedSwatch(id)).toBe(getSeedSchemes(id).light['--primary']);
 		}
 	});
 });
@@ -657,10 +634,7 @@ describe('seed schemes — WCAG contrast across all six schemes', () => {
 				}
 			);
 
-			const failing = rows.filter((row) => {
-				const exception = MEASURED_EXCEPTIONS[`${id}/${mode}/${row.label}`];
-				return exception ? row.ratio < exception.floor : row.ratio < row.min;
-			});
+			const failing = rows.filter((row) => row.ratio < row.min);
 			const worst = Math.min(...rows.map((row) => row.ratio));
 			console.log(
 				`${SEED_SCHEMES[id].label} ${mode}: ${rows.length - failing.length}/${rows.length} pairs pass` +
@@ -673,16 +647,126 @@ describe('seed schemes — WCAG contrast across all six schemes', () => {
 
 			describe(`${SEED_SCHEMES[id].label} · ${mode}`, () => {
 				it.each(rows)('$label', (row) => {
-					const exception = MEASURED_EXCEPTIONS[`${id}/${mode}/${row.label}`];
-					const floor = exception ? exception.floor : row.min;
 					expect(
 						row.ratio,
-						exception
-							? `${row.label}: measured ${row.ratio.toFixed(2)}:1, documented exception floor ${floor}:1 (${exception.why})`
-							: `${row.label}: measured ${row.ratio.toFixed(2)}:1, WCAG requires ${row.min}:1`
-					).toBeGreaterThanOrEqual(floor);
+						`${row.label}: measured ${row.ratio.toFixed(2)}:1, WCAG requires ${row.min}:1`
+					).toBeGreaterThanOrEqual(row.min);
 				});
 			});
 		}
 	}
+});
+
+/* ------------------------------------------------------------------ *
+ * 5 — the reference is TINTED, so a scheme colours the whole app
+ * ------------------------------------------------------------------ */
+
+describe('reference palette — the neutrals carry the scheme', () => {
+	/**
+	 * THE CLASS OF BUG THIS CATCHES. Re-greying the neutrals.
+	 *
+	 * The whole six-scheme system rests on one property of the reference palette:
+	 * its surface families are CHROMATIC, so rotating the hue moves the page, the
+	 * cards, the borders and the secondary text — not just the buttons.
+	 * `layout.css` once shipped neutral chroma 0.004 and neutral-variant 0.012,
+	 * which is near-grey: all six schemes then painted the same surfaces and the
+	 * picker offered six colours that looked like one.
+	 *
+	 * A contrast audit cannot catch that. Dropping chroma makes every pair measure
+	 * the SAME or BETTER - the surfaces drift toward a neutral grey that is easier
+	 * to read, not harder. So the failure is silent exactly where this repo is
+	 * most careful, and it needs its own assertion rather than a ratio.
+	 *
+	 * The floors are deliberately below the shipped 0.012 / 0.024: this fails a
+	 * re-greying, not a legitimate re-tune of the tint.
+	 */
+	it('the neutral families are chromatic, in both themes', () => {
+		for (const mode of MODES) {
+			const palette = referencePalette(mode);
+			for (const name of ['surface', 'surface-container', 'on-surface']) {
+				expect(
+					palette[`md-sys-color-${name}`].C,
+					`${mode}/--md-sys-color-${name} is grey — a scheme could not show on it`
+				).toBeGreaterThanOrEqual(0.008);
+			}
+			for (const name of ['surface-variant', 'on-surface-variant', 'outline-variant']) {
+				expect(
+					palette[`md-sys-color-${name}`].C,
+					`${mode}/--md-sys-color-${name} is grey`
+				).toBeGreaterThanOrEqual(0.016);
+			}
+		}
+	});
+
+	it('six schemes produce six different page colours', () => {
+		const backgrounds = SCHEME_IDS.map((id) => getSeedSchemes(id).light['--background']);
+		expect(new Set(backgrounds).size, `page colours: ${backgrounds.join(', ')}`).toBe(
+			SCHEME_IDS.length
+		);
+	});
+
+	/**
+	 * THE MAPPING TABLE IS THE CONTRACT, SO LET IT BE CHECKED.
+	 *
+	 * `layout.css` stores each shadcn token twice: once as an M3 role
+	 * (`--md-sys-color-surface`) and once as the alias shadcn components read
+	 * (`--background`). The duplication is deliberate — the contrast audit parses
+	 * literal `oklch()` values and refuses `var()`, so an alias cannot point at its
+	 * role — and the comment above them calls the pairing "the contract".
+	 *
+	 * Until this test existed nothing enforced it. Retuning one family by search
+	 * and replace left `--sidebar-ring` on the old tone while `--primary` moved:
+	 * every pair still passed, because a focus ring two tones off is still a focus
+	 * ring, and the app shipped two different colours for the same role. That is
+	 * exactly the class of bug a test has to catch, because no ratio can.
+	 */
+	it('every shadcn alias is byte-equal to the M3 role it names', () => {
+		const ALIAS_TO_ROLE: Record<string, string> = {
+			background: 'surface',
+			foreground: 'on-surface',
+			card: 'surface-container',
+			'card-foreground': 'on-surface',
+			popover: 'surface-container-high',
+			'popover-foreground': 'on-surface',
+			primary: 'primary',
+			'primary-foreground': 'on-primary',
+			secondary: 'secondary-container',
+			'secondary-foreground': 'on-secondary-container',
+			muted: 'surface-container-high',
+			'muted-foreground': 'on-surface-variant',
+			accent: 'secondary-container',
+			'accent-foreground': 'on-secondary-container',
+			destructive: 'error',
+			'destructive-foreground': 'on-error',
+			border: 'outline-variant',
+			input: 'outline-variant',
+			ring: 'primary',
+			'chart-1': 'primary',
+			'chart-2': 'tertiary',
+			'chart-3': 'secondary',
+			'chart-4': 'error',
+			'chart-5': 'outline',
+			sidebar: 'surface',
+			'sidebar-foreground': 'on-surface',
+			'sidebar-primary': 'primary',
+			'sidebar-primary-foreground': 'on-primary',
+			'sidebar-accent': 'secondary-container',
+			'sidebar-accent-foreground': 'on-secondary-container',
+			'sidebar-border': 'outline-variant',
+			'sidebar-ring': 'primary'
+		};
+
+		for (const mode of MODES) {
+			const palette = referencePalette(mode);
+			for (const [alias, role] of Object.entries(ALIAS_TO_ROLE)) {
+				const aliasValue = palette[alias];
+				const roleValue = palette[`md-sys-color-${role}`];
+				expect(aliasValue, `${mode}: --${alias} is missing`).toBeDefined();
+				expect(roleValue, `${mode}: --md-sys-color-${role} is missing`).toBeDefined();
+				expect(aliasValue, `${mode}: --${alias} must equal --md-sys-color-${role}`).toEqual(
+					roleValue
+				);
+			}
+		}
+	});
 });

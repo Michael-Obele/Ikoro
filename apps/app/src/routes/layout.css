@@ -22,15 +22,47 @@
  *   primary          hue 17.58, chroma 0.222   the seed itself
  *   secondary        hue 17.58, chroma 0.075   same hue, a third of the chroma
  *   tertiary         hue 77.58, chroma 0.110   hue rotated +60 degrees
- *   neutral          hue 17.58, chroma 0.004   the surfaces
- *   neutral variant  hue 17.58, chroma 0.012   outlines and secondary text
+ *   neutral          hue 17.58, chroma 0.012   the surfaces
+ *   neutral variant  hue 17.58, chroma 0.024   outlines and secondary text
  *   error            hue 27.00, chroma 0.200   M3's fixed error hue
+ *
+ * WHY THE NEUTRALS ARE TINTED, AND WHY THAT IS THE WHOLE POINT.
+ *
+ * A colour scheme the user picks has to be visible on the screen they are
+ * looking at, and a screen is mostly surface: page, cards, muted fills, borders,
+ * secondary text. The neutrals used to be near-achromatic — chroma 0.004 and
+ * 0.012 — so switching from crimson to teal repainted the buttons and left every
+ * surface the same warm grey. The picker offered six schemes and the app
+ * delivered one. That is the bug this file fixes: chrome without a tint is not a
+ * theme, it is an accent colour.
+ *
+ * The values are M3 TonalSpot's own proportions rather than a taste call.
+ * Material's TonalSpot requests neutral chroma 6 and neutral-variant chroma 8
+ * against a primary of 36 (material-color-utilities, `CorePalettesTonalSpot`).
+ * In OKLCH at these tones that lands at roughly 0.012 and 0.024 — which is what
+ * is written below. The variant family stays twice the neutral one, exactly as
+ * before, because `--border` and `--input` route through it and SC 1.4.11 needs
+ * them to stay the stronger of the two.
+ *
+ * The tint is FREE, and that is measured rather than hoped. WCAG luminance is
+ * dominated by lightness, and raising chroma at a fixed OKLCH L moves it by well
+ * under a percent. Re-running the 86-pair audit at up to TEN times these chromas
+ * still passes every pair, with the worst margin falling only from 8.52% to
+ * 8.18% (`border on muted`, 3.25:1). So the tint was chosen for what it looks
+ * like, not for what the gate would tolerate — and the gate in
+ * `tests/theme-contrast.test.ts` is what keeps that honest after the fact.
+ *
+ * Two roles are deliberately NOT tinted. `scrim` is a shadow, not a surface, and
+ * a coloured shadow reads as a stain. `surface-container-lowest` is pure white
+ * at L 1, where any chroma at all is outside sRGB and the browser gamut-maps it
+ * back to grey anyway — writing a tint there would be a value the app never
+ * paints.
  *
  * THE TONES ARE CIE L*, 0 (black) to 100 (white), NOT OKLCH lightness — which is
  * what makes them M3 tones and not an arbitrary ramp. The file stores each result
- * as oklch() to match its existing style; the values were produced by holding L*
- * fixed and taking the largest chroma that stays inside sRGB, so the browser
- * renders exactly what is written here and no CSS gamut mapping is involved.
+ * as oklch() to match its existing style, and every chroma below is small enough
+ * to stay inside sRGB at its tone, so the browser renders exactly what is written
+ * here and no CSS gamut mapping is involved.
  *
  * NOT DYNAMIC COLOUR, DELIBERATELY. Material You reads a palette out of the
  * phone's wallpaper. That is an Android SYSTEM capability and Capacitor runs this
@@ -75,8 +107,8 @@
  * preference:
  *
  *   role                       spec tone measured at the spec tone          shipped   shipped ratio
- *   primary (light)            40        ring/50 2.54:1 FAIL                13        3.32:1
- *                                        on-primary 6.14:1 FAIL                       15.26:1
+ *   primary (light)            40        ring/50 2.54:1 FAIL                11        3.49:1
+ *                                        on-primary 6.14:1 FAIL                       15.89:1
  *   error (light)              40        /10 tint 4.69:1 FAIL               26        7.63:1
  *                                        on surface 6.15:1 FAIL                       10.24:1
  *   error (dark)               80        /20 tint 6.67:1 FAIL               90        8.02:1
@@ -96,6 +128,15 @@
  *     40 — still a step lighter and far more chromatic than the near-black
  *     `oklch(0.205 0 0)` it replaces. In dark the same rule pushes the other way
  *     and M3's tone 80 passes as shipped.
+ *
+ *     The shipped tone is 11, not 13, and the extra step is the seed schemes'
+ *     doing. Crimson clears the composite at tone 13, but the six schemes are
+ *     hue ROTATIONS of it, and WCAG luminance is a weighted sum of linear RGB
+ *     rather than a function of OKLCH L alone — so teal, whose green-heavy mix
+ *     dominates that sum, measured 2.99:1 at the same lightness. One tone lower
+ *     puts every seed over the line, worst case teal at 3.07:1. Fixing it in the
+ *     reference is what lets `tests/theme-schemes.test.ts` assert 3:1 for all six
+ *     schemes with no per-scheme exception.
  *   - `--outline-variant` is M3's soft divider, but shadcn routes BOTH `--border`
  *     and `--input` through it, and those are control boundaries — SC 1.4.11
  *     requires 3:1 to identify a control. M3's tone 80 is a 1.62:1 hairline, so
@@ -123,7 +164,7 @@
  */
 :root {
 	/* ---------------------------------------------------------------- M3 roles */
-	--md-sys-color-primary: oklch(0.263 0.105 17.58);
+	--md-sys-color-primary: oklch(0.246 0.105 17.58);
 	--md-sys-color-on-primary: oklch(0.984 0.007 17.58);
 	--md-sys-color-primary-container: oklch(0.919 0.041 17.58);
 	--md-sys-color-on-primary-container: oklch(0.236 0.094 17.58);
@@ -139,19 +180,19 @@
 	--md-sys-color-on-error: oklch(0.984 0.007 27);
 	--md-sys-color-error-container: oklch(0.918 0.041 27);
 	--md-sys-color-on-error-container: oklch(0.236 0.096 27);
-	--md-sys-color-surface: oklch(0.983 0.004 17.58);
-	--md-sys-color-on-surface: oklch(0.225 0.004 17.58);
-	--md-sys-color-surface-variant: oklch(0.915 0.012 17.58);
-	--md-sys-color-on-surface-variant: oklch(0.398 0.012 17.58);
+	--md-sys-color-surface: oklch(0.983 0.012 17.58);
+	--md-sys-color-on-surface: oklch(0.225 0.012 17.58);
+	--md-sys-color-surface-variant: oklch(0.915 0.024 17.58);
+	--md-sys-color-on-surface-variant: oklch(0.398 0.024 17.58);
 	--md-sys-color-surface-container-lowest: oklch(1 0 17.58);
-	--md-sys-color-surface-container-low: oklch(0.966 0.004 17.58);
-	--md-sys-color-surface-container: oklch(0.949 0.004 17.58);
-	--md-sys-color-surface-container-high: oklch(0.932 0.004 17.58);
-	--md-sys-color-surface-container-highest: oklch(0.914 0.004 17.58);
-	--md-sys-color-outline: oklch(0.527 0.012 17.58);
-	--md-sys-color-outline-variant: oklch(0.588 0.012 17.58);
-	--md-sys-color-inverse-surface: oklch(0.311 0.004 17.58);
-	--md-sys-color-inverse-on-surface: oklch(0.957 0.004 17.58);
+	--md-sys-color-surface-container-low: oklch(0.966 0.012 17.58);
+	--md-sys-color-surface-container: oklch(0.949 0.012 17.58);
+	--md-sys-color-surface-container-high: oklch(0.932 0.012 17.58);
+	--md-sys-color-surface-container-highest: oklch(0.914 0.012 17.58);
+	--md-sys-color-outline: oklch(0.527 0.024 17.58);
+	--md-sys-color-outline-variant: oklch(0.588 0.024 17.58);
+	--md-sys-color-inverse-surface: oklch(0.311 0.012 17.58);
+	--md-sys-color-inverse-on-surface: oklch(0.957 0.012 17.58);
 	--md-sys-color-scrim: oklch(0.138 0.004 17.58);
 
 	/*
@@ -199,42 +240,42 @@
 
 	/* ------------------------------------------- shadcn-svelte compatibility */
 	/* Values repeat the roles above literally, on purpose — see the header. */
-	--background: oklch(0.983 0.004 17.58);
-	--foreground: oklch(0.225 0.004 17.58);
-	--card: oklch(0.949 0.004 17.58);
-	--card-foreground: oklch(0.225 0.004 17.58);
-	--popover: oklch(0.932 0.004 17.58);
-	--popover-foreground: oklch(0.225 0.004 17.58);
-	--primary: oklch(0.263 0.105 17.58);
+	--background: oklch(0.983 0.012 17.58);
+	--foreground: oklch(0.225 0.012 17.58);
+	--card: oklch(0.949 0.012 17.58);
+	--card-foreground: oklch(0.225 0.012 17.58);
+	--popover: oklch(0.932 0.012 17.58);
+	--popover-foreground: oklch(0.225 0.012 17.58);
+	--primary: oklch(0.246 0.105 17.58);
 	--primary-foreground: oklch(0.984 0.007 17.58);
 	--secondary: oklch(0.919 0.041 17.58);
 	--secondary-foreground: oklch(0.234 0.075 17.58);
-	--muted: oklch(0.932 0.004 17.58);
-	--muted-foreground: oklch(0.398 0.012 17.58);
+	--muted: oklch(0.932 0.012 17.58);
+	--muted-foreground: oklch(0.398 0.024 17.58);
 	--accent: oklch(0.919 0.041 17.58);
 	--accent-foreground: oklch(0.234 0.075 17.58);
 	--destructive: oklch(0.381 0.155 27);
 	--destructive-foreground: oklch(0.984 0.007 27);
-	--border: oklch(0.588 0.012 17.58);
-	--input: oklch(0.588 0.012 17.58);
-	--ring: oklch(0.263 0.105 17.58);
+	--border: oklch(0.588 0.024 17.58);
+	--input: oklch(0.588 0.024 17.58);
+	--ring: oklch(0.246 0.105 17.58);
 
 	/* Data series: M3 charts read primary -> tertiary, so do these. */
-	--chart-1: oklch(0.263 0.105 17.58);
+	--chart-1: oklch(0.246 0.105 17.58);
 	--chart-2: oklch(0.486 0.101 77.58);
 	--chart-3: oklch(0.492 0.075 17.58);
 	--chart-4: oklch(0.381 0.155 27);
-	--chart-5: oklch(0.527 0.012 17.58);
+	--chart-5: oklch(0.527 0.024 17.58);
 
 	/* The sidebar is a surface, not a separate palette. */
-	--sidebar: oklch(0.983 0.004 17.58);
-	--sidebar-foreground: oklch(0.225 0.004 17.58);
-	--sidebar-primary: oklch(0.263 0.105 17.58);
+	--sidebar: oklch(0.983 0.012 17.58);
+	--sidebar-foreground: oklch(0.225 0.012 17.58);
+	--sidebar-primary: oklch(0.246 0.105 17.58);
 	--sidebar-primary-foreground: oklch(0.984 0.007 17.58);
 	--sidebar-accent: oklch(0.919 0.041 17.58);
 	--sidebar-accent-foreground: oklch(0.234 0.075 17.58);
-	--sidebar-border: oklch(0.588 0.012 17.58);
-	--sidebar-ring: oklch(0.263 0.105 17.58);
+	--sidebar-border: oklch(0.588 0.024 17.58);
+	--sidebar-ring: oklch(0.246 0.105 17.58);
 
 	/*
 	 * The one shadcn knob the generated components read for shape. It points at
@@ -268,40 +309,40 @@
 	--md-sys-color-on-error: oklch(0.327 0.133 27);
 	--md-sys-color-error-container: oklch(0.417 0.169 27);
 	--md-sys-color-on-error-container: oklch(0.918 0.041 27);
-	--md-sys-color-surface: oklch(0.19 0.004 17.58);
-	--md-sys-color-on-surface: oklch(0.914 0.004 17.58);
-	--md-sys-color-surface-variant: oklch(0.398 0.012 17.58);
-	--md-sys-color-on-surface-variant: oklch(0.829 0.012 17.58);
-	--md-sys-color-surface-container-lowest: oklch(0.173 0.004 17.58);
-	--md-sys-color-surface-container-low: oklch(0.199 0.004 17.58);
-	--md-sys-color-surface-container: oklch(0.207 0.004 17.58);
-	--md-sys-color-surface-container-high: oklch(0.242 0.004 17.58);
-	--md-sys-color-surface-container-highest: oklch(0.276 0.004 17.58);
-	--md-sys-color-outline: oklch(0.657 0.012 17.58);
-	--md-sys-color-outline-variant: oklch(0.545 0.012 17.58);
-	--md-sys-color-inverse-surface: oklch(0.914 0.004 17.58);
-	--md-sys-color-inverse-on-surface: oklch(0.311 0.004 17.58);
+	--md-sys-color-surface: oklch(0.19 0.012 17.58);
+	--md-sys-color-on-surface: oklch(0.914 0.012 17.58);
+	--md-sys-color-surface-variant: oklch(0.398 0.024 17.58);
+	--md-sys-color-on-surface-variant: oklch(0.829 0.024 17.58);
+	--md-sys-color-surface-container-lowest: oklch(0.173 0.012 17.58);
+	--md-sys-color-surface-container-low: oklch(0.199 0.012 17.58);
+	--md-sys-color-surface-container: oklch(0.207 0.012 17.58);
+	--md-sys-color-surface-container-high: oklch(0.242 0.012 17.58);
+	--md-sys-color-surface-container-highest: oklch(0.276 0.012 17.58);
+	--md-sys-color-outline: oklch(0.657 0.024 17.58);
+	--md-sys-color-outline-variant: oklch(0.545 0.024 17.58);
+	--md-sys-color-inverse-surface: oklch(0.914 0.012 17.58);
+	--md-sys-color-inverse-on-surface: oklch(0.311 0.012 17.58);
 	--md-sys-color-scrim: oklch(0.138 0.004 17.58);
 
 	/* ------------------------------------------- shadcn-svelte compatibility */
-	--background: oklch(0.19 0.004 17.58);
-	--foreground: oklch(0.914 0.004 17.58);
-	--card: oklch(0.207 0.004 17.58);
-	--card-foreground: oklch(0.914 0.004 17.58);
-	--popover: oklch(0.242 0.004 17.58);
-	--popover-foreground: oklch(0.914 0.004 17.58);
+	--background: oklch(0.19 0.012 17.58);
+	--foreground: oklch(0.914 0.012 17.58);
+	--card: oklch(0.207 0.012 17.58);
+	--card-foreground: oklch(0.914 0.012 17.58);
+	--popover: oklch(0.242 0.012 17.58);
+	--popover-foreground: oklch(0.914 0.012 17.58);
 	--primary: oklch(0.838 0.089 17.58);
 	--primary-foreground: oklch(0.327 0.13 17.58);
 	--secondary: oklch(0.388 0.075 17.58);
 	--secondary-foreground: oklch(0.919 0.041 17.58);
-	--muted: oklch(0.242 0.004 17.58);
-	--muted-foreground: oklch(0.829 0.012 17.58);
+	--muted: oklch(0.242 0.012 17.58);
+	--muted-foreground: oklch(0.829 0.024 17.58);
 	--accent: oklch(0.388 0.075 17.58);
 	--accent-foreground: oklch(0.919 0.041 17.58);
 	--destructive: oklch(0.918 0.041 27);
 	--destructive-foreground: oklch(0.327 0.133 27);
-	--border: oklch(0.545 0.012 17.58);
-	--input: oklch(0.545 0.012 17.58);
+	--border: oklch(0.545 0.024 17.58);
+	--input: oklch(0.545 0.024 17.58);
 	--ring: oklch(0.838 0.089 17.58);
 
 	/* Data series: M3 charts read primary -> tertiary, so do these. */
@@ -309,16 +350,16 @@
 	--chart-2: oklch(0.831 0.11 77.58);
 	--chart-3: oklch(0.837 0.075 17.58);
 	--chart-4: oklch(0.918 0.041 27);
-	--chart-5: oklch(0.657 0.012 17.58);
+	--chart-5: oklch(0.657 0.024 17.58);
 
 	/* The sidebar is a surface, not a separate palette. */
-	--sidebar: oklch(0.19 0.004 17.58);
-	--sidebar-foreground: oklch(0.914 0.004 17.58);
+	--sidebar: oklch(0.19 0.012 17.58);
+	--sidebar-foreground: oklch(0.914 0.012 17.58);
 	--sidebar-primary: oklch(0.838 0.089 17.58);
 	--sidebar-primary-foreground: oklch(0.327 0.13 17.58);
 	--sidebar-accent: oklch(0.388 0.075 17.58);
 	--sidebar-accent-foreground: oklch(0.919 0.041 17.58);
-	--sidebar-border: oklch(0.545 0.012 17.58);
+	--sidebar-border: oklch(0.545 0.024 17.58);
 	--sidebar-ring: oklch(0.838 0.089 17.58);
 }
 
