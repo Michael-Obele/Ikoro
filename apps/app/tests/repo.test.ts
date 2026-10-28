@@ -268,3 +268,151 @@ describe('markAllDirty', () => {
 		expect((await repo.getTask(id))?.dirty).toBe(1);
 	});
 });
+
+describe('subtasks', () => {
+	/**
+	 * The subtask contract, one level deep by design:
+	 *
+	 *   - a subtask is created against a TOP-LEVEL parent only (repo enforces it,
+	 *     so no UI or future sync writer can nest deeper);
+	 *   - a parent with open subtasks cannot be completed — the thrown MESSAGE is
+	 *     the contract the UI surfaces, so it is asserted verbatim;
+	 *   - deleting a parent soft-deletes its children (sequential + idempotent,
+	 *     like deleteList, because svelte-idb has no transaction);
+	 *   - a subtask always inherits its parent's listId, whatever the caller passed.
+	 */
+	async function parentWithChildren(): Promise<{ parentId: string; childIds: string[] }> {
+		const listId = await freshList();
+		const parent = await repo.createTask({ listId, title: 'parent' });
+		const a = await repo.createTask({ listId, title: 'a', parentId: parent.id });
+		const b = await repo.createTask({ listId, title: 'b', parentId: parent.id });
+		return { parentId: parent.id, childIds: [a.id, b.id] };
+	}
+
+	it('subtasksOf returns only that parent’s alive subtasks, in creation order', async () => {
+		const { parentId, childIds } = await parentWithChildren();
+
+		const subs = await repo.subtasksOf(parentId);
+		expect(subs.map((t) => t.id)).toEqual(childIds);
+		expect(subs.every((t) => t.parentId === parentId)).toBe(true);
+
+		// Another parent's child must not leak in.
+		const listId = (await repo.getTask(parentId))!.listId;
+		const stranger = await repo.createTask({ listId, title: 'stranger' });
+		await repo.createTask({ listId, title: 'other child', parentId: stranger.id });
+		expect((await repo.subtasksOf(parentId)).map((t) => t.id)).toEqual(childIds);
+	});
+
+	it('subtasksOf hides tombstoned subtasks', async () => {
+		const { parentId, childIds } = await parentWithChildren();
+		await repo.deleteTask(childIds[0]);
+
+		const subs = await repo.subtasksOf(parentId);
+		expect(subs.map((t) => t.id)).toEqual([childIds[1]]);
+	});
+
+	it('createTask forces the subtask into the parent’s list', async () => {
+		const listId = await freshList();
+		const parent = await repo.createTask({ listId, title: 'parent' });
+		const otherList = await repo.createList('Elsewhere');
+
+		const child = await repo.createTask({
+			listId: otherList.id, // wrong on purpose — inheritance must win
+			title: 'child',
+			parentId: parent.id
+		});
+
+		expect(child.listId).toBe(listId);
+	});
+
+	it('rejects a subtask whose parent does not exist or is deleted', async () => {
+		const listId = await freshList();
+		await expect(
+			repo.createTask({ listId, title: 'orphan', parentId: 'no-such-task' })
+		).rejects.toThrow(/no longer exists/);
+
+		const parent = await repo.createTask({ listId, title: 'doomed' });
+		await repo.deleteTask(parent.id);
+		await expect(
+			repo.createTask({ listId, title: 'child of ghost', parentId: parent.id })
+		).rejects.toThrow(/no longer exists/);
+	});
+
+	it('enforces the one-level rule — a subtask cannot become a parent', async () => {
+		const { parentId, childIds } = await parentWithChildren();
+
+		await expect(
+			repo.createTask({
+				listId: (await repo.getTask(parentId))!.listId,
+				title: 'grandchild',
+				parentId: childIds[0]
+			})
+		).rejects.toThrow(/one level deep/);
+	});
+
+	it('toggleTask refuses to complete a parent with open subtasks — message asserted verbatim', async () => {
+		const { parentId } = await parentWithChildren();
+
+		await expect(repo.toggleTask(parentId)).rejects.toThrow('Complete its subtasks first');
+		// The refusal must not have half-applied: the parent is still open.
+		expect((await repo.getTask(parentId))?.completedAt).toBeNull();
+	});
+
+	it('toggleTask completes a parent once every subtask is done', async () => {
+		const { parentId, childIds } = await parentWithChildren();
+		for (const id of childIds) await repo.toggleTask(id);
+
+		await expect(repo.toggleTask(parentId)).resolves.toBeUndefined();
+		expect((await repo.getTask(parentId))?.completedAt).not.toBeNull();
+	});
+
+	it('toggleTask always allows reopening a completed parent', async () => {
+		const { parentId, childIds } = await parentWithChildren();
+		for (const id of childIds) await repo.toggleTask(id);
+		await repo.toggleTask(parentId);
+
+		// Children are done, so this is legal — but reopen must work even if a
+		// future edit loosens the gate, hence asserting both directions.
+		await repo.toggleTask(parentId);
+		expect((await repo.getTask(parentId))?.completedAt).toBeNull();
+	});
+
+	it('deleteTask cascades the soft delete to subtasks', async () => {
+		const { parentId, childIds } = await parentWithChildren();
+
+		await repo.deleteTask(parentId);
+
+		expect((await repo.getTask(parentId))?.deletedAt).not.toBeNull();
+		for (const id of childIds) {
+			expect((await repo.getTask(id))?.deletedAt).not.toBeNull();
+		}
+		// And the cascade is visible to the read model: no orphans anywhere.
+		expect(await repo.subtasksOf(parentId)).toHaveLength(0);
+	});
+
+	it('deleteTask cascade is idempotent — a second call resolves cleanly', async () => {
+		const { parentId } = await parentWithChildren();
+		await repo.deleteTask(parentId);
+
+		await expect(repo.deleteTask(parentId)).resolves.toBeUndefined();
+	});
+
+	it('completing a subtask never gates on siblings and never blocks itself', async () => {
+		const { childIds } = await parentWithChildren();
+
+		// A subtask is not a parent: the gate must not apply to it even though
+		// its sibling is still open.
+		await expect(repo.toggleTask(childIds[0])).resolves.toBeUndefined();
+		expect((await repo.getTask(childIds[0]))?.completedAt).not.toBeNull();
+	});
+
+	it('hasOpenSubtasks tracks the children, not the parent itself', async () => {
+		const { parentId, childIds } = await parentWithChildren();
+
+		expect(await repo.hasOpenSubtasks(parentId)).toBe(true);
+		await repo.toggleTask(childIds[0]);
+		expect(await repo.hasOpenSubtasks(parentId)).toBe(true);
+		await repo.toggleTask(childIds[1]);
+		expect(await repo.hasOpenSubtasks(parentId)).toBe(false);
+	});
+});

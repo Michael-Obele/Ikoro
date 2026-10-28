@@ -17,11 +17,14 @@
 	import ListIcon from 'lucide-svelte/icons/list';
 	import * as repo from '$lib/db/repo';
 	import type { Task } from '$lib/db/schema';
-	import { liveListById, liveTasksByList } from '$lib/stores/view';
+	import { liveListById, liveTasksByList, liveSubtasksByParent } from '$lib/stores/view';
 
 	const listId = $derived(page.params.id ?? '');
 	const list = $derived(liveListById(listId));
-	const tasks = $derived(liveTasksByList(listId));
+	// Top-level rows only — subtasks render nested under their parent (see
+	// `liveSubtasksByParent`), so they are excluded from the drag pool: reordering
+	// is a decision about parents, and children follow their parent's position.
+	const tasks = $derived(liveTasksByList(listId).filter((t) => t.parentId === null));
 
 	let editing = $state<Task | null>(null);
 	let sheetOpen = $state(false);
@@ -30,6 +33,8 @@
 		editing = task;
 		sheetOpen = true;
 	}
+
+	const subtasksByParent = $derived(liveSubtasksByParent());
 
 	// Reordering writes one `put()` per row, sequentially — svelte-idb has no
 	// transaction to wrap them in. The operation is idempotent, so a drag that
@@ -65,7 +70,7 @@
 		</header>
 
 		<!-- The same add row Today and Upcoming render, bound to this list. -->
-		<AddTaskRow listId={listId} />
+		<AddTaskRow {listId} />
 
 		{#if tasks.length === 0}
 			<EmptyState
@@ -83,7 +88,7 @@
 				>
 					{#each tasks as task (task.id)}
 						<div animate:flip={{ duration: 150 }}>
-							<TaskRow {task} onopen={openTask} />
+							<TaskRow {task} onopen={openTask} subtasks={subtasksByParent.get(task.id) ?? []} />
 						</div>
 					{/each}
 				</div>

@@ -171,12 +171,34 @@ export async function reorderLists(ids: string[]): Promise<void> {
 
 // ── tasks ────────────────────────────────────────────────────────────────────
 
-/** `add()`, not `put()` — see `createList`. A duplicate id must throw. */
+/**
+ * `add()`, not `put()` — see `createList`. A duplicate id must throw.
+ *
+ * SUBTASKS. A task with a `parentId` is a subtask, and subtasks are exactly
+ * one level deep: the parent must exist, be alive, and itself be a top-level
+ * task. That is enforced HERE, not only in the UI, so an import or a future
+ * sync writer cannot nest deeper by accident. A subtask also always lives in
+ * its parent's list — the caller's `listId` is overridden, because a child
+ * sitting in a different list than its parent would make every nested view
+ * a lie. (`updateTask` does not police `parentId`: nothing in the UI ever
+ * writes one through it, and reparenting is a v1.2 question.)
+ */
 export async function createTask(input: TaskInput): Promise<Task> {
+	let listId = input.listId;
+	if (input.parentId) {
+		const parent = await getTask(input.parentId);
+		if (!parent || parent.deletedAt !== null) {
+			throw new Error('The task this subtask belongs to no longer exists');
+		}
+		if (parent.parentId !== null) {
+			throw new Error('Subtasks can only be one level deep');
+		}
+		listId = parent.listId;
+	}
 	const ts = nowIso();
 	const task: Task = {
 		id: input.id ?? newId(),
-		listId: input.listId,
+		listId,
 		title: input.title,
 		notes: input.notes ?? null,
 		dueDate: input.dueDate ?? null,
@@ -189,7 +211,14 @@ export async function createTask(input: TaskInput): Promise<Task> {
 		alarmId: null,
 		alarmFiredAt: null,
 		color: input.color ?? null,
-		sortOrder: input.sortOrder ?? (await db.tasks.where('byList').equals(input.listId).count()),
+		sortOrder:
+			input.sortOrder ??
+			(input.parentId
+				? // Siblings compete only with each other, so a subtask's slot comes
+					// from its parent's child count — dense 0,1,2… instead of a position
+					// inherited from the whole list.
+					await db.tasks.where('byParent').equals(input.parentId).count()
+				: await db.tasks.where('byList').equals(listId).count()),
 		createdAt: ts,
 		updatedAt: ts,
 		deletedAt: null,
@@ -223,11 +252,19 @@ export async function updateTask(id: string, patch: Partial<Task>): Promise<void
  * Deliberately does NOT touch `alarmAt`: cancelling the platform notification is
  * M4's scheduler's job. Keeping the two apart means a storage-level toggle in a
  * test never silently disarms an alarm on a real device, and vice versa.
+ *
+ * A parent with open subtasks cannot be completed — the message is the contract
+ * the UI surfaces verbatim. Completing a parent while its children are open
+ * would strand them: they would keep appearing under a done parent with no way
+ * to see they were still owed. Ticking a DONE parent back open is always legal.
  */
 export async function toggleTask(id: string): Promise<void> {
 	const current = await db.tasks.get(id);
 	if (!current) return;
 	const task = asTask(current);
+	if (task.completedAt === null && task.parentId === null && (await hasOpenSubtasks(id))) {
+		throw new Error('Complete its subtasks first');
+	}
 	await db.tasks.put({
 		...task,
 		completedAt: task.completedAt ? null : nowIso(),
@@ -246,6 +283,49 @@ export async function deleteTask(id: string): Promise<void> {
 		updatedAt: nowIso(),
 		dirty: 1
 	} as unknown as Record<string, unknown>);
+
+	// Cascade to subtasks — sequentially and idempotently, exactly like
+	// `deleteList`: svelte-idb has no transaction, so the worst case of an
+	// interruption is a parent tombstoned while its children are not, and
+	// re-running finishes it. Children of a subtask cannot exist (one level),
+	// so one pass is the whole cascade.
+	const children = await db.tasks.where('byParent').equals(id).toArray();
+	for (const row of children) {
+		const child = asTask(row);
+		if (child.deletedAt) continue; // already tombstoned — keep it idempotent
+		await db.tasks.put({
+			...child,
+			deletedAt: nowIso(),
+			updatedAt: nowIso(),
+			dirty: 1
+		} as unknown as Record<string, unknown>);
+	}
+}
+
+// ── subtasks ─────────────────────────────────────────────────────────────────
+
+/**
+ * A parent's living subtasks, oldest first (`sortOrder` is a dense 0,1,2…
+ * assigned at creation — see `createTask`).
+ *
+ * Read through the `byParent` index rather than filtering `getAll()`: the index
+ * exists for exactly this, and unlike the reactive layer this path has no
+ * `liveAll()` subscription to piggyback on. Tombstones are filtered by the one
+ * `alive()` funnel every read shares.
+ */
+export async function subtasksOf(parentId: string): Promise<Task[]> {
+	const rows = await db.tasks.where('byParent').equals(parentId).toArray();
+	return alive(rows.map(asTask)).sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+/**
+ * Whether any subtask of `id` is still open. The gate behind `toggleTask`'s
+ * parent rule, kept separate so the UI can cheaply ask the same question
+ * (e.g. to explain WHY a checkbox refused) without duplicating the predicate.
+ */
+export async function hasOpenSubtasks(id: string): Promise<boolean> {
+	const children = await db.tasks.where('byParent').equals(id).toArray();
+	return alive(children.map(asTask)).some((t) => t.completedAt === null);
 }
 
 export async function tasksByList(listId: string): Promise<Task[]> {

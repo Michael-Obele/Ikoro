@@ -16,6 +16,11 @@
 	 *
 	 * Completed tasks never appear. Undated tasks cannot appear — they have no
 	 * `dueDate`, so they are not in the `byDue` index these rows come from.
+	 *
+	 * SUBTASKS never appear as top-level rows here, even when they carry their own
+	 * `dueDate` — the policy (documented on `liveSubtasksByParent`) is that a
+	 * subtask lives only under its parent, everywhere. The parent is what the
+	 * date buckets return; the children attach beneath it.
 	 */
 	import TaskGroup from '$lib/components/task/TaskGroup.svelte';
 	import AddTaskRow from '$lib/components/task/AddTaskRow.svelte';
@@ -24,7 +29,7 @@
 	import CalendarCheck from 'lucide-svelte/icons/calendar-check';
 	import type { Task } from '$lib/db/schema';
 	import { PAST_WINDOW_DAYS } from '$lib/db/repo';
-	import { liveTasks } from '$lib/stores/view';
+	import { liveTasks, liveSubtasksByParent } from '$lib/stores/view';
 	import { isPastDue, todayISO, todayWindowStart } from '$lib/utils/time';
 
 	let editing = $state<Task | null>(null);
@@ -36,18 +41,23 @@
 	// Narrowed in plain code rather than with `where(...)`: svelte-idb's indexed
 	// queries are not reactive, so this runs inside $derived over the single
 	// liveAll() subscription. Ordering is applied here, not in the view helper,
-	// because the ordering IS the view's opinion.
+	// because the ordering IS the view's opinion. Top-level rows only — subtasks
+	// render nested under their parent, never as their own row.
 	const dueToday = $derived(
 		liveTasks()
-			.filter((t) => t.completedAt === null && t.dueDate === today)
+			.filter((t) => t.completedAt === null && t.parentId === null && t.dueDate === today)
 			.sort(byDue)
 	);
 
 	const overdue = $derived(
 		liveTasks()
-			.filter((t) => isPastDue(t) && t.dueDate !== null && t.dueDate >= windowStart)
+			.filter(
+				(t) => isPastDue(t) && t.parentId === null && t.dueDate !== null && t.dueDate >= windowStart
+			)
 			.sort(byDue)
 	);
+
+	const subtasksByParent = $derived(liveSubtasksByParent());
 
 	/** Overdue first (oldest date at the top), then the clock, then manual order. */
 	function byDue(a: Task, b: Task): number {
@@ -102,8 +112,8 @@
 			hint="Add a task above, or check Upcoming for what is coming."
 		/>
 	{:else}
-		<TaskGroup heading="Past" tasks={overdue} onopen={openTask} />
-		<TaskGroup heading="Today" tasks={dueToday} onopen={openTask} />
+		<TaskGroup heading="Past" tasks={overdue} onopen={openTask} {subtasksByParent} />
+		<TaskGroup heading="Today" tasks={dueToday} onopen={openTask} {subtasksByParent} />
 	{/if}
 </div>
 

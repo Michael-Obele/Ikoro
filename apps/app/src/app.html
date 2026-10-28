@@ -1,162 +1,165 @@
 <!doctype html>
 <html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="text-scale" content="scale" />
-		<script>
+
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<meta name="text-scale" content="scale" />
+	<script>
+		/*
+		 * PRE-PAINT THEME. Runs before SvelteKit fills in the head placeholder
+		 * further down this element, which is the only position where "before the
+		 * first paint" is true.
+		 *
+		 * Do NOT name that placeholder in a comment. SvelteKit substitutes the
+		 * FIRST occurrence of it in this file, not the only one, so an earlier
+		 * mention silently swallows the substitution and leaves the real token in
+		 * the markup — where the HTML parser hoists it out of <head> and renders it
+		 * as visible text at the top of every screen. Hit for real; the suite now
+		 * asserts this file mentions it exactly once.
+		 *
+		 * It has to be INLINE. An imported module is fetched, parsed and executed
+		 * AFTER the CSS has already painted, which is precisely the white flash
+		 * this exists to prevent — a full-screen strobe for anyone loading the app
+		 * in a dark room.
+		 *
+		 * This duplicates THEME_STORAGE_KEY, the JSON shape and the resolution
+		 * rule from src/lib/theme/theme.svelte.ts. That is the cost of not
+		 * flashing, and it is worth it. tests/theme-store.test.ts asserts the two
+		 * copies agree, so a rename on one side fails the suite.
+		 */
+		(() => {
+			const KEY = 'ikoro:theme';
+			const SCHEME_KEY = 'ikoro:scheme';
+			const DARK = 'dark';
+			let choice = 'system';
+			try {
+				// runed's PersistedState serialises with JSON.stringify, so the
+				// stored value is '"dark"', not 'dark'.
+				const raw = localStorage.getItem(KEY);
+				if (raw) {
+					const parsed = JSON.parse(raw);
+					if (parsed === 'light' || parsed === 'dark' || parsed === 'system') {
+						choice = parsed;
+					}
+				}
+			} catch {
+				// Private mode, a corrupt value, storage disabled. 'system' is a
+				// safe answer: it is what a first run would do anyway.
+			}
+			const dark =
+				choice === DARK ||
+				(choice === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+			const root = document.documentElement;
+			root.classList.toggle(DARK, dark);
+			root.style.colorScheme = dark ? 'dark' : 'light';
+
 			/*
-			 * PRE-PAINT THEME. Runs before SvelteKit fills in the head placeholder
-			 * further down this element, which is the only position where "before the
-			 * first paint" is true.
+			 * COLOUR SCHEME. The seed palettes are generated in
+			 * src/lib/theme/schemes.ts, which cannot run here — a module arrives
+			 * after the stylesheet has painted, which is the flash. So the
+			 * stylesheet is read out of the DOM instead: it is already parsed by
+			 * the time this script runs, and its :root / .dark blocks ARE the
+			 * crimson reference the other five hues are rotations of.
 			 *
-			 * Do NOT name that placeholder in a comment. SvelteKit substitutes the
-			 * FIRST occurrence of it in this file, not the only one, so an earlier
-			 * mention silently swallows the substitution and leaves the real token in
-			 * the markup — where the HTML parser hoists it out of <head> and renders it
-			 * as visible text at the top of every screen. Hit for real; the suite now
-			 * asserts this file mentions it exactly once.
-			 *
-			 * It has to be INLINE. An imported module is fetched, parsed and executed
-			 * AFTER the CSS has already painted, which is precisely the white flash
-			 * this exists to prevent — a full-screen strobe for anyone loading the app
-			 * in a dark room.
-			 *
-			 * This duplicates THEME_STORAGE_KEY, the JSON shape and the resolution
-			 * rule from src/lib/theme/theme.svelte.ts. That is the cost of not
-			 * flashing, and it is worth it. tests/theme-store.test.ts asserts the two
-			 * copies agree, so a rename on one side fails the suite.
+			 * Only the hue is rotated, exactly as the module does it, so the
+			 * pre-paint palette and the one the store applies a tick later are
+			 * the same colours. Anything unexpected (no stylesheet yet, a value
+			 * that is not oklch) leaves the static crimson in place, which is
+			 * always a correct answer.
 			 */
-			(() => {
-				const KEY = 'ikoro:theme';
-				const SCHEME_KEY = 'ikoro:scheme';
-				const DARK = 'dark';
-				let choice = 'system';
+			let scheme = 'crimson';
+			try {
+				const raw = localStorage.getItem(SCHEME_KEY);
+				if (raw) {
+					const parsed = JSON.parse(raw);
+					if (
+						parsed === 'crimson' ||
+						parsed === 'blue' ||
+						parsed === 'green' ||
+						parsed === 'orange' ||
+						parsed === 'purple' ||
+						parsed === 'teal' ||
+						parsed === 'dynamic'
+					) {
+						scheme = parsed;
+					}
+				}
+			} catch {
+				// Same reasoning as above: crimson is the audited default.
+			}
+
+			// The seed hues, duplicated from SEED_SCHEMES. tests/theme-store.test.ts
+			// asserts the two copies agree.
+			const HUES = {
+				crimson: 17.58,
+				blue: 250,
+				green: 145,
+				orange: 45,
+				purple: 290,
+				teal: 195
+			};
+			const REFERENCE_HUE = 17.58;
+			const TERTIARY_OFFSET = 60;
+			const ERROR_HUE = 27;
+
+			// `dynamic` has no palette before the bridge answers, so it paints the
+			// crimson fallback — the same answer the store gives.
+			const hue = HUES[scheme] === undefined ? REFERENCE_HUE : HUES[scheme];
+			const delta = hue - REFERENCE_HUE;
+
+			const rotate = (h) => {
+				if (Math.abs(h - ERROR_HUE) < 0.5) return h;
+				const isTertiary = Math.abs(h - (REFERENCE_HUE + TERTIARY_OFFSET)) < 0.5;
+				const isSeed = Math.abs(h - REFERENCE_HUE) < 0.5;
+				if (!isSeed && !isTertiary) return h;
+				return (((h + delta) % 360) + 360) % 360;
+			};
+
+			const round = (n) => {
+				const fixed = n.toFixed(3);
+				return fixed.endsWith('.000') ? fixed.slice(0, -4) : fixed;
+			};
+
+			if (delta !== 0) {
 				try {
-					// runed's PersistedState serialises with JSON.stringify, so the
-					// stored value is '"dark"', not 'dark'.
-					const raw = localStorage.getItem(KEY);
-					if (raw) {
-						const parsed = JSON.parse(raw);
-						if (parsed === 'light' || parsed === 'dark' || parsed === 'system') {
-							choice = parsed;
+					const sheet = Array.from(document.styleSheets).find((s) => {
+						try {
+							return Array.from(s.cssRules).some(
+								(r) => r.selectorText === ':root' || r.selectorText === '.dark'
+							);
+						} catch {
+							// A cross-origin sheet throws on cssRules; skip it.
+							return false;
+						}
+					});
+					const rules = sheet ? Array.from(sheet.cssRules) : [];
+					const wanted = dark ? '.dark' : ':root';
+					const block = rules.find((r) => r.selectorText === wanted);
+					if (block) {
+						for (const name of Array.from(block.style)) {
+							const value = block.style.getPropertyValue(name).trim();
+							const m = /^oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\)$/.exec(value);
+							if (!m) continue;
+							const h = rotate(Number(m[3]));
+							root.style.setProperty(
+								name,
+								`oklch(${round(Number(m[1]))} ${round(Number(m[2]))} ${round(h)})`
+							);
 						}
 					}
 				} catch {
-					// Private mode, a corrupt value, storage disabled. 'system' is a
-					// safe answer: it is what a first run would do anyway.
+					// No stylesheet yet, or an unreadable one. The static crimson is
+					// already on screen and is correct; the store re-applies on mount.
 				}
-				const dark =
-					choice === DARK ||
-					(choice === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-				const root = document.documentElement;
-				root.classList.toggle(DARK, dark);
-				root.style.colorScheme = dark ? 'dark' : 'light';
+			}
+		})();
+	</script>
+	%sveltekit.head%
+</head>
 
-				/*
-				 * COLOUR SCHEME. The seed palettes are generated in
-				 * src/lib/theme/schemes.ts, which cannot run here — a module arrives
-				 * after the stylesheet has painted, which is the flash. So the
-				 * stylesheet is read out of the DOM instead: it is already parsed by
-				 * the time this script runs, and its :root / .dark blocks ARE the
-				 * crimson reference the other five hues are rotations of.
-				 *
-				 * Only the hue is rotated, exactly as the module does it, so the
-				 * pre-paint palette and the one the store applies a tick later are
-				 * the same colours. Anything unexpected (no stylesheet yet, a value
-				 * that is not oklch) leaves the static crimson in place, which is
-				 * always a correct answer.
-				 */
-				let scheme = 'crimson';
-				try {
-					const raw = localStorage.getItem(SCHEME_KEY);
-					if (raw) {
-						const parsed = JSON.parse(raw);
-						if (
-							parsed === 'crimson' ||
-							parsed === 'blue' ||
-							parsed === 'green' ||
-							parsed === 'orange' ||
-							parsed === 'purple' ||
-							parsed === 'teal' ||
-							parsed === 'dynamic'
-						) {
-							scheme = parsed;
-						}
-					}
-				} catch {
-					// Same reasoning as above: crimson is the audited default.
-				}
+<body data-sveltekit-preload-data="hover">
+	<div style="display: contents">%sveltekit.body%</div>
+</body>
 
-				// The seed hues, duplicated from SEED_SCHEMES. tests/theme-store.test.ts
-				// asserts the two copies agree.
-				const HUES = {
-					crimson: 17.58,
-					blue: 250,
-					green: 145,
-					orange: 45,
-					purple: 290,
-					teal: 195
-				};
-				const REFERENCE_HUE = 17.58;
-				const TERTIARY_OFFSET = 60;
-				const ERROR_HUE = 27;
-
-				// `dynamic` has no palette before the bridge answers, so it paints the
-				// crimson fallback — the same answer the store gives.
-				const hue = HUES[scheme] === undefined ? REFERENCE_HUE : HUES[scheme];
-				const delta = hue - REFERENCE_HUE;
-
-				const rotate = (h) => {
-					if (Math.abs(h - ERROR_HUE) < 0.5) return h;
-					const isTertiary = Math.abs(h - (REFERENCE_HUE + TERTIARY_OFFSET)) < 0.5;
-					const isSeed = Math.abs(h - REFERENCE_HUE) < 0.5;
-					if (!isSeed && !isTertiary) return h;
-					return (((h + delta) % 360) + 360) % 360;
-				};
-
-				const round = (n) => {
-					const fixed = n.toFixed(3);
-					return fixed.endsWith('.000') ? fixed.slice(0, -4) : fixed;
-				};
-
-				if (delta !== 0) {
-					try {
-						const sheet = Array.from(document.styleSheets).find((s) => {
-							try {
-								return Array.from(s.cssRules).some(
-									(r) => r.selectorText === ':root' || r.selectorText === '.dark'
-								);
-							} catch {
-								// A cross-origin sheet throws on cssRules; skip it.
-								return false;
-							}
-						});
-						const rules = sheet ? Array.from(sheet.cssRules) : [];
-						const wanted = dark ? '.dark' : ':root';
-						const block = rules.find((r) => r.selectorText === wanted);
-						if (block) {
-							for (const name of Array.from(block.style)) {
-								const value = block.style.getPropertyValue(name).trim();
-								const m = /^oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\)$/.exec(value);
-								if (!m) continue;
-								const h = rotate(Number(m[3]));
-								root.style.setProperty(
-									name,
-									`oklch(${round(Number(m[1]))} ${round(Number(m[2]))} ${round(h)})`
-								);
-							}
-						}
-					} catch {
-						// No stylesheet yet, or an unreadable one. The static crimson is
-						// already on screen and is correct; the store re-applies on mount.
-					}
-				}
-			})();
-		</script>
-		%sveltekit.head%
-	</head>
-	<body data-sveltekit-preload-data="hover">
-		<div style="display: contents">%sveltekit.body%</div>
-	</body>
 </html>

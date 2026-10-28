@@ -20,11 +20,14 @@
 	import Label from '$lib/components/ui/label/label.svelte';
 	import Textarea from '$lib/components/ui/textarea/textarea.svelte';
 	import * as Sheet from '$lib/components/ui/sheet';
+	import Checkbox from '$lib/components/ui/checkbox/checkbox.svelte';
+	import Trash2 from 'lucide-svelte/icons/trash-2';
 	import DuePicker from './DuePicker.svelte';
 	import PriorityPicker from './PriorityPicker.svelte';
 	import AlarmSheet from './AlarmSheet.svelte';
 	import * as repo from '$lib/db/repo';
 	import { TASK_COLOR_IDS, TASK_COLORS, taskColorValue } from '$lib/task-colors';
+	import { liveSubtasksByParent } from '$lib/stores/view';
 	import type { Task } from '$lib/db/schema';
 
 	let {
@@ -111,6 +114,58 @@
 		if (!task) return;
 		await repo.deleteTask(task.id);
 		close();
+	}
+
+	// ── subtasks ────────────────────────────────────────────────────────────────
+
+	/**
+	 * The open task's subtasks, straight from the live map — ticking one updates
+	 * this list and the row behind the sheet from the same subscription.
+	 *
+	 * Shown only when the open task is TOP-LEVEL (`parentId === null`): subtasks
+	 * are one level deep, so a subtask opened in this sheet simply has no
+	 * Subtasks section rather than an empty one — the absence is the rule, not a
+	 * dead control.
+	 */
+	const subtasks = $derived(
+		task && task.parentId === null ? (liveSubtasksByParent().get(task.id) ?? []) : []
+	);
+	const subtaskProgress = $derived(
+		subtasks.length === 0
+			? null
+			: `${subtasks.filter((s) => s.completedAt !== null).length}/${subtasks.length}`
+	);
+
+	/** "Add subtask" — one field, Enter commits, Escape or empty-blur puts it away. */
+	let addingSubtask = $state(false);
+
+	async function addSubtask(event: SubmitEvent) {
+		event.preventDefault();
+		if (!task) return;
+		const form = event.currentTarget as HTMLFormElement;
+		const title = String(new FormData(form).get('subtask-title') ?? '').trim();
+		if (!title) {
+			addingSubtask = false;
+			return;
+		}
+		// listId is inherited from the parent inside repo.createTask; passing the
+		// parent's own listId keeps the call honest if that inheritance ever moves.
+		await repo.createTask({ listId: task.listId, title, parentId: task.id });
+		form.reset();
+		form.querySelector('input')?.focus();
+	}
+
+	function clearSubtaskAdd(event: FocusEvent) {
+		if ((event.currentTarget as HTMLInputElement).value.trim()) return;
+		addingSubtask = false;
+	}
+
+	async function toggleSubtask(id: string) {
+		await repo.toggleTask(id);
+	}
+
+	async function removeSubtask(id: string) {
+		await repo.deleteTask(id);
 	}
 
 	/**
@@ -214,7 +269,7 @@
 							aria-label="No color"
 							title="No color"
 							onclick={() => saveColor(null)}
-							class="size-8 shrink-0 rounded-xs border-2 border-input bg-transparent outline-none transition-[box-shadow,border-color] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 {color ===
+							class="size-8 shrink-0 rounded-xs border-2 border-input bg-transparent transition-[box-shadow,border-color] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 {color ===
 							null
 								? 'border-primary ring-2 ring-primary ring-offset-2 ring-offset-popover'
 								: 'hover:border-foreground'}"
@@ -231,7 +286,7 @@
 								aria-label="{TASK_COLORS[id].label} color"
 								title={TASK_COLORS[id].label}
 								onclick={() => saveColor(id)}
-								class="size-8 shrink-0 rounded-xs border-2 border-input outline-none transition-[box-shadow,border-color] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 {selected
+								class="size-8 shrink-0 rounded-xs border-2 border-input transition-[box-shadow,border-color] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 {selected
 									? 'border-primary ring-2 ring-primary ring-offset-2 ring-offset-popover'
 									: 'hover:border-foreground'}"
 								style="background: {TASK_COLORS[id].value}"
@@ -248,6 +303,88 @@
 				<div class="border-b border-outline-variant py-4">
 					<AlarmSheet {task} />
 				</div>
+
+				<!--
+					SUBTASKS. Only for top-level tasks — a subtask opened here gets no
+					section at all, because subtasks cannot nest. The section is ruled
+					like every other: hairline top and bottom, no card. Each subtask is
+					a mini row (checkbox + title + delete) whose checkbox toggles through
+					repo.toggleTask, so the parent's progress marker in the list behind
+					updates live.
+				-->
+				{#if task.parentId === null}
+					<div class="border-b border-outline-variant py-4">
+						<div class="flex items-center justify-between">
+							<span class="text-sm font-medium">Subtasks</span>
+							{#if subtaskProgress}
+								<span class="text-xs text-muted-foreground tabular-nums" aria-live="polite">
+									{subtaskProgress}
+								</span>
+							{/if}
+						</div>
+
+						{#if subtasks.length > 0}
+							<ul class="mt-2">
+								{#each subtasks as sub (sub.id)}
+									<li
+										class="flex items-center gap-1 border-b border-outline-variant/40 py-1 last:border-b-0"
+									>
+										<label class="flex size-8 shrink-0 cursor-pointer items-center justify-center">
+											<Checkbox
+												checked={sub.completedAt !== null}
+												onCheckedChange={() => toggleSubtask(sub.id)}
+												aria-label={sub.completedAt !== null
+													? `Mark "${sub.title}" as not done`
+													: `Mark "${sub.title}" as done`}
+											/>
+										</label>
+										<!-- `task` is $bindable: assigning swaps the sheet onto the
+										     subtask, which re-seeds every draft via the id-keyed
+										     effect. Nice-to-have from the spec, free here. -->
+										<button
+											type="button"
+											class="min-w-0 flex-1 truncate py-1 text-left text-sm {sub.completedAt
+												? 'text-muted-foreground line-through'
+												: ''}"
+											onclick={() => (task = sub)}
+										>
+											{sub.title}
+										</button>
+										<Button
+											variant="ghost"
+											size="icon-sm"
+											aria-label="Delete {sub.title}"
+											onclick={() => removeSubtask(sub.id)}
+										>
+											<Trash2 class="size-4 text-muted-foreground" />
+										</Button>
+									</li>
+								{/each}
+							</ul>
+						{/if}
+
+						{#if addingSubtask}
+							<form class="mt-2" onsubmit={addSubtask}>
+								<Input
+									name="subtask-title"
+									placeholder="Subtask title"
+									autofocus
+									onblur={clearSubtaskAdd}
+									onkeydown={(e) => e.key === 'Escape' && (addingSubtask = false)}
+								/>
+								<button type="submit" class="sr-only" tabindex="-1" aria-hidden="true">Add</button>
+							</form>
+						{:else}
+							<button
+								type="button"
+								class="mt-2 flex h-9 w-full items-center gap-2 border border-dashed border-outline-variant px-3 text-sm text-muted-foreground transition-colors hover:border-primary hover:bg-accent/50 hover:text-foreground"
+								onclick={() => (addingSubtask = true)}
+							>
+								Add subtask
+							</button>
+						{/if}
+					</div>
+				{/if}
 
 				<div class="mt-auto pt-4">
 					{#if confirmingDelete}

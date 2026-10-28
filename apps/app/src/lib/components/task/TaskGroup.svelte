@@ -10,6 +10,13 @@
 	 * Done hands in its own `row` snippet instead of copying this section/h2/ul
 	 * markup the way it used to. A group heading is one decision, and two copies of
 	 * it are two chances for the views to drift apart.
+	 *
+	 * SUBTASKS. `tasks` is expected to hold TOP-LEVEL rows only — callers filter
+	 * `parentId === null` before handing a group over (see `liveSubtasksByParent`
+	 * for the policy). Children arrive in `subtasksByParent` and render nested
+	 * under their parent via TaskRow. A subtask that somehow reaches `tasks`
+	 * anyway still renders — as a childless row — so a caller bug degrades to
+	 * "flat list" rather than "missing tasks".
 	 */
 	import TaskRow from '$lib/components/task/TaskRow.svelte';
 	import type { Task } from '$lib/db/schema';
@@ -20,7 +27,8 @@
 		tasks,
 		onopen,
 		dateLabel = 'full',
-		row
+		row,
+		subtasksByParent
 	}: {
 		heading: string;
 		tasks: Task[];
@@ -28,6 +36,8 @@
 		dateLabel?: 'full' | 'time';
 		/** Replaces the default row. The `<li>` stays here, so a snippet renders content only. */
 		row?: Snippet<[Task]>;
+		/** Parent id → its alive subtasks, in order. Absent = no nesting anywhere. */
+		subtasksByParent?: Map<string, Task[]>;
 	} = $props();
 </script>
 
@@ -48,7 +58,7 @@
 					{#if row}
 						{@render row(task)}
 					{:else}
-						<TaskRow {task} {onopen} {dateLabel} />
+						<TaskRow {task} {onopen} {dateLabel} subtasks={subtasksByParent?.get(task.id) ?? []} />
 					{/if}
 				</li>
 			{/each}

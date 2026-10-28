@@ -12,7 +12,7 @@
 	import EmptyState from '$lib/components/shell/EmptyState.svelte';
 	import CalendarDays from 'lucide-svelte/icons/calendar-days';
 	import type { Task } from '$lib/db/schema';
-	import { liveTasks } from '$lib/stores/view';
+	import { liveTasks, liveSubtasksByParent } from '$lib/stores/view';
 	import { formatDayHeading, groupByDay, isoDaysAgo } from '$lib/utils/time';
 
 	const DAYS_AHEAD = 7;
@@ -25,13 +25,16 @@
 
 	// Sorted by day before grouping, so the headings run forward in time even
 	// though `groupByDay` preserves first-seen order — that is what makes it safe
-	// to hand it an already-ordered list.
+	// to hand it an already-ordered list. Top-level rows only: a subtask with its
+	// own due date stays nested under its parent (see `liveSubtasksByParent`), so
+	// it appears on the day ITS PARENT is due, never as its own row.
 	const groups = $derived(
 		groupByDay(
 			liveTasks()
 				.filter(
 					(t) =>
 						t.completedAt === null &&
+						t.parentId === null &&
 						t.dueDate !== null &&
 						t.dueDate >= firstDay &&
 						t.dueDate <= lastDay
@@ -39,6 +42,8 @@
 				.sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? ''))
 		)
 	);
+
+	const subtasksByParent = $derived(liveSubtasksByParent());
 
 	const quiet = $derived(groups.length === 0);
 
@@ -79,6 +84,7 @@
 				tasks={group.tasks}
 				onopen={openTask}
 				dateLabel="time"
+				{subtasksByParent}
 			/>
 		{/each}
 	{/if}
