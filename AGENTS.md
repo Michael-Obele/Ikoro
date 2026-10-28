@@ -332,19 +332,20 @@ Conventional Commits, **one milestone per commit**, never two milestones batched
 committed on a red harness. The body lists any new dependency (name + why) and any deviation from
 the plan (what + why).
 
-The type is not decoration — **it is the version number.** One commit is one patch:
+The type is not decoration — **it is the version number**, and release-please reads it. Before
+1.0.0 every claim is cheap:
 
 | commit | bump |
 | --- | --- |
-| `feat: …` | minor |
-| `feat!: …` · `feat(x)!: …` · a `BREAKING CHANGE:` footer | major |
-| every other conventional type (`fix`, `perf`, `refactor`, `docs`, `chore`, `ci`, `build`, `test`, `style`, `revert`) | patch |
+| anything conventional — `feat:` included | patch |
+| `feat!: …` · `feat(x)!: …` · a `BREAKING CHANGE:` footer | minor |
+| — | major (not before 1.0.0) |
 
-A bump is a promise that cannot be taken back once it is on a store listing, so it is read from the
-commit message rather than guessed from the diff. `bun apps/app/scripts/version.ts auto`
-derives it from the commits since the last tag; the release workflow refuses a tag smaller than the
-history claims, and refuses a commit that does not parse. Rule, parser and guard are one file:
-`apps/app/scripts/version.ts`. Runbook: `RELEASE.md`.
+release-please turns those commits into one release PR; merging it writes the version, the changelog
+and the tag (`release-please-config.json`, `.github/workflows/release-please.yml`). **Never edit the
+version by hand.** A message that does not parse is silently dropped from the bump and the changelog,
+so `apps/app/scripts/version.ts check` re-derives the bump at build time and fails the release when
+the tag is smaller than the commits claim. Runbook: `RELEASE.md`.
 
 ```
 feat: svelte-idb data layer + repo + valibot schemas (M1)
