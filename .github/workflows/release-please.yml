@@ -89,6 +89,9 @@ jobs:
       # workflow_dispatch is the one event GITHUB_TOKEN is allowed to trigger.
       # --ref <tag> makes GITHUB_REF_NAME the tag, which is what the build
       # asserts on, and makes its checkout land on the tagged commit.
+      #
+      # --repo is required: this job has no checkout, so `gh` has no git remote
+      # to infer the repository from and dies with "not a git repository".
       - name: Start the Android build for that tag
         if: "${{ steps.tag.outputs.tag != '' }}"
         env:
@@ -96,5 +99,5 @@ jobs:
           TAG: ${{ steps.tag.outputs.tag }}
         run: |
           set -euo pipefail
-          gh workflow run release-android.yml --ref "$TAG"
+          gh workflow run release-android.yml --ref "$TAG" --repo "$GITHUB_REPOSITORY"
           echo "dispatched release-android.yml at $TAG"
