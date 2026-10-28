@@ -13,6 +13,26 @@
 #
 # BUN ONLY: this repo never uses npm/npx/pnpm/yarn. `bunx` is the npx
 # equivalent and is what runs the Capacitor CLI.
+#
+# ---------------------------------------------------------------------------
+# VERSION POLICY — what the tag number has to be. Full runbook: RELEASE.md.
+#
+#   every commit is a PATCH   fix:, perf:, refactor:, docs:, chore:, ci:,
+#                             build:, test:, style:, revert:
+#   a MINOR is claimed        feat:
+#   a MAJOR is claimed        feat!:, anything!:, or a `BREAKING CHANGE:` footer
+#
+# One commit is one patch. "Minor" promises the user will find something new
+# and "major" promises something they already do will stop working; on a store
+# listing neither can be taken back, so the number is never guessed from the
+# diff — it is taken from what the commits say. The tag must be AT LEAST the
+# largest claim among the commits since the previous tag: a bigger bump is
+# allowed, a smaller one fails the run (a feature shipped as a patch can only
+# be corrected by the next release absorbing it). The rule, the parser and the
+# guard are all one file: apps/app/scripts/version.ts —
+# `bun apps/app/scripts/version.ts auto` derives the level so nobody has to
+# remember it.
+# ---------------------------------------------------------------------------
 
 name: Release Android
 
@@ -36,8 +56,15 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - name: Checkout
+      # The version-policy guard compares the tag against the commits since the
+      # *previous* tag, and `git describe` has to see every tag — a shallow
+      # clone has neither the history nor the tags, and the guard would then
+      # pass by finding nothing to check. Full history is the price of a
+      # version that cannot lie about what it contains.
+      - name: Checkout (full history + tags)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
@@ -75,6 +102,14 @@ jobs:
           PKG=$(node -p "require('./apps/app/package.json').version")
           echo "tag=$TAG package.json=$PKG"
           [ "$TAG" = "$PKG" ] || { echo "tag $TAG != package.json $PKG"; exit 1; }
+
+      # The version policy, enforced. One commit is one patch, `feat:` is a
+      # minor, `!` / a BREAKING CHANGE: footer is a major — see the header of
+      # this file. Deliberately before the keystore is decoded: a wrong version
+      # should cost seconds, not a signed build nobody can publish, and a
+      # version that has reached a store listing can never be undone.
+      - name: Assert version bump matches the commits since the last tag
+        run: bun apps/app/scripts/version.ts check
 
       # The keystore is never committed. It arrives base64-encoded in a secret
       # and is written to $RUNNER_TEMP, which is wiped with the runner.
