@@ -22,7 +22,8 @@
 	],
 	"scripts": {
 		"build": "tsc",
-		"check": "tsc --noEmit -p tsconfig.json"
+		"check": "tsc --noEmit -p tsconfig.json",
+		"prepare": "tsc"
 	},
 	"capacitor": {
 		"android": {
