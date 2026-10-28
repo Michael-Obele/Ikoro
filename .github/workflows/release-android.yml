@@ -1,0 +1,127 @@
+# Release pipeline for the Android app (M12-T1).
+#
+# Push a tag `v<version>` where <version> is exactly apps/app/package.json's
+# `version`, and this builds the static SPA, syncs it into the Capacitor
+# Android project, signs a release APK + AAB, and attaches both to a GitHub
+# Release. The tag/version assertion below is the guard: a tag that disagrees
+# with package.json fails the run before anything is built, because a release
+# whose Settings screen and package manager disagree about the version is
+# worse than no release.
+#
+# Secrets (see docs/RELEASE.md): ANDROID_KEYSTORE_B64,
+# ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD.
+#
+# BUN ONLY: this repo never uses npm/npx/pnpm/yarn. `bunx` is the npx
+# equivalent and is what runs the Capacitor CLI.
+
+name: Release Android
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# One release at a time per tag; never cancel a half-finished upload.
+concurrency:
+  group: release-android-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build signed APK + AAB
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.0'
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # A tag that does not match the app version would ship a build whose
+      # versionName disagrees with the release it is attached to.
+      - name: Assert tag matches apps/app/package.json version
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG=$(node -p "require('./apps/app/package.json').version")
+          echo "tag=$TAG package.json=$PKG"
+          [ "$TAG" = "$PKG" ] || { echo "tag $TAG != package.json $PKG"; exit 1; }
+
+      # The keystore is never committed. It arrives base64-encoded in a secret
+      # and is written to $RUNNER_TEMP, which is wiped with the runner.
+      - name: Decode keystore
+        shell: bash
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KEYSTORE_B64:-}" ]; then
+            echo "ANDROID_KEYSTORE_B64 is not set — see docs/RELEASE.md"
+            exit 1
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/ikoro.keystore"
+          test -s "$RUNNER_TEMP/ikoro.keystore"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build web app
+        run: bun --cwd apps/app run build
+
+      # Copies apps/app/build into the Android project and regenerates
+      # capacitor.build.gradle / capacitor.settings.gradle.
+      - name: Sync Capacitor
+        working-directory: apps/app
+        run: bunx cap sync android
+
+      - name: Assemble signed APK + AAB
+        working-directory: apps/app/android
+        env:
+          IKORO_KEYSTORE: ${{ runner.temp }}/ikoro.keystore
+          IKORO_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          IKORO_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          IKORO_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew :app:bundleRelease :app:assembleRelease --no-daemon --stacktrace
+
+      # Fail loudly if the signing block silently did not apply: an unsigned
+      # APK cannot be installed over a previous release.
+      - name: Verify artifacts are signed
+        shell: bash
+        working-directory: apps/app/android/app/build/outputs
+        run: |
+          set -euo pipefail
+          ls -l apk/release/app-release.apk bundle/release/app-release.aab
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
+          "$APKSIGNER" verify --print-certs apk/release/app-release.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Ikoro ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            apps/app/android/app/build/outputs/apk/release/app-release.apk
+            apps/app/android/app/build/outputs/bundle/release/app-release.aab

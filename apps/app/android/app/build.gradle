@@ -33,10 +33,33 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Release signing is driven entirely by the environment, so a local
+    // `./gradlew assembleRelease` with no keystore still produces an unsigned
+    // artifact instead of failing configuration. CI (see
+    // .github/workflows/release-android.yml) exports the four IKORO_* vars
+    // from repository secrets; docs/RELEASE.md is the runbook.
+    //
+    // The `if` is deliberate: assigning a signingConfig whose storeFile does
+    // not exist makes AGP fail at configuration time, which would break every
+    // local release build for someone who has never created a keystore.
+    signingConfigs {
+        release {
+            def ks = System.getenv('IKORO_KEYSTORE')
+            if (ks != null && file(ks).exists()) {
+                storeFile file(ks)
+                storePassword System.getenv('IKORO_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('IKORO_KEY_ALIAS')
+                keyPassword System.getenv('IKORO_KEY_PASSWORD')
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (System.getenv('IKORO_KEYSTORE') != null) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }
