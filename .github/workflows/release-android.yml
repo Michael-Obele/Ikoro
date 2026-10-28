@@ -94,8 +94,13 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # `bun --cwd apps/app run build` does NOT work: in bun 1.4 the `--cwd`
+      # flag is not accepted before `run`, so the command prints bun's usage
+      # and exits 0 without building anything — and the next step then fails
+      # with "Could not find the web assets directory: ./build". Put the flag
+      # after `run` (or use working-directory). Verified locally.
       - name: Build web app
-        run: bun --cwd apps/app run build
+        run: bun run --cwd apps/app build
 
       # Copies apps/app/build into the Android project and regenerates
       # capacitor.build.gradle / capacitor.settings.gradle.
