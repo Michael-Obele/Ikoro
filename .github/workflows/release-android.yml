@@ -1,12 +1,10 @@
 # Release pipeline for the Android app (M12-T1).
 #
-# Push a tag `v<version>` where <version> is exactly apps/app/package.json's
-# `version`, and this builds the static SPA, syncs it into the Capacitor
-# Android project, signs a release APK + AAB, and attaches both to a GitHub
-# Release. The tag/version assertion below is the guard: a tag that disagrees
-# with package.json fails the run before anything is built, because a release
-# whose Settings screen and package manager disagree about the version is
-# worse than no release.
+# Merging the release PR cut by release-please tags `v<version>` where <version>
+# is exactly apps/app/package.json's `version`, and this builds the static SPA,
+# syncs it into the Capacitor Android project, signs a release APK + AAB, and
+# attaches both to a GitHub Release. You do not tag by hand any more — see
+# .github/workflows/release-please.yml and RELEASE.md.
 #
 # Secrets (see RELEASE.md): ANDROID_KEYSTORE_B64,
 # ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD.
@@ -15,23 +13,23 @@
 # equivalent and is what runs the Capacitor CLI.
 #
 # ---------------------------------------------------------------------------
-# VERSION POLICY — what the tag number has to be. Full runbook: RELEASE.md.
+# VERSION POLICY — release-please decides the number, this file checks it.
+# Full runbook: RELEASE.md.
 #
-#   every commit is a PATCH   fix:, perf:, refactor:, docs:, chore:, ci:,
-#                             build:, test:, style:, revert:
-#   a MINOR is claimed        feat:
-#   a MAJOR is claimed        feat!:, anything!:, or a `BREAKING CHANGE:` footer
+#   every commit is a PATCH      whatever the type — `feat:` included
+#                                (release-please: bump-patch-for-minor-pre-major)
+#   a `!` commit is a MINOR      type!: / type(scope)!: / a BREAKING CHANGE:
+#                                footer (release-please: bump-minor-pre-major)
+#   no MAJOR before 1.0.0
 #
-# One commit is one patch. "Minor" promises the user will find something new
-# and "major" promises something they already do will stop working; on a store
-# listing neither can be taken back, so the number is never guessed from the
-# diff — it is taken from what the commits say. The tag must be AT LEAST the
-# largest claim among the commits since the previous tag: a bigger bump is
-# allowed, a smaller one fails the run (a feature shipped as a patch can only
-# be corrected by the next release absorbing it). The rule, the parser and the
-# guard are all one file: apps/app/scripts/version.ts —
-# `bun apps/app/scripts/version.ts auto` derives the level so nobody has to
-# remember it.
+# release-please reads the commits and maintains the release PR; merging it
+# writes package.json, the changelog, and the tag that starts this run. This
+# workflow then re-derives the bump from the commits since the previous tag and
+# fails when the tag is smaller than they claim — and when any of those commits
+# does not parse, because release-please drops an unreadable message without
+# failing anything. A bigger bump is always allowed; only a smaller one is not,
+# since a published version can never be taken back. The arithmetic lives in
+# apps/app/scripts/version.ts.
 # ---------------------------------------------------------------------------
 
 name: Release Android
@@ -103,11 +101,12 @@ jobs:
           echo "tag=$TAG package.json=$PKG"
           [ "$TAG" = "$PKG" ] || { echo "tag $TAG != package.json $PKG"; exit 1; }
 
-      # The version policy, enforced. One commit is one patch, `feat:` is a
-      # minor, `!` / a BREAKING CHANGE: footer is a major — see the header of
-      # this file. Deliberately before the keystore is decoded: a wrong version
-      # should cost seconds, not a signed build nobody can publish, and a
-      # version that has reached a store listing can never be undone.
+      # The version policy, enforced. Say what the tag claims and what the
+      # commits since the last one claim — release-please computed the former,
+      # this recomputes it, and a disagreement means a release PR was merged
+      # over commits it never saw. Deliberately before the keystore is decoded:
+      # a wrong version should cost seconds, not a signed build nobody can
+      # publish. See the header.
       - name: Assert version bump matches the commits since the last tag
         run: bun apps/app/scripts/version.ts check
 

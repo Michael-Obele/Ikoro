@@ -1,31 +1,33 @@
 /**
- * The version tool. One file, two verbs:
+ * The version guard. The release workflow runs it on the tag and refuses a
+ * release whose own commit history does not justify it.
  *
- *   bun scripts/version.ts auto      # bump from the commits since the last tag
- *   bun scripts/version.ts minor     # or say the level: major|minor|patch
- *   bun scripts/version.ts 0.4.0     # or say the number
- *   bun scripts/version.ts check     # the release guard — CI runs this on the tag
+ *   bun apps/app/scripts/version.ts check
  *
- * THE RULE: one commit is one patch. A `feat:` is a minor; a `!` after the
- * type/scope or a `BREAKING CHANGE:` footer is a major; every other
- * conventional type (`fix`, `perf`, `refactor`, `docs`, `chore`, `ci`, `build`,
- * `test`, `style`, `revert`) is a patch.
+ * WHO OWNS THE NUMBER: release-please. It reads the commits, keeps a release PR
+ * open, and cuts the tag when that PR is merged — see `release-please-config.json`
+ * and `.github/workflows/release-please.yml`. So this file decides nothing and
+ * bumps nothing. It only checks, which is the one thing release-please cannot do
+ * for us: a message it cannot parse is silently dropped from the bump and the
+ * changelog, with no failure anywhere.
  *
- * `check` fails when the tag's bump is smaller than its own commits claim — and
- * when a commit since the previous tag does not parse. The second matters as
- * much as the first: an unparseable message claims no level, so it is invisible
- * to the arithmetic and a feature hiding in one would ship as a patch. A bigger
- * bump is always allowed; only a smaller one is refused, because a version that
- * has reached a store listing can never be taken back.
+ * THE RULE — and the reason for both flags in `release-please-config.json`:
  *
- * Why not semantic-release or commit-and-tag-version: both exist to also write
- * a CHANGELOG and publish a package. Here the release is a tag that triggers an
- * Android build, so the only thing to decide is the number — `git log` plus a
- * regex answers that, and a dependency chain plus a config file is a supply
- * chain bought for a version number.
+ * | commit                                                 | bump  |
+ * | ------------------------------------------------------ | ----- |
+ * | anything conventional — `feat:` included                | patch |
+ * | `type!:` / `type(scope)!:` / a BREAKING CHANGE: footer  | minor |
+ * |                                                        | no major before 1.0.0 |
+ *
+ * `bump-patch-for-minor-pre-major` is what makes a `feat:` a patch: before
+ * 1.0.0, a new capability is not yet a promise. `bump-minor-pre-major` is what
+ * makes a breaking change a minor instead of a major. Both are set, so the
+ * arithmetic here and the arithmetic in release-please agree — and if they ever
+ * disagree, this check fails the build instead of shipping a number the store
+ * cannot take back.
  */
 import { execFileSync } from 'node:child_process';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 /** `apps/app`, wherever the command was run from. */
@@ -33,7 +35,7 @@ const APP = new URL('..', import.meta.url).pathname;
 const PKG = resolve(APP, 'package.json');
 
 const POLICY =
-	'patch = any other conventional type · minor = feat: · major = type!: / type(scope)!: / a BREAKING CHANGE: footer';
+	'every commit is a patch · a `!` (or a BREAKING CHANGE: footer) is a minor · no major until 1.0.0';
 
 /** Ordered, so "bigger" is a larger index. */
 export const LEVELS = ['patch', 'minor', 'major'] as const;
@@ -70,15 +72,15 @@ export function parse(message: string): Commit | null {
 		type: type.toLowerCase(),
 		scope: scope?.trim() ?? null,
 		// The footer is checked against the whole message: `feat!:` may omit it,
-		// but a `fix:` carrying one is still a major.
+		// but a `fix:` carrying one is still a minor.
 		breaking: Boolean(bang) || BREAKING.test(message),
 		description
 	};
 }
 
+/** Every commit is a patch; only a breaking marker earns a minor. */
 export function levelFor(commit: Commit): Level {
-	if (commit.breaking) return 'major';
-	return commit.type === 'feat' ? 'minor' : 'patch';
+	return commit.breaking ? 'minor' : 'patch';
 }
 
 /** The largest claim in the list, or `null` when there are no commits at all. */
@@ -87,11 +89,10 @@ export function requiredLevel(commits: readonly Commit[]): Level | null {
 	return commits.map(levelFor).reduce((a, b) => (LEVELS.indexOf(b) > LEVELS.indexOf(a) ? b : a));
 }
 
-export function bump(version: string, level: Level): string {
+/** Android's versionCode — the number Play actually orders uploads by. */
+export function versionCode(version: string): number {
 	const [major, minor, patch] = parseSemver(version);
-	if (level === 'major') return `${major + 1}.0.0`;
-	if (level === 'minor') return `${major}.${minor + 1}.0`;
-	return `${major}.${minor}.${patch + 1}`;
+	return major * 10000 + minor * 100 + patch;
 }
 
 /** The level going from `from` to `to`; null when `to` is not ahead of `from`. */
@@ -165,74 +166,18 @@ function label(commit: Commit): string {
 	return `${commit.type}${scope}${commit.breaking ? '!' : ''}`;
 }
 
-// ---------------------------------------------------------------------- verbs
+// ------------------------------------------------------------------------ CLI
 
 function fail(lines: string[]): never {
-	console.error(['', ...lines, '', `policy: ${POLICY}`, 'see RELEASE.md, "Which bump does my commit need?"'].join('\n'));
+	console.error(
+		['', ...lines, '', `policy: ${POLICY}`, 'see RELEASE.md, "Which bump does my commit need?"'].join(
+			'\n'
+		)
+	);
 	process.exit(1);
 }
 
-async function readPackage(): Promise<{ version: string }> {
-	return JSON.parse(await readFile(PKG, 'utf8')) as { version: string };
-}
-
-async function bumpVerb(arg: string): Promise<void> {
-	const pkg = await readPackage();
-	const current = pkg.version;
-	const isExact = SEMVER.test(arg);
-
-	let level: Level = 'patch';
-	if (isExact) {
-		// Stated outright — nothing to derive, nothing to argue with.
-	} else if (arg === 'auto') {
-		const [last] = releaseTags();
-		const { total, commits, unreadable } = readCommits(last ? `${last}..HEAD` : 'HEAD');
-		if (total === 0) fail([`✗ no commits since ${last ?? 'the first commit'} — nothing to release`]);
-
-		// Print the evidence first: a number derived from a commit list the
-		// author cannot see is a number nobody can argue with.
-		console.log(`commits since ${last ?? 'the first commit'}: ${total}`);
-		for (const commit of commits) {
-			console.log(`  ${levelFor(commit).padEnd(5)}  ${label(commit)}: ${commit.description}`);
-		}
-		if (unreadable.length > 0) {
-			console.warn('\nnot Conventional Commits, counted as a patch — fix before releasing:');
-			for (const subject of unreadable) console.warn(`  ${subject}`);
-		}
-		level = requiredLevel(commits) ?? 'patch';
-	} else {
-		if (!LEVELS.includes(arg as Level)) {
-			fail([`✗ unknown bump "${arg}" — want major|minor|patch|auto or an exact x.y.z`]);
-		}
-		level = arg as Level;
-	}
-
-	const next = isExact ? arg : bump(current, level);
-	if (next === current) {
-		console.log(`already at ${current} — nothing to do`);
-		return;
-	}
-
-	const [major, minor, patch] = parseSemver(next);
-	if (minor > 99 || patch > 99) {
-		console.warn(
-			`⚠ ${next}: minor/patch above 99 collides in the versionCode formula ` +
-				`(major*10000 + minor*100 + patch). Consider bumping the major instead.`
-		);
-	}
-
-	pkg.version = next;
-	await writeFile(PKG, JSON.stringify(pkg, null, '\t') + '\n');
-
-	console.log(`${current} -> ${next}  (android versionCode ${major * 10000 + minor * 100 + patch})`);
-	console.log('\nnext steps:');
-	console.log('  git add apps/app/package.json');
-	console.log(`  git commit -m "chore(release): v${next}"`);
-	console.log(`  git tag v${next}`);
-	console.log('  git push origin master --tags   # the tag push triggers the release build');
-}
-
-async function checkVerb(): Promise<void> {
+async function check(): Promise<void> {
 	const tag = process.env.GITHUB_REF_NAME?.trim() || tagAtHead();
 	if (!tag) {
 		fail([
@@ -241,14 +186,24 @@ async function checkVerb(): Promise<void> {
 		]);
 	}
 
-	const { version } = await readPackage();
+	const { version } = JSON.parse(await readFile(PKG, 'utf8')) as { version: string };
 	const tagVersion = tag.replace(/^v/, '');
 	if (tagVersion !== version) {
 		fail([
 			`✗ tag ${tag} != apps/app/package.json ${version}.`,
-			'  A release whose release page and package manager disagree about the',
-			'  version is worse than no release. Re-run:',
-			'    bun apps/app/scripts/version.ts auto'
+			'  release-please writes both together, so a mismatch means one was',
+			'  edited by hand. Let the next release PR set it.'
+		]);
+	}
+
+	// Play orders uploads by versionCode, so a collision is a release that can
+	// never be published: 0.3.100 and 0.4.0 both come out as 400.
+	const [, minor, patch] = parseSemver(version);
+	if (minor > 99 || patch > 99) {
+		fail([
+			`✗ ${version}: minor/patch above 99 collides in the versionCode formula`,
+			`  major*10000 + minor*100 + patch == ${versionCode(version)}.`,
+			'  Let the next minor through: add a `feat!:` commit and merge that release PR.'
 		]);
 	}
 
@@ -278,43 +233,37 @@ async function checkVerb(): Promise<void> {
 			`✗ ${unreadable.length} of ${total} commits since ${previous} are not Conventional Commits:`,
 			...unreadable.map((subject) => `    ${subject}`),
 			'',
-			'  An unparseable message claims no level, so it is invisible to this check',
-			'  — a feature hiding in one would ship as a patch. Reword it (git rebase -i)',
-			'  before tagging, or split it out of this release.'
+			'  release-please ignores a message it cannot parse, so such a commit would',
+			'  miss the bump and the changelog without failing anything. Reword it first.'
 		]);
 	}
 
 	const required = requiredLevel(commits) ?? 'patch';
 	if (LEVELS.indexOf(actual) < LEVELS.indexOf(required)) {
-		const cause = commits.filter((commit) =>
-			required === 'major'
-				? commit.breaking
-				: required === 'minor' && !commit.breaking && commit.type === 'feat'
-		);
+		const cause = commits.filter((commit) => commit.breaking && required === 'minor');
 		fail([
 			`✗ ${previous} -> ${tag} is a ${actual}, but the commits since ${previous} claim a ${required}.`,
 			...cause.map((commit) => `    ${label(commit)}: ${commit.description}`),
 			'',
-			`  Bump at least a ${required}: bun apps/app/scripts/version.ts ${required}`,
-			'  then commit, re-tag, and push. A bigger bump is always allowed; only a',
-			'  smaller one is refused.'
+			'  A `!` commit is a minor (bump-minor-pre-major). Confirm',
+			'  release-please-config.json still sets both pre-major flags.'
 		]);
 	}
 
 	console.log(
-		`${previous} -> ${tag}: ${actual}, history claims ${required} — ok (${total} commits)`
+		`${previous} -> ${tag}: ${actual}, history claims ${required} — ok ` +
+			`(${total} commits, versionName ${version}, versionCode ${versionCode(version)})`
 	);
 }
 
-// Only the CLI runs the verbs; vitest imports the rules above.
+// Only the CLI runs the check; vitest imports the rules above.
 const invokedDirectly = process.argv[1]?.endsWith('version.ts') ?? false;
 
 if (invokedDirectly) {
-	const arg = process.argv[2];
-	if (!arg) {
-		console.error('usage: bun apps/app/scripts/version.ts <auto|major|minor|patch|x.y.z|check>');
+	if (process.argv[2] !== 'check') {
+		console.error('usage: bun apps/app/scripts/version.ts check');
 		console.error(`       ${POLICY}`);
 		process.exit(1);
 	}
-	await (arg === 'check' ? checkVerb() : bumpVerb(arg));
+	await check();
 }
