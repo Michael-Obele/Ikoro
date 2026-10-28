@@ -48,18 +48,24 @@ jobs:
       # recreates it on the next push anyway. Delete it, so the branch list only
       # ever holds branches someone is working on. A 404 is the normal answer
       # when release-please already cleaned up.
+      #
+      # The `--components--app` suffix is release-please's own naming for a
+      # manifest-mode component; it is not in the docs, it is in the run log.
       - name: Delete the release branch after a merge
         if: "${{ steps.release.outputs['apps/app--release_created'] == 'true' }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          branch="release-please--branches--master"
-          if gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$branch" 2>/dev/null; then
-            echo "deleted $branch"
-          else
-            echo "$branch was already gone"
-          fi
+          for branch in \
+            "release-please--branches--master--components--app" \
+            "release-please--branches--master"; do
+            if gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$branch" 2>/dev/null; then
+              echo "deleted $branch"
+            else
+              echo "$branch was already gone"
+            fi
+          done
 
       # The tag has to be readable here: dispatching at an empty ref would run
       # the build against master and trip its own tag assertion instead of
