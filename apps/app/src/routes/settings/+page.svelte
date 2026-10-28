@@ -10,6 +10,7 @@
 	import Backup from '$lib/components/ui/Backup.svelte';
 	import SyncPanel from '$lib/components/ui/SyncPanel.svelte';
 	import ThemeToggle from '$lib/components/theme/ThemeToggle.svelte';
+	import ThemeSchemePicker from '$lib/components/theme/ThemeSchemePicker.svelte';
 	import { liveLists, liveTasks } from '$lib/stores/view';
 
 	const lists = $derived(liveLists());
@@ -38,6 +39,10 @@
 				like work, that is a bug, not a setting.
 			</p>
 			<ThemeToggle />
+			<div class="mt-4">
+				<h3 class="mb-2 text-sm font-medium">Colour</h3>
+				<ThemeSchemePicker />
+			</div>
 		</section>
 
 		<section>

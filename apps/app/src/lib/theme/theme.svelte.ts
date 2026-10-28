@@ -25,11 +25,18 @@ import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 import { readDynamicPalettes } from 'ikoro-dynamic-colors';
 import { applyTokens, buildMonetSchemes, clearTokens, type TokenMap } from './monet';
+import {
+	getSeedSchemes,
+	isSchemeId,
+	type SchemeId,
+	type SeedSchemeId
+} from './schemes';
 
 export type ThemeChoice = 'system' | 'light' | 'dark';
 export type ResolvedTheme = Exclude<ThemeChoice, 'system'>;
 
 export const THEME_STORAGE_KEY = 'ikoro:theme';
+export const SCHEME_STORAGE_KEY = 'ikoro:scheme';
 export const DARK_CLASS = 'dark';
 export const DARK_MEDIA_QUERY = '(prefers-color-scheme: dark)';
 
@@ -49,6 +56,18 @@ export function isThemeChoice(value: unknown): value is ThemeChoice {
  * tabs for free. The repo rule is to use runed rather than roll our own.
  */
 export const themeChoice = new PersistedState<ThemeChoice>(THEME_STORAGE_KEY, 'system');
+
+/**
+ * The persisted colour scheme, defaulting to crimson.
+ *
+ * Crimson is the default because it is the palette `layout.css` ships and the one
+ * `tests/theme-contrast.test.ts` audits — a first run gets the hand-tuned scheme,
+ * not a rotation of it. `dynamic` is a valid stored value even on a device that
+ * cannot supply a wallpaper palette; the store falls back to crimson in that case
+ * rather than rewriting the user's choice, so the setting survives a move to a
+ * device that can.
+ */
+export const schemeChoice = new PersistedState<SchemeId>(SCHEME_STORAGE_KEY, 'crimson');
 
 /**
  * What the OS currently wants. Starts `false` so the very first render is
@@ -124,6 +143,41 @@ export function setTheme(choice: ThemeChoice): void {
 }
 
 /* ------------------------------------------------------------------ *
+ * Colour scheme (seed themes)
+ * ------------------------------------------------------------------ */
+
+/**
+ * The scheme actually in force, which is not always the one stored.
+ *
+ * `dynamic` is only honoured when the device can supply a wallpaper palette AND
+ * one has actually arrived. Until then — and forever, on web and on Android
+ * below 12 — the answer is crimson, the audited static scheme. Falling back to
+ * crimson rather than to "whatever was last applied" matters: the fallback has to
+ * be a colour that is always correct, not a leftover.
+ *
+ * A FUNCTION, not an exported `$derived`, for the same reason `resolvedTheme()`
+ * is one: Svelte 5 refuses to export derived state from a module, and the failure
+ * only shows up in `vite build`.
+ */
+export function resolvedScheme(): SeedSchemeId | 'dynamic' {
+	const stored = schemeChoice.current;
+	if (stored === 'dynamic') return dynamicSchemes ? 'dynamic' : 'crimson';
+	return stored;
+}
+
+/**
+ * The only scheme mutation.
+ *
+ * Writes storage and re-applies in one step, so the picker never has to know
+ * whether the scheme it just chose needs a wallpaper read first.
+ */
+export function setScheme(id: SchemeId): void {
+	if (!isSchemeId(id)) return;
+	schemeChoice.current = id;
+	applyResolvedTheme();
+}
+
+/* ------------------------------------------------------------------ *
  * Dynamic colour (Material You)
  * ------------------------------------------------------------------ */
 
@@ -173,7 +227,10 @@ export async function refreshDynamicScheme(): Promise<void> {
 		}
 		dynamicAvailable = true;
 		dynamicSchemes = buildMonetSchemes(result.palettes);
-		applyTheme();
+		// `applyResolvedTheme`, not `applyTheme`: the palette that just arrived is
+		// only half the story — the scheme in force decides whether it is used at
+		// all, and a user on a seed scheme must not be repainted by a wallpaper.
+		applyResolvedTheme();
 	} catch (error) {
 		console.warn('[ikoro] dynamic colour read failed', error);
 	}
@@ -185,14 +242,27 @@ export function isDynamicAvailable(): boolean {
 }
 
 /**
- * Write the dynamic scheme for the resolved theme, or restore the static one.
+ * Write the scheme for the resolved theme, or restore the static one.
  *
  * Inline custom properties on `<html>` beat the stylesheet's `:root` and `.dark`
  * blocks by specificity, so this is a genuine override rather than a second
- * palette competing with the first. Clearing them is the whole of "go back to
- * the static scheme" — nothing else has to be undone.
+ * palette competing with the first. Clearing them is the whole of "go back to the
+ * static scheme" — nothing else has to be undone.
+ *
+ * PRECEDENCE, in one place:
+ *
+ *   1. scheme === 'dynamic' AND a wallpaper palette has arrived -> that palette
+ *   2. scheme === 'dynamic' but no palette (web, Android < 12, read failed)
+ *      -> crimson, the audited static scheme
+ *   3. any seed scheme -> its rotated token map
+ *
+ * Crimson is applied as an explicit override rather than by clearing the inline
+ * tokens, because the user may have arrived at crimson FROM another seed: the
+ * inline properties from that seed are still on `<html>` and would otherwise win
+ * over the stylesheet. Clearing first and then writing crimson is the only order
+ * that leaves exactly one palette in force.
  */
-function applyDynamicScheme(): void {
+function applyScheme(): void {
 	if (typeof document === 'undefined') return;
 	const root = document.documentElement;
 
@@ -201,8 +271,17 @@ function applyDynamicScheme(): void {
 		appliedTokens = null;
 	}
 
-	if (!dynamicSchemes) return;
-	const tokens = resolvedTheme() === 'dark' ? dynamicSchemes.dark : dynamicSchemes.light;
+	const scheme = resolvedScheme();
+	const seed: SeedSchemeId = scheme === 'dynamic' ? 'crimson' : scheme;
+	const tokens =
+		scheme === 'dynamic' && dynamicSchemes
+			? resolvedTheme() === 'dark'
+				? dynamicSchemes.dark
+				: dynamicSchemes.light
+			: resolvedTheme() === 'dark'
+				? getSeedSchemes(seed).dark
+				: getSeedSchemes(seed).light;
+
 	applyTokens(root, tokens);
 	appliedTokens = tokens;
 }
@@ -239,14 +318,14 @@ export function watchDynamicColors(): () => void {
 }
 
 /**
- * Keep the DOM in step with the resolved theme AND the dynamic scheme.
+ * Keep the DOM in step with the resolved theme AND the colour scheme.
  *
  * One function rather than two effects, because the two are not independent: the
- * dynamic scheme is per-theme, so a light/dark flip has to re-apply it, and a
+ * scheme is per-theme, so a light/dark flip has to re-apply it, and a wallpaper
  * palette arriving has to apply the half that matches the current theme. Split
  * across two effects they would race on the same custom properties.
  */
 export function applyResolvedTheme(): void {
 	applyTheme();
-	applyDynamicScheme();
+	applyScheme();
 }
