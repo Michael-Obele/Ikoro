@@ -123,4 +123,45 @@ describe('TaskRow', () => {
 
 		expect(screen.queryByTestId('task-color-edge')).toBeNull();
 	});
+
+	/**
+	 * SUBTASKS. The bug these guard against is specific and silent: the row used a
+	 * `<self>` tag for its recursive call, and Svelte has no such tag — it compiled
+	 * to an unknown element that renders nothing. The "0/3" count still appeared, so
+	 * the row looked alive while the nested list was a zero-height `<ul>` full of
+	 * empty custom elements, and the chevron appeared to do nothing. Asserting on
+	 * the child's TEXT is what catches that; asserting on the count would not.
+	 */
+	it('renders its subtasks as real rows, not just a count', () => {
+		render(TaskRow, {
+			props: {
+				task: fixture(),
+				subtasks: [fixture({ id: 'sub-1', parentId: 'task-1', title: 'Book the room' })]
+			}
+		});
+
+		expect(screen.getByText('Book the room')).toBeTruthy();
+		expect(screen.getByLabelText('0 of 1 subtasks done')).toBeTruthy();
+	});
+
+	it('hides and restores the subtask rows when the chevron is clicked', async () => {
+		render(TaskRow, {
+			props: {
+				task: fixture(),
+				subtasks: [fixture({ id: 'sub-1', parentId: 'task-1', title: 'Book the room' })]
+			}
+		});
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Collapse subtasks' }));
+		expect(screen.queryByText('Book the room')).toBeNull();
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Expand subtasks' }));
+		expect(screen.getByText('Book the room')).toBeTruthy();
+	});
+
+	it('offers no chevron when the task has no subtasks', () => {
+		render(TaskRow, { props: { task: fixture() } });
+
+		expect(screen.queryByRole('button', { name: /subtasks/i })).toBeNull();
+	});
 });

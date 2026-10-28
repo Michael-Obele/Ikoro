@@ -21,6 +21,10 @@
 	 * chevron and the "n/m" progress marker render only when children exist, so a
 	 * childless row is pixel-identical to how it has always been.
 	 */
+	// Svelte 5 has no `<self>` / `<svelte:self>` tag — a component that needs to
+	// render itself imports itself. `<self>` compiles to a literal unknown element,
+	// which is silently empty, so the subtask list rendered as a zero-height `<ul>`.
+	import Self from './TaskRow.svelte';
 	import Checkbox from '$lib/components/ui/checkbox/checkbox.svelte';
 	import BellRing from 'lucide-svelte/icons/bell-ring';
 	import ChevronRight from 'lucide-svelte/icons/chevron-right';
@@ -223,14 +227,14 @@
 		The nested rows. One level only — a subtask is created against a top-level
 		parent, so these children never carry children of their own. `indent` shifts
 		their checkbox under the parent's title; the hairline separator comes from
-		TaskRow itself, so the nesting reads as one continuous ruled list. `<self>`
-		is the Svelte 5 recursion form; a subtask's own `subtasks` prop defaults
-		to [], so the recursion terminates by construction.
+		TaskRow itself, so the nesting reads as one continuous ruled list. `Self` is
+		the component importing its own file; a subtask's own `subtasks` prop
+		defaults to [], so the recursion terminates by construction.
 	-->
 	<ul>
 		{#each subtasks as sub (sub.id)}
 			<li>
-				<self task={sub} {onopen} {dateLabel} indent></self>
+				<Self task={sub} {onopen} {dateLabel} indent />
 			</li>
 		{/each}
 	</ul>
