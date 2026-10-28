@@ -68,6 +68,11 @@ export async function exportAll(): Promise<ExportFile> {
 			dueTime: t.dueTime,
 			priority: t.priority,
 			alarmAt: t.alarmAt,
+			// User data, not device state: a restore that drops the subtask tree or
+			// the colours has thrown away work the user can see is gone. `?? null`
+			// normalises the absent-key `undefined` an old row may carry.
+			parentId: t.parentId ?? null,
+			color: t.color ?? null,
 			updatedAt: t.updatedAt
 		}))
 	};
@@ -76,9 +81,10 @@ export async function exportAll(): Promise<ExportFile> {
 /**
  * Validate, then merge.
  *
- * The order matters: parse → validate → merge → reschedule. Re-arming before
- * the rows land would schedule alarms for tasks that do not exist yet, and
- * skipping validation would import a file that silently corrupts the store.
+ * The order matters: parse → validate → merge → normalise → reschedule.
+ * Re-arming before the rows land would schedule alarms for tasks that do not
+ * exist yet, and skipping validation would import a file that silently
+ * corrupts the store.
  */
 export async function importAll(input: unknown): Promise<ImportResult> {
 	const parsed = parseEnvelope(input);
@@ -131,7 +137,11 @@ export async function importAll(input: unknown): Promise<ImportResult> {
 			dueDate: incoming.dueDate,
 			dueTime: incoming.dueTime,
 			priority: incoming.priority,
-			parentId: existing?.parentId ?? null,
+			// Newer-wins like every other user field. The old `existing?.parentId
+			// ?? null` never updated the pointer, so a subtask restored from a
+			// backup stayed detached from its parent forever.
+			parentId: incoming.parentId ?? null,
+			color: incoming.color ?? null,
 			repeat: existing?.repeat ?? null,
 			completedAt: existing?.completedAt ?? null,
 			alarmAt: incoming.alarmAt,
@@ -149,6 +159,34 @@ export async function importAll(input: unknown): Promise<ImportResult> {
 		await db.tasks.put(task as unknown as Record<string, unknown>);
 		mergedTasks.set(task.id, task);
 		taskWrites++;
+	}
+
+	// Normalise subtask structure over the MERGED set — the file's pointers are
+	// only trustworthy once every row (imported and local alike) is in the map:
+	//
+	//  - an `parentId` naming a task that is not in the merged set is a dangling
+	//    reference (a partial backup, or a parent the receiving device deleted);
+	//    the child is demoted to a top-level task rather than vanish;
+	//  - a child pointing at itself, or at a task that is itself a child, is a
+	//    malformed chain — subtasks are exactly one level deep, so the child is
+	//    demoted too;
+	//  - a child inherits its parent's list, mirroring `repo.createTask`, so a
+	//    nested view never shows a child in a list its parent is not in.
+	//
+	// Demotion is a repair, not a rejection: the task itself is user data and
+	// must survive even when the structure around it cannot.
+	for (const task of mergedTasks.values()) {
+		if (task.parentId === null) continue;
+		const parent = mergedTasks.get(task.parentId);
+		const broken =
+			!parent ||
+			parent.deletedAt !== null ||
+			parent.id === task.id ||
+			parent.parentId !== null ||
+			parent.listId !== task.listId;
+		if (!broken) continue;
+		await db.tasks.put({ ...task, parentId: null } as unknown as Record<string, unknown>);
+		mergedTasks.set(task.id, { ...task, parentId: null });
 	}
 
 	// Imported alarms are not armed yet — the user was promised a reminder, so

@@ -14,7 +14,7 @@
 	import TaskRow from '$lib/components/task/TaskRow.svelte';
 	import TaskSheet from '$lib/components/task/TaskSheet.svelte';
 	import EmptyState from '$lib/components/shell/EmptyState.svelte';
-	import ListIcon from 'lucide-svelte/icons/list';
+	import ListIcon from '@lucide/svelte/icons/list';
 	import * as repo from '$lib/db/repo';
 	import type { Task } from '$lib/db/schema';
 	import { liveListById, liveTasksByList, liveSubtasksByParent } from '$lib/stores/view';

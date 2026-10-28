@@ -26,7 +26,7 @@
 	import AddTaskRow from '$lib/components/task/AddTaskRow.svelte';
 	import TaskSheet from '$lib/components/task/TaskSheet.svelte';
 	import EmptyState from '$lib/components/shell/EmptyState.svelte';
-	import CalendarCheck from 'lucide-svelte/icons/calendar-check';
+	import CalendarCheck from '@lucide/svelte/icons/calendar-check';
 	import type { Task } from '$lib/db/schema';
 	import { PAST_WINDOW_DAYS } from '$lib/db/repo';
 	import { liveTasks, liveSubtasksByParent } from '$lib/stores/view';

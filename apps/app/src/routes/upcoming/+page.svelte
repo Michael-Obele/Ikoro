@@ -10,7 +10,7 @@
 	import AddTaskRow from '$lib/components/task/AddTaskRow.svelte';
 	import TaskSheet from '$lib/components/task/TaskSheet.svelte';
 	import EmptyState from '$lib/components/shell/EmptyState.svelte';
-	import CalendarDays from 'lucide-svelte/icons/calendar-days';
+	import CalendarDays from '@lucide/svelte/icons/calendar-days';
 	import type { Task } from '$lib/db/schema';
 	import { liveTasks, liveSubtasksByParent } from '$lib/stores/view';
 	import { formatDayHeading, groupByDay, isoDaysAgo } from '$lib/utils/time';

@@ -16,8 +16,8 @@
 	 * It used to be a copy of that section/h2/ul, which is two places for a heading
 	 * style to drift apart.
 	 */
-	import RotateCcw from 'lucide-svelte/icons/rotate-ccw';
-	import CheckCheck from 'lucide-svelte/icons/check-check';
+	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
+	import CheckCheck from '@lucide/svelte/icons/check-check';
 	import Button from '$lib/components/ui/button/button.svelte';
 	import TaskGroup from '$lib/components/task/TaskGroup.svelte';
 	import TaskSheet from '$lib/components/task/TaskSheet.svelte';

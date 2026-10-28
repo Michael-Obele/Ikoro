@@ -10,13 +10,14 @@
     },
     "apps/app": {
       "name": "app",
-      "version": "0.1.0",
+      "version": "0.2.1",
       "dependencies": {
         "@capacitor/app": "8.1.2",
         "@capacitor/core": "8.5.2",
         "@capacitor/local-notifications": "8.3.1",
         "@ikoro/sync": "workspace:*",
         "@internationalized/date": "3.12.0",
+        "@lucide/svelte": "^1.63.0",
         "@tauri-apps/api": "2.12.1",
         "@tauri-apps/plugin-notification": "2.5.1",
         "bits-ui": "2.19.5",
@@ -351,7 +352,7 @@
 
     "@levischuck/tiny-cbor": ["@levischuck/tiny-cbor@0.2.11", "", {}, "sha512-llBRm4dT4Z89aRsm6u2oEZ8tfwL/2l6BwpZ7JcyieouniDECM5AqNgr/y08zalEIvW3RSK4upYyybDcmjXqAow=="],
 
-    "@lucide/svelte": ["@lucide/svelte@1.51.0", "", { "peerDependencies": { "svelte": "^5" } }, "sha512-FNoBtfrnQS1LV7yRm8T8pF6OH72BzCyPOWrOmVcpqGGLFmQZndRB4h0qhzUKqPq2JNkSfF7f4tUaiCwdY4WFfg=="],
+    "@lucide/svelte": ["@lucide/svelte@1.63.0", "", { "peerDependencies": { "svelte": "^5" } }, "sha512-eAhbnjLMmbF7Xf6VMECERIKi8f0vDlDgMnNUcZgJKRclS2yjZel6XRaPlfFRvAvbGfVFrOchILEuCB/vTaz8PA=="],
 
     "@neondatabase/serverless": ["@neondatabase/serverless@1.2.0", "", {}, "sha512-tnaqgixUengZQNd9ZrS3ytQfamJzLKY8QxgqWQTNHHtB+KrFQWk77JTbbpg4RD+J3qE4eO2lVytvGDX5Kj6FdQ=="],
 

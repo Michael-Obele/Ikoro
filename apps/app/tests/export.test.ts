@@ -75,6 +75,21 @@ describe('exportAll', () => {
 		expect(dump.schemaVersion).toBe(1);
 		expect(new Date(dump.exportedAt).toString()).not.toBe('Invalid Date');
 	});
+
+	it('exports color and parentId — user data, not device state', async () => {
+		const list = await createList('Tasks');
+		const parent = await createTask({ listId: list.id, title: 'parent', color: 'teal' });
+		await createTask({ listId: list.id, title: 'child', parentId: parent.id, color: 'red' });
+
+		const dump = await exportAll();
+		const parentRow = dump.tasks.find((t) => t.id === parent.id);
+		const childRow = dump.tasks.find((t) => t.title === 'child');
+
+		expect(parentRow?.color).toBe('teal');
+		expect(parentRow?.parentId).toBeNull();
+		expect(childRow?.color).toBe('red');
+		expect(childRow?.parentId).toBe(parent.id);
+	});
 });
 
 describe('importAll', () => {
@@ -148,6 +163,88 @@ describe('importAll', () => {
 		// file can overwrite the local row, so the row must survive.
 		const result = await importAll(await exportAll());
 		expect(result.tasks).toBe(0);
+	});
+
+	it('round-trips a colored parent and its subtask after a wipe', async () => {
+		const list = await createList('Tasks');
+		const parent = await createTask({ listId: list.id, title: 'parent', color: 'teal' });
+		const child = await createTask({
+			listId: list.id,
+			title: 'child',
+			parentId: parent.id,
+			color: 'red'
+		});
+
+		const before = JSON.parse(JSON.stringify(await exportAll()));
+
+		// Simulate a restore onto an empty device.
+		await db.tasks.clear();
+		await db.lists.clear();
+		const result = await importAll(before);
+
+		expect(result.tasks).toBe(2);
+		expect(result.skipped).toBe(0);
+
+		const restoredParent = (await db.tasks.get(parent.id)) as unknown as {
+			color: string | null;
+			parentId: string | null;
+		};
+		const restoredChild = (await db.tasks.get(child.id)) as unknown as {
+			color: string | null;
+			parentId: string | null;
+		};
+		expect(restoredParent.color).toBe('teal');
+		expect(restoredParent.parentId).toBeNull();
+		expect(restoredChild.color).toBe('red');
+		expect(restoredChild.parentId).toBe(parent.id);
+
+		// And the file the restored store exports is byte-identical in content.
+		const after = await exportAll();
+		expect(after.tasks).toEqual(before.tasks);
+	});
+
+	it('demotes a subtask whose parent is missing from the file', async () => {
+		const list = await createList('Tasks');
+		const parent = await createTask({ listId: list.id, title: 'parent' });
+		const child = await createTask({ listId: list.id, title: 'child', parentId: parent.id });
+
+		const dump = await exportAll();
+		// Simulate a partial backup: the parent row is gone, the child remains.
+		dump.tasks = dump.tasks.filter((t) => t.id !== parent.id);
+
+		await db.tasks.clear();
+		await db.lists.clear();
+		const result = await importAll(dump);
+
+		// The child SURVIVES — it is user data — but as a top-level task, never
+		// as a dangling reference into a parent that does not exist.
+		expect(result.tasks).toBe(1);
+		expect(result.skipped).toBe(0);
+		const restored = (await db.tasks.get(child.id)) as unknown as { parentId: string | null };
+		expect(restored.parentId).toBeNull();
+	});
+
+	it('updates parentId and color on an existing task when the file is newer', async () => {
+		const list = await createList('Tasks');
+		const parent = await createTask({ listId: list.id, title: 'parent' });
+		const task = await createTask({ listId: list.id, title: 'floating', color: 'blue' });
+
+		const dump = await exportAll();
+		const row = dump.tasks.find((t) => t.id === task.id);
+		if (!row) throw new Error('task missing from export');
+		row.parentId = parent.id;
+		row.color = 'teal';
+		// Make the file copy strictly newer than the local one.
+		row.updatedAt = new Date(Date.now() + 60_000).toISOString();
+
+		await importAll(dump);
+
+		const restored = (await db.tasks.get(task.id)) as unknown as {
+			parentId: string | null;
+			color: string | null;
+		};
+		expect(restored.parentId).toBe(parent.id);
+		expect(restored.color).toBe('teal');
 	});
 
 	it('clears device-scoped fields on every imported task', async () => {

@@ -17,7 +17,7 @@
 	 * parts as the rest of the screen.
 	 */
 	import type { Snippet } from 'svelte';
-	import type { Icon as IconComponent } from 'lucide-svelte';
+    import { type LucideIcon } from '@lucide/svelte';
 
 	let {
 		icon,
@@ -31,7 +31,7 @@
 		 * components are `Component<IconProps>`, and a narrower structural type does
 		 * not accept them (their props include `size`, `strokeWidth`, `absoluteStrokeWidth`).
 		 */
-		icon: typeof IconComponent;
+		icon: LucideIcon;
 		/** What is true. One short line. */
 		title: string;
 		/** What to do about it. One short line, optional. */

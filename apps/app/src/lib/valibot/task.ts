@@ -69,8 +69,12 @@ export type TaskFormValues = v.InferInput<typeof taskInputSchema>;
  * The backup envelope (M7).
  *
  * `schemaVersion` is a literal, not a number, so an older Ikoro refuses a newer
- * file loudly at parse time instead of importing the fields it does not
- * understand and dropping the rest.
+ * file loudly at parse time instead of guessing. Within one version the schema
+ * only ever grows ADDITIVE OPTIONAL fields (`parentId`, `color`): an old file
+ * missing them still parses, and a new file read by an older build merely has
+ * the unknown keys stripped by the parser — degraded, never rejected. The
+ * version bumps only when a same-version parser could MISREAD a file: a
+ * renamed field, a changed type, a new required field.
  */
 export const exportSchema = v.object({
 	app: v.literal('ikoro'),
@@ -99,6 +103,13 @@ export const exportSchema = v.object({
 			dueTime: v.nullable(v.string()),
 			priority: v.picklist([0, 1, 2, 3]),
 			alarmAt: v.nullable(v.string()),
+			// Subtask structure and per-task colour are USER DATA, unlike the
+			// device-scoped fields — losing them on restore is data loss. Optional
+			// (not nullable-required) so backups written before subtasks/colors
+			// shipped still parse; `null` is the explicit "none" state, matching
+			// how the columns read back from IndexedDB.
+			parentId: v.optional(v.nullable(v.string())),
+			color: v.optional(v.nullable(v.string())),
 			updatedAt: v.pipe(v.string(), v.isoTimestamp())
 		})
 	)
