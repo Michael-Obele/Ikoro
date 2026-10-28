@@ -7,3 +7,6 @@ project(':capacitor-app').projectDir = new File('../../../node_modules/.bun/@cap
 
 include ':capacitor-local-notifications'
 project(':capacitor-local-notifications').projectDir = new File('../../../node_modules/.bun/@capacitor+local-notifications@8.3.1+8c735c3c6e2ff3c1/node_modules/@capacitor/local-notifications/android')
+
+include ':ikoro-dynamic-colors'
+project(':ikoro-dynamic-colors').projectDir = new File('../node_modules/ikoro-dynamic-colors/android')
