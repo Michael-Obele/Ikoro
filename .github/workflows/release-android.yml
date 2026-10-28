@@ -8,7 +8,7 @@
 # whose Settings screen and package manager disagree about the version is
 # worse than no release.
 #
-# Secrets (see docs/RELEASE.md): ANDROID_KEYSTORE_B64,
+# Secrets (see RELEASE.md): ANDROID_KEYSTORE_B64,
 # ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD.
 #
 # BUN ONLY: this repo never uses npm/npx/pnpm/yarn. `bunx` is the npx
@@ -76,7 +76,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${KEYSTORE_B64:-}" ]; then
-            echo "ANDROID_KEYSTORE_B64 is not set — see docs/RELEASE.md"
+            echo "ANDROID_KEYSTORE_B64 is not set — see RELEASE.md"
             exit 1
           fi
           echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/ikoro.keystore"

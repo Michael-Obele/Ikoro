@@ -68,3 +68,9 @@ Thumbs.db
 # agent browser scratch
 .playwright-mcp/
 .browser-use/
+
+# signing keys — never commit. The release keystore arrives base64-encoded via
+# the ANDROID_KEYSTORE_B64 secret (see RELEASE.md).
+*.keystore
+*.jks
+*.keystore.b64
