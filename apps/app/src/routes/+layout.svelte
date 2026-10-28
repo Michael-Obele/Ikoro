@@ -113,14 +113,34 @@
 
 <Sheet.Root bind:open={sheetOpen}>
 	<Sheet.Content side="left" class="w-72 p-0">
-		<ListSidebar />
+		<!--
+			The drawer needs a real header, for two reasons.
+
+			One: a sheet with no `Sheet.Title` is an UNNAMED dialog to a screen
+			reader, so this is where its accessible name comes from. TaskSheet sets
+			the same pair, and an sr-only Description keeps the name from being read
+			out as the first thing in the panel.
+
+			Two: the close button is `absolute top-3 right-3` in the generated
+			sheet-content, so whatever renders first slides underneath it. The drawer
+			now leads with the lists — the whole point of dropping the views — which
+			put the Lists row's "New list" button in exactly that corner and stacked
+			two icon buttons on top of each other. The header occupies that band,
+			which pushes the lists clear of the close button.
+		-->
+		<Sheet.Header>
+			<Sheet.Title>Ikoro</Sheet.Title>
+			<Sheet.Description class="sr-only">Lists and settings</Sheet.Description>
+		</Sheet.Header>
+
+		<ListSidebar variant="drawer" />
 	</Sheet.Content>
 </Sheet.Root>
 
 {#if browser && dev}
 	<!-- sv-agentation: UI annotations become markdown context for AI agents. Dev only. -->
 	<Agentation
-		toolbarPosition="bottom-right"
+		toolbarPosition="top-right"
 		outputMode="forensic"
 		pauseAnimations
 		clearOnCopy

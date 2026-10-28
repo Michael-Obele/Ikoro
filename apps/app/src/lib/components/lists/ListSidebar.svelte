@@ -1,6 +1,10 @@
 <script lang="ts">
 	/**
-	 * Navigation. Views first, then the user's own lists.
+	 * Navigation. In the desktop sidebar the views come first, then the user's own
+	 * lists. In the phone's drawer the lists come first and the views are gone:
+	 * Today / Upcoming / Done already own the bottom bar, so repeating them here
+	 * would only push the lists (the reason the drawer was opened) down the panel.
+	 * Settings has no bottom-bar slot, so the drawer keeps it.
 	 *
 	 * Reads the active route from `$app/state` (Kit 3 removed `$app/stores`; a
 	 * module-level `$state` object is the reactive replacement). Every row
@@ -24,8 +28,12 @@
 	import ListDialog from './ListDialog.svelte';
 	import { liveListById, liveLists } from '$lib/stores/view';
 
-	// The responsive shell (sidebar / sheet) lives in +layout.svelte; this
-	// component is only ever the sidebar's contents.
+	// The responsive shell (sidebar / sheet) lives in +layout.svelte; this component
+	// renders the contents of both. `variant` is how the shell tells them apart: the
+	// desktop aside wants the full navigation, the phone's drawer wants only the
+	// lists plus the two destinations the bottom bar cannot reach: Settings and the
+	// theme switch.
+	let { variant = 'sidebar' }: { variant?: 'sidebar' | 'drawer' } = $props();
 
 	let dialog = $state<'create' | 'rename' | 'delete'>('create');
 	let dialogListId = $state<string | null>(null);
@@ -35,12 +43,17 @@
 	const lists = $derived(liveLists());
 	const path = $derived(page.url.pathname);
 
+	// Settings is pulled out of VIEWS because the drawer renders it on its own,
+	// below the lists; the sidebar keeps it as the last of the views.
 	const VIEWS = [
 		{ href: '/today', label: 'Today', icon: CalendarClock },
 		{ href: '/upcoming', label: 'Upcoming', icon: CalendarDays },
-		{ href: '/done', label: 'Done', icon: CheckCheck },
-		{ href: '/settings', label: 'Settings', icon: SettingsIcon }
+		{ href: '/done', label: 'Done', icon: CheckCheck }
 	] as const;
+
+	const SETTINGS = { href: '/settings', label: 'Settings', icon: SettingsIcon } as const;
+
+	type NavItem = (typeof VIEWS)[number] | typeof SETTINGS;
 
 	function isActive(href: string): boolean {
 		return path === href || path.startsWith(`${href}/`);
@@ -62,31 +75,23 @@
 	}
 </script>
 
-<nav class="flex h-full flex-col gap-1 p-3" aria-label="Main">
-	<a href="/today" class="mb-3 flex items-center gap-2 px-2 text-sm font-semibold tracking-tight">
-		<CalendarClock class="size-4 text-primary" />
-		Ikoro
-	</a>
+{#snippet navRow(item: NavItem)}
+	<li>
+		<a
+			href={item.href}
+			aria-current={isActive(item.href) ? 'page' : undefined}
+			class="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors
+			       hover:bg-accent/60 data-[active=true]:bg-accent data-[active=true]:font-medium"
+			data-active={isActive(item.href)}
+		>
+			<item.icon class="size-4 shrink-0 opacity-70" />
+			{item.label}
+		</a>
+	</li>
+{/snippet}
 
-	<ul class="grid gap-0.5">
-		{#each VIEWS as view (view.href)}
-			<li>
-				<a
-					href={view.href}
-					aria-current={isActive(view.href) ? 'page' : undefined}
-					class="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors
-					       hover:bg-accent/60 data-[active=true]:bg-accent data-[active=true]:font-medium"
-					data-active={isActive(view.href)}
-					
-				>
-					<view.icon class="size-4 shrink-0 opacity-70" />
-					{view.label}
-				</a>
-			</li>
-		{/each}
-	</ul>
-
-	<div class="mt-5 flex items-center justify-between px-2">
+{#snippet listsSection()}
+	<div class="flex items-center justify-between px-2 {variant === 'sidebar' ? 'mt-5' : ''}">
 		<span class="text-xs font-medium tracking-wide text-muted-foreground uppercase">Lists</span>
 		<Button
 			variant="ghost"
@@ -142,13 +147,47 @@
 			<li class="px-2 py-1.5 text-xs text-muted-foreground">No lists yet</li>
 		{/if}
 	</ul>
+{/snippet}
+
+<nav class="flex h-full flex-col gap-1 p-3" aria-label="Main">
+	<!--
+		The desktop sidebar carries the brand and the full set of views. The phone's
+		drawer drops both: Today / Upcoming / Done already sit in the bottom bar, so
+		repeating them only pushed the lists (the reason the drawer was opened) below
+		the fold.
+	-->
+	{#if variant === 'sidebar'}
+		<a href="/today" class="mb-3 flex items-center gap-2 px-2 text-sm font-semibold tracking-tight">
+			<CalendarClock class="size-4 text-primary" />
+			Ikoro
+		</a>
+
+		<ul class="grid gap-0.5">
+			{#each VIEWS as view (view.href)}
+				{@render navRow(view)}
+			{/each}
+			{@render navRow(SETTINGS)}
+		</ul>
+	{/if}
+
+	{@render listsSection()}
+
+	<!--
+		Settings has no bottom-bar slot, so the drawer must carry it or it becomes
+		unreachable on a phone. In the sidebar it is simply the last view above.
+	-->
+	{#if variant === 'drawer'}
+		<ul class="mt-5 grid gap-0.5">
+			{@render navRow(SETTINGS)}
+		</ul>
+	{/if}
 
 	<!--
 		The theme switch lives here, not only in Settings, because this component
-		IS the navigation: it renders as the desktop sidebar and — inside the sheet
-		in +layout.svelte — as the phone's nav drawer. One placement covers both
-		breakpoints. `mt-auto` pins it to the bottom, where a global setting is
-		expected to be.
+		IS the navigation: it renders as the desktop sidebar and (inside the sheet
+		in +layout.svelte) as the phone's nav drawer. In the drawer it is the only
+		copy, so it has to survive the smaller surface too. `mt-auto` pins it to the
+		bottom, where a global setting is expected to be.
 	-->
 	<div class="mt-auto pt-4">
 		<ThemeToggle />
