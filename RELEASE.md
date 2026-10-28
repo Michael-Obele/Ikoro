@@ -113,11 +113,18 @@ No tagging, no version editing. Push commits to `master`, then merge the PR rele
 4. **The build starts.** `release-please.yml` dispatches `release-android.yml` at the new tag, which
    signs and attaches `Ikoro-v<version>.apk` and `.aab` to the release.
 
+> **Only commits that touch `apps/app` earn a release.** release-please filters by the package path,
+> so a week of `.github/` and `docs/` work produces no PR — and no version. That is deliberate: a CI
+> fix should not move the number a user sees. Work on `apps/landing`, `apps/server` or
+> `packages/*` is likewise invisible to `apps/app`'s version until it is wired into its own package
+> entry in `release-please-config.json`.
+
 To preview the next version without merging anything: look at the release PR's title. That number is
 what release-please computed from the commits in it.
 
 To rebuild a release whose artifacts are missing, dispatch the build by hand — it refuses a ref that
-is not a version tag:
+is not a version tag. Note that it runs the workflow **as that tag had it**, so a fix to the build
+pipeline only takes effect from the next tag onward:
 
 ```bash
 gh workflow run release-android.yml --ref v0.3.2
