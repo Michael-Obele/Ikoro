@@ -140,7 +140,7 @@
 {#if browser && dev}
 	<!-- sv-agentation: UI annotations become markdown context for AI agents. Dev only. -->
 	<Agentation
-		toolbarPosition="top-right"
+		toolbarPosition="top-left"
 		outputMode="forensic"
 		pauseAnimations
 		clearOnCopy
