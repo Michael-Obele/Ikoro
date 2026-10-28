@@ -2,14 +2,15 @@
 #
 # It runs on every push to master, keeps ONE open release PR that accumulates
 # the commits since the last tag, and — when you merge that PR — bumps
-# apps/app/package.json, writes the changelog, and cuts the tag. The tag is what
-# starts release-android.yml, which builds and publishes the APK + AAB.
+# apps/app/package.json, writes the changelog, and cuts the tag. That tag is
+# then handed to release-android.yml, which builds and publishes the APK + AAB.
 #
-# WHY A PAT (secrets.RELEASE_PLEASE_TOKEN) AND NOT THE DEFAULT GITHUB_TOKEN:
-# events caused by GITHUB_TOKEN do not create workflow runs. release-please
-# would cut the tag, report success, and the build would never start — a release
-# that exists on the Releases tab with no artifacts, and no failure anywhere to
-# explain it. Handing the action a PAT makes its tag push an ordinary push.
+# WHY THE BUILD IS DISPATCHED EXPLICITLY, AND NOT TRIGGERED BY THE TAG PUSH:
+# events caused by GITHUB_TOKEN do not create workflow runs, so a tag pushed by
+# release-please would never start the build — leaving a release on the Releases
+# tab with no artifacts and no failure anywhere to explain it. `workflow_dispatch`
+# is the documented exception: it always creates a run, whatever token asked for
+# it. So this job calls it directly. No PAT, no second secret to rotate.
 #
 # BUN ONLY: this repo never uses npm/npx/pnpm/yarn.
 
@@ -22,6 +23,8 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  # Needed to dispatch release-android.yml. Without it the dispatch is a 403.
+  actions: write
 
 concurrency:
   group: release-please
@@ -34,38 +37,21 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      # Fail loudly instead of silently producing a tag nobody builds. Without
-      # the PAT, release-please still opens and merges PRs — using GITHUB_TOKEN —
-      # and the release would look successful while release-android.yml stayed
-      # asleep.
-      - name: Require the PAT the build needs
-        env:
-          TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [ -z "${TOKEN:-}" ]; then
-            echo "RELEASE_PLEASE_TOKEN is not set — see RELEASE.md, step 3."
-            echo "With the default GITHUB_TOKEN, release-please cuts the tag but"
-            echo "release-android.yml never runs for it."
-            exit 1
-          fi
-
       - name: Run release-please
         id: release
         uses: googleapis/release-please-action@v4
         with:
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
       # Merging the release PR leaves its branch behind, and release-please
       # recreates it on the next push anyway. Delete it, so the branch list only
-      # ever holds branches someone is working on. The per-package output is
-      # keyed by the manifest path.
+      # ever holds branches someone is working on. A 404 is the normal answer
+      # when release-please already cleaned up.
       - name: Delete the release branch after a merge
         if: "${{ steps.release.outputs['apps/app--release_created'] == 'true' }}"
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           branch="release-please--branches--master"
@@ -74,3 +60,35 @@ jobs:
           else
             echo "$branch was already gone"
           fi
+
+      # The tag has to be readable here: dispatching at an empty ref would run
+      # the build against master and trip its own tag assertion instead of
+      # failing where the bug is.
+      - name: Check the tag release-please just cut
+        id: tag
+        if: "${{ steps.release.outputs['apps/app--release_created'] == 'true' }}"
+        env:
+          TAG: ${{ steps.release.outputs['apps/app--tag_name'] }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TAG:-}" ]; then
+            echo "release_created is true but apps/app--tag_name is empty."
+            echo "release-please changed its output keys — dispatch by hand:"
+            echo "  gh workflow run release-android.yml --ref v<version>"
+            exit 1
+          fi
+          echo "tag=$TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      # workflow_dispatch is the one event GITHUB_TOKEN is allowed to trigger.
+      # --ref <tag> makes GITHUB_REF_NAME the tag, which is what the build
+      # asserts on, and makes its checkout land on the tagged commit.
+      - name: Start the Android build for that tag
+        if: "${{ steps.tag.outputs.tag != '' }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh workflow run release-android.yml --ref "$TAG"
+          echo "dispatched release-android.yml at $TAG"

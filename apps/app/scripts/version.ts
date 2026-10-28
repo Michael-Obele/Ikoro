@@ -187,6 +187,14 @@ async function check(): Promise<void> {
 	}
 
 	const { version } = JSON.parse(await readFile(PKG, 'utf8')) as { version: string };
+	if (!tag.startsWith('v')) {
+		fail([
+			`✗ "${tag}" is not a version tag.`,
+			'  This runs on a release, so it needs the tag. In CI that means the',
+			'  workflow was dispatched at a branch instead of a tag:',
+			'    gh workflow run release-android.yml --ref v<version>'
+		]);
+	}
 	const tagVersion = tag.replace(/^v/, '');
 	if (tagVersion !== version) {
 		fail([

@@ -38,8 +38,14 @@ on:
   push:
     tags:
       - 'v*'
+  # release-please triggers this itself, because a tag it pushes with
+  # GITHUB_TOKEN would never start a run. workflow_dispatch is the documented
+  # exception, so the release job dispatches it at the tag:
+  #   gh workflow run release-android.yml --ref v0.3.2
+  workflow_dispatch:
 
-# One release at a time per tag; never cancel a half-finished upload.
+# One release at a time per tag; never cancel a half-finished upload. Keyed on
+# the ref, which is the tag both for a pushed tag and for a dispatch.
 concurrency:
   group: release-android-${{ github.ref }}
   cancel-in-progress: false
@@ -108,7 +114,17 @@ jobs:
       # a wrong version should cost seconds, not a signed build nobody can
       # publish. See the header.
       - name: Assert version bump matches the commits since the last tag
-        run: bun apps/app/scripts/version.ts check
+        shell: bash
+        run: |
+          set -euo pipefail
+          # GITHUB_REF_NAME is the tag for a pushed tag and for a dispatch at one.
+          # A dispatch at a branch would check the wrong thing, so say so plainly.
+          case "$GITHUB_REF_NAME" in
+            v*) bun apps/app/scripts/version.ts check ;;
+            *) echo "GITHUB_REF_NAME=$GITHUB_REF_NAME is not a version tag"
+               echo "dispatch this workflow at the tag: gh workflow run release-android.yml --ref v<version>"
+               exit 1 ;;
+          esac
 
       # The keystore is never committed. It arrives base64-encoded in a secret
       # and is written to $RUNNER_TEMP, which is wiped with the runner.

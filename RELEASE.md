@@ -35,7 +35,7 @@ base64 -w0 ikoro.keystore > ikoro.keystore.b64
 
 ## 3. Set the four GitHub secrets
 
-Repo → **Settings → Secrets and variables → Actions → New repository secret**. Create exactly these five:
+Repo → **Settings → Secrets and variables → Actions → New repository secret**. Create exactly these four:
 
 | Secret | Value |
 | --- | --- |
@@ -43,7 +43,6 @@ Repo → **Settings → Secrets and variables → Actions → New repository sec
 | `ANDROID_KEYSTORE_PASSWORD` | the store password from step 1 |
 | `ANDROID_KEY_ALIAS` | `ikoro` |
 | `ANDROID_KEY_PASSWORD` | the key password from step 1 |
-| `RELEASE_PLEASE_TOKEN` | a personal access token — see below |
 
 With the [`gh`](https://cli.github.com) CLI instead of the web UI:
 
@@ -52,7 +51,6 @@ gh secret set ANDROID_KEYSTORE_B64 < ikoro.keystore.b64
 gh secret set ANDROID_KEYSTORE_PASSWORD   # prompts
 gh secret set ANDROID_KEY_ALIAS           # prompts — enter: ikoro
 gh secret set ANDROID_KEY_PASSWORD        # prompts
-gh secret set RELEASE_PLEASE_TOKEN        # prompts — paste the PAT
 ```
 
 Verify they're set (values stay hidden):
@@ -61,11 +59,9 @@ Verify they're set (values stay hidden):
 gh secret list
 ```
 
-### Why `RELEASE_PLEASE_TOKEN` is not optional
-
-**Events raised by the default `GITHUB_TOKEN` do not create workflow runs.** With it, release-please would cut the tag and report success, and `release-android.yml` would never start — a release on the Releases tab with no artifacts, and no failure anywhere to explain it. That is a deliberate GitHub rule, not a bug.
-
-So give the action a token of its own: a fine-grained PAT scoped to this repository with **Contents: read and write** and **Pull requests: read and write**. The workflow asserts the secret exists and fails loudly if it does not, so this can only be misconfigured once, visibly.
+No token secret is needed. release-please tags with the default `GITHUB_TOKEN`, and a tag pushed
+that way cannot start another workflow — so `release-please.yml` starts the build with
+`gh workflow run`, which is the one event `GITHUB_TOKEN` *is* allowed to trigger.
 
 ## 4. Which bump does my commit need? (commit → version)
 
@@ -114,11 +110,18 @@ No tagging, no version editing. Push commits to `master`, then merge the PR rele
 3. **Merge the PR.** release-please then writes `apps/app/package.json` and the changelog, cuts tag
    `v<version>`, and publishes the GitHub Release. Its branch (`release-please--branches--master`) is
    deleted by a step in `release-please.yml` so the branch list stays clean.
-4. **The tag starts the build.** `release-android.yml` builds, signs, and attaches `Ikoro-v<version>.apk`
-   and `.aab` to the release.
+4. **The build starts.** `release-please.yml` dispatches `release-android.yml` at the new tag, which
+   signs and attaches `Ikoro-v<version>.apk` and `.aab` to the release.
 
 To preview the next version without merging anything: look at the release PR's title. That number is
 what release-please computed from the commits in it.
+
+To rebuild a release whose artifacts are missing, dispatch the build by hand — it refuses a ref that
+is not a version tag:
+
+```bash
+gh workflow run release-android.yml --ref v0.3.2
+```
 
 ## 6. Rotating a secret
 
@@ -135,7 +138,8 @@ The next release run picks it up. No workflow change needed.
 ## Troubleshooting
 
 - **`tag X != package.json Y`** — the tag and `apps/app/package.json` disagree, which now only happens if one was edited by hand. Close the tag, let the next release PR set both.
-- **A tag exists but no build ran** — `RELEASE_PLEASE_TOKEN` is unset or expired, so release-please tagged with `GITHUB_TOKEN` and the push could not trigger a workflow. Re-set the secret (step 3) and re-run the release: `gh release delete v<version>` and delete the tag, then re-run the Release Please workflow.
+- **A tag exists but no build ran** — `release-please.yml` dispatches the build, so check that run first. If the dispatch step failed, rebuild by hand: `gh workflow run release-android.yml --ref v<version>`.
+- **`"master" is not a version tag`** — the build was dispatched at a branch. Dispatch it at the tag instead.
 - **No release PR appears** — nothing releasable happened since the last tag, or the commits do not parse. Run `git log --oneline v<last>..HEAD` and check the messages.
 - **`ANDROID_KEYSTORE_B64 is not set`** — step 3 was skipped or the secret name has a typo. Names must match exactly.
 - **Verify artifacts are signed fails** — the signing block did not apply. Confirm all four keystore secrets are set; the block is env-gated and silently skips signing when `IKORO_KEYSTORE` is absent.
