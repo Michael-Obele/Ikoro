@@ -112,15 +112,25 @@
 </script>
 
 <Sheet.Root bind:open onOpenChange={(next) => !next && close()}>
-	<Sheet.Content side="right" class="w-full sm:max-w-md">
+	<!--
+		`rounded-none` is explicit rather than inherited. The sheet is a full-height
+		panel flush against the screen edge, so a corner on it would be a corner
+		against nothing — and the generated Sheet.Content carries no radius of its
+		own, which means the shape is decided here, once, instead of by whatever
+		`--radius` happens to be.
+	-->
+	<Sheet.Content side="right" class="w-full rounded-none sm:max-w-md">
 		{#if task}
-			<Sheet.Header>
+			<!-- The header is separated by a hairline, not by a card. Every section
+			     below is divided the same way, so the sheet reads as one ruled
+			     document rather than a stack of floating panels. -->
+			<Sheet.Header class="border-b border-outline-variant">
 				<Sheet.Title>Task</Sheet.Title>
 				<Sheet.Description class="sr-only">Edit this task</Sheet.Description>
 			</Sheet.Header>
 
-			<div class="flex flex-col gap-5 overflow-y-auto px-4 pb-6">
-				<div class="grid gap-1.5">
+			<div class="flex flex-col overflow-y-auto px-4 pb-6">
+				<div class="grid gap-1.5 border-b border-outline-variant py-4">
 					<Label for="task-title">Title</Label>
 					<Input
 						id="task-title"
@@ -133,7 +143,7 @@
 					/>
 				</div>
 
-				<div class="grid gap-1.5">
+				<div class="grid gap-1.5 border-b border-outline-variant py-4">
 					<Label for="task-notes">Notes</Label>
 					<Textarea
 						id="task-notes"
@@ -145,9 +155,11 @@
 					/>
 				</div>
 
-				<DuePicker bind:dueDate bind:dueTime onsetchange={saveSchedule} />
+				<div class="border-b border-outline-variant py-4">
+					<DuePicker bind:dueDate bind:dueTime onsetchange={saveSchedule} />
+				</div>
 
-				<div class="grid gap-1.5">
+				<div class="grid gap-1.5 border-b border-outline-variant py-4">
 					<span class="text-sm font-medium">Priority</span>
 					<PriorityPicker bind:priority onchange={savePriority} />
 				</div>
@@ -155,9 +167,11 @@
 				<!-- The reminder control. It has to be the one field that arms a
 				     platform alarm, so it lives with the scheduler rather than in
 				     this file's local state. -->
-				<AlarmSheet {task} />
+				<div class="border-b border-outline-variant py-4">
+					<AlarmSheet {task} />
+				</div>
 
-				<div class="mt-auto border-t pt-4">
+				<div class="mt-auto pt-4">
 					{#if confirmingDelete}
 						<div class="flex items-center gap-2">
 							<p class="flex-1 text-sm text-muted-foreground">

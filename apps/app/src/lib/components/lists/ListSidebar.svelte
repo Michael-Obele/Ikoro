@@ -77,11 +77,16 @@
 
 {#snippet navRow(item: NavItem)}
 	<li>
+		<!--
+			The active state is a 2px bar on the leading edge plus a tinted row, not a
+			rounded pill. It is the same indicator language as the phone's bottom bar,
+			so "where am I" reads identically on both layouts.
+		-->
 		<a
 			href={item.href}
 			aria-current={isActive(item.href) ? 'page' : undefined}
-			class="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors
-			       hover:bg-accent/60 data-[active=true]:bg-accent data-[active=true]:font-medium"
+			class="flex items-center gap-2.5 border-l-2 border-transparent px-2 py-1.5 text-sm transition-colors
+			       hover:bg-accent/60 data-[active=true]:border-primary data-[active=true]:bg-accent data-[active=true]:font-medium"
 			data-active={isActive(item.href)}
 		>
 			<item.icon class="size-4 shrink-0 opacity-70" />
@@ -109,8 +114,8 @@
 				<a
 					href="/lists/{list.id}"
 					aria-current={path === `/lists/${list.id}` ? 'page' : undefined}
-					class="flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors
-					       hover:bg-accent/60 data-[active=true]:bg-accent data-[active=true]:font-medium"
+					class="flex min-w-0 flex-1 items-center gap-2.5 border-l-2 border-transparent px-2 py-1.5 text-sm transition-colors
+					       hover:bg-accent/60 data-[active=true]:border-primary data-[active=true]:bg-accent data-[active=true]:font-medium"
 					data-active={path === `/lists/${list.id}`}
 				>
 					<ListIcon class="size-4 shrink-0 opacity-70" />

@@ -16,8 +16,9 @@
 	 * that drawer is where the lists, the theme control and the way into Settings
 	 * already live, and a second home for them is a second thing to keep in step.
 	 *
-	 * All four slots clear a 44px touch target by a wide margin (each is roughly
-	 * 64px tall and a quarter of the width).
+	 * All four slots clear a 44px touch target by a wide margin: each is
+	 * `min-h-14` (56px) and a quarter of the width, and the whole slot is the
+	 * target — the icon is not a separate hit area.
 	 */
 	import { page } from '$app/state';
 	import CalendarClock from 'lucide-svelte/icons/calendar-clock';
@@ -56,19 +57,29 @@
 		<a
 			href={tab.href}
 			aria-current={isActive(tab.href) ? 'page' : undefined}
-			class="flex flex-1 flex-col items-center gap-0.5 pt-2 pb-1.5 text-[0.6875rem] transition-colors"
+			class="relative flex min-h-14 flex-1 flex-col items-center justify-center gap-1 pt-2 pb-1.5 text-[0.6875rem] transition-colors"
 		>
-			<!-- The M3 indicator: the pill marks the destination, not the label, so the
-			     states read the same way they do in the sidebar. -->
+			<!--
+				The active indicator is a 2px bar across the TOP edge of the tab, not a
+				rounded pill behind the icon. A bar marks the destination at the edge of
+				the bar itself, which is where the eye already is when it looks at a
+				navigation strip, and it is the one shape that stays honest in a boxy
+				system — a pill would be the only rounded thing on the screen.
+
+				It is a separate absolutely-positioned element rather than a border so it
+				can fade in without shifting the icon by 2px.
+			-->
 			<span
-				class="flex h-8 w-16 items-center justify-center rounded-full transition-colors {isActive(
+				aria-hidden="true"
+				class="absolute inset-x-3 top-0 h-0.5 bg-primary transition-opacity {isActive(
 					tab.href
 				)
-					? 'bg-accent text-accent-foreground'
-					: 'text-muted-foreground'}"
-			>
-				<tab.icon class="size-5" />
-			</span>
+					? 'opacity-100'
+					: 'opacity-0'}"
+			></span>
+			<tab.icon
+				class="size-5 {isActive(tab.href) ? 'text-primary' : 'text-muted-foreground'}"
+			/>
 			<span class={isActive(tab.href) ? 'font-medium text-foreground' : 'text-muted-foreground'}>
 				{tab.label}
 			</span>
@@ -77,12 +88,10 @@
 
 	<button
 		type="button"
-		class="flex flex-1 flex-col items-center gap-0.5 pt-2 pb-1.5 text-[0.6875rem] text-muted-foreground transition-colors"
+		class="flex min-h-14 flex-1 flex-col items-center justify-center gap-1 pt-2 pb-1.5 text-[0.6875rem] text-muted-foreground transition-colors"
 		onclick={onopenlists}
 	>
-		<span class="flex h-8 w-16 items-center justify-center rounded-full">
-			<ListIcon class="size-5" />
-		</span>
+		<ListIcon class="size-5" />
 		<span>Lists</span>
 	</button>
 </nav>

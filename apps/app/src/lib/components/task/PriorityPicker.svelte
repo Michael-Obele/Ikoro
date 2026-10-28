@@ -64,12 +64,17 @@
 
 <div class="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Priority">
 	{#each OPTIONS as option (option.value)}
+		<!--
+			Square chips, not pills. A pill here was the only rounded control left in
+			the sheet once the shape scale went boxy, and it read as a leftover. The
+			chips are `min-h-9` so each is a comfortable tap target on a phone.
+		-->
 		<button
 			type="button"
 			role="radio"
 			aria-checked={priority === option.value}
 			data-on={priority === option.value}
-			class="rounded-full border px-2.5 py-1 text-xs transition-colors {option.class}
+			class="min-h-9 border px-3 text-xs transition-colors {option.class}
 			       data-[on=false]:border-border data-[on=false]:text-muted-foreground data-[on=true]:border-transparent"
 			onclick={() => pick(option.value)}
 		>

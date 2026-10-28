@@ -20,6 +20,8 @@
 	import TaskGroup from '$lib/components/task/TaskGroup.svelte';
 	import AddTaskRow from '$lib/components/task/AddTaskRow.svelte';
 	import TaskSheet from '$lib/components/task/TaskSheet.svelte';
+	import EmptyState from '$lib/components/shell/EmptyState.svelte';
+	import CalendarCheck from 'lucide-svelte/icons/calendar-check';
 	import type { Task } from '$lib/db/schema';
 	import { PAST_WINDOW_DAYS } from '$lib/db/repo';
 	import { liveTasks } from '$lib/stores/view';
@@ -89,7 +91,16 @@
 	<AddTaskRow dueDate={today} />
 
 	{#if quiet}
-		<p class="py-16 text-center text-sm text-muted-foreground">Nothing due — Ikoro is quiet.</p>
+		<!--
+			The empty state names the next action rather than only the state. The add
+			row is already above it, so the hint points at that rather than repeating
+			a second "add a task" control that would do the same thing.
+		-->
+		<EmptyState
+			icon={CalendarCheck}
+			title="Nothing due today"
+			hint="Add a task above, or check Upcoming for what is coming."
+		/>
 	{:else}
 		<TaskGroup heading="Past" tasks={overdue} onopen={openTask} />
 		<TaskGroup heading="Today" tasks={dueToday} onopen={openTask} />

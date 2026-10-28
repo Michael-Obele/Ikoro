@@ -36,7 +36,13 @@
 		<h2 class="mb-1 px-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
 			{heading}
 		</h2>
-		<ul class="grid gap-0.5">
+		<!--
+			No gap between rows. Each row draws its own hairline bottom border, so a
+			gap would leave the separators floating in mid-air instead of reading as
+			one continuous ruled list. `divide-y` is not used because Done hands in its
+			own row snippet, which would then need to know about the divider.
+		-->
+		<ul class="grid">
 			{#each tasks as task (task.id)}
 				<li>
 					{#if row}

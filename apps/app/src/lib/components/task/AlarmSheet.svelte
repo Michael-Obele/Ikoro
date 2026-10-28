@@ -128,7 +128,12 @@
 	}
 </script>
 
-<div class="grid gap-2.5 rounded-lg border p-3">
+<!--
+	No border and no radius. This block sits inside TaskSheet, which already draws a
+	hairline between sections — a second box around it would be a card inside a
+	card, and the rounded one it used to be was the only rounded thing on the sheet.
+-->
+<div class="grid gap-2.5">
 	<div class="flex items-center justify-between gap-3">
 		<Label for="alarm-{task.id}" class="text-sm font-medium">Remind me</Label>
 		<Switch

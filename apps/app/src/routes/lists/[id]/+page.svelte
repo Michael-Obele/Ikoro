@@ -13,6 +13,8 @@
 	import AddTaskRow from '$lib/components/task/AddTaskRow.svelte';
 	import TaskRow from '$lib/components/task/TaskRow.svelte';
 	import TaskSheet from '$lib/components/task/TaskSheet.svelte';
+	import EmptyState from '$lib/components/shell/EmptyState.svelte';
+	import ListIcon from 'lucide-svelte/icons/list';
 	import * as repo from '$lib/db/repo';
 	import type { Task } from '$lib/db/schema';
 	import { liveListById, liveTasksByList } from '$lib/stores/view';
@@ -66,16 +68,18 @@
 		<AddTaskRow listId={listId} />
 
 		{#if tasks.length === 0}
-			<p class="py-16 text-center text-sm text-muted-foreground">
-				Nothing here yet. Add a task above.
-			</p>
+			<EmptyState
+				icon={ListIcon}
+				title="This list is empty"
+				hint="Add a task above — it stays in this list until you move it."
+			/>
 		{:else}
 			<section aria-label="Tasks">
 				<div
 					use:dndzone={{ items: tasks, flipDurationMs: 150, dragDisabled: false }}
 					onconsider={onReorder}
 					onfinalize={onReorder}
-					class="grid gap-0.5"
+					class="grid"
 				>
 					{#each tasks as task (task.id)}
 						<div animate:flip={{ duration: 150 }}>

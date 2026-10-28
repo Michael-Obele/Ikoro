@@ -75,12 +75,19 @@
 			<button type="submit" class="sr-only" tabindex="-1" aria-hidden="true">Add</button>
 		</form>
 	{:else}
+		<!--
+			A dashed ghost row, not a plain text button. The dashed border is the
+			conventional "there is a slot here, and it is empty" affordance — it reads
+			as a placeholder for a row rather than as a link, which is what the old
+			borderless version looked like. It is square-cornered and 44px tall so it
+			matches the rows it will produce and clears the touch minimum.
+		-->
 		<button
 			type="button"
-			class="mb-2 flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+			class="mb-2 flex h-11 w-full items-center gap-2 border border-dashed border-outline-variant px-3 text-sm text-muted-foreground transition-colors hover:border-primary hover:bg-accent/50 hover:text-foreground"
 			onclick={() => (adding = true)}
 		>
-			<PlusIcon class="size-4" /> {label}
+			<PlusIcon class="size-4 shrink-0" /> {label}
 		</button>
 	{/if}
 {/if}

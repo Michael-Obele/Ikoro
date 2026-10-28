@@ -9,6 +9,8 @@
 	import TaskGroup from '$lib/components/task/TaskGroup.svelte';
 	import AddTaskRow from '$lib/components/task/AddTaskRow.svelte';
 	import TaskSheet from '$lib/components/task/TaskSheet.svelte';
+	import EmptyState from '$lib/components/shell/EmptyState.svelte';
+	import CalendarDays from 'lucide-svelte/icons/calendar-days';
 	import type { Task } from '$lib/db/schema';
 	import { liveTasks } from '$lib/stores/view';
 	import { formatDayHeading, groupByDay, isoDaysAgo } from '$lib/utils/time';
@@ -63,9 +65,11 @@
 	<AddTaskRow dueDate={firstDay} />
 
 	{#if quiet}
-		<p class="py-16 text-center text-sm text-muted-foreground">
-			Nothing in the next {DAYS_AHEAD} days.
-		</p>
+		<EmptyState
+			icon={CalendarDays}
+			title="Nothing in the next {DAYS_AHEAD} days"
+			hint="Add a task above and it lands on tomorrow."
+		/>
 	{:else}
 		{#each groups as group (group.day)}
 			<!-- `dateLabel="time"`: the heading already names the day, so a row only

@@ -60,23 +60,39 @@
 </script>
 
 <div
-	class="group flex items-center gap-3 rounded-md px-2 py-2 transition-colors hover:bg-accent/50 data-[completed=true]:opacity-55"
+	class="group relative flex items-center gap-1 border-b border-outline-variant/40 px-1 transition-colors last:border-b-0 hover:bg-accent/50 data-[completed=true]:opacity-55"
 	data-completed={completed}
 >
-	<Checkbox
-		checked={completed}
-		onCheckedChange={toggle}
-		aria-label={completed ? `Mark "${task.title}" as not done` : `Mark "${task.title}" as done`}
-	/>
+	<!--
+		The checkbox lives inside a 44x44 label rather than being the target itself.
+		The generated Checkbox is 16px with a 12px/8px `after:` halo — about 40x32 of
+		hit area, which is under the 44px minimum and, worse, is a different size in
+		each direction. A wrapper makes the target square, predictable, and big
+		enough for a thumb. `-my-1` keeps the row from growing to 44px tall just to
+		hold it: the target overflows the row's padding box instead.
+	-->
+	<label
+		class="-my-1 flex size-11 shrink-0 cursor-pointer items-center justify-center"
+	>
+		<Checkbox
+			checked={completed}
+			onCheckedChange={toggle}
+			aria-label={completed ? `Mark "${task.title}" as not done` : `Mark "${task.title}" as done`}
+		/>
+	</label>
 
-	<button type="button" class="min-w-0 flex-1 text-left" onclick={() => onopen?.(task)}>
-		<span class="block truncate text-sm data-[done=true]:line-through" data-done={completed}>
+	<button
+		type="button"
+		class="flex min-w-0 flex-1 flex-col items-start gap-0.5 py-2.5 pr-2 text-left"
+		onclick={() => onopen?.(task)}
+	>
+		<span class="block w-full truncate text-sm data-[done=true]:line-through" data-done={completed}>
 			{task.title}
 		</span>
 
 		{#if shownDue}
 			<span
-				class="mt-0.5 block text-xs {overdue
+				class="block text-xs {overdue
 					? 'font-medium text-error'
 					: 'text-muted-foreground'}"
 			>
@@ -90,7 +106,7 @@
 		always the outermost mark, which is what makes priority a scannable right edge.
 	-->
 	{#if task.alarmAt || task.priority > 0}
-		<span class="flex shrink-0 items-center gap-1.5">
+		<span class="flex shrink-0 items-center gap-1.5 pr-1">
 			{#if task.alarmAt}
 				<BellRing
 					class="size-3.5 text-muted-foreground"
@@ -104,6 +120,9 @@
 					`role="img"` is load-bearing. An `aria-label` on a bare `<span>` is
 					ignored, so without a role the priority was colour-only for a screen
 					reader as well as for everyone else.
+
+					Circular on purpose: a dot is a dot. This is the one place in the row
+					where `rounded-full` is semantic rather than a rounded corner.
 				-->
 				<span
 					class="size-2 shrink-0 rounded-full {PRIORITY_DOT[task.priority]}"

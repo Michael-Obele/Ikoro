@@ -154,14 +154,30 @@
 	--md-sys-color-inverse-on-surface: oklch(0.957 0.004 17.58);
 	--md-sys-color-scrim: oklch(0.138 0.004 17.58);
 
-	/* M3 shape scale. `--radius` below is M3's medium corner and drives every
-	   shadcn radius-* utility through the calc()s in `@theme inline`. */
+	/*
+	 * M3 shape scale — BOXY, DELIBERATELY.
+	 *
+	 * The spec's ladder is 0/4/8/12/16/28. This app ships a sharp, squared-off
+	 * look instead: the medium corner (the one `--radius` points at, and therefore
+	 * the one every shadcn `rounded-*` utility resolves through) is 2px, not 12px.
+	 * Two pixels rather than zero because a true 0 on a filled control reads as a
+	 * rendering bug at 1x, while 2px reads as a deliberate edge.
+	 *
+	 * The ladder is compressed rather than scaled: xs and md are both 2px, so the
+	 * steps above it (lg 4, xl 6) are the only ones that visibly differ. That is
+	 * the point — a boxy system has almost no radius range, and pretending
+	 * otherwise would put a 28px corner back on a dialog.
+	 *
+	 * `full` stays 9999px. It is not a corner size, it is "make this a circle",
+	 * and the things that use it — the switch thumb, the priority dot, the
+	 * avatar — are circular because a circle is what they MEAN.
+	 */
 	--md-sys-shape-corner-none: 0px;
-	--md-sys-shape-corner-xs: 4px;
-	--md-sys-shape-corner-sm: 8px;
-	--md-sys-shape-corner-md: 12px;
-	--md-sys-shape-corner-lg: 16px;
-	--md-sys-shape-corner-xl: 28px;
+	--md-sys-shape-corner-xs: 2px;
+	--md-sys-shape-corner-sm: 2px;
+	--md-sys-shape-corner-md: 2px;
+	--md-sys-shape-corner-lg: 4px;
+	--md-sys-shape-corner-xl: 6px;
 	--md-sys-shape-corner-full: 9999px;
 
 	/*
@@ -221,8 +237,10 @@
 	--sidebar-ring: oklch(0.263 0.105 17.58);
 
 	/*
-	 * The one shadcn knob the generated components read for shape. M3's medium
-	 * corner (12px) drives every radius utility through the calc()s below.
+	 * The one shadcn knob the generated components read for shape. It points at
+	 * M3's medium corner, which this app sets to 2px — see the shape scale above.
+	 * Every `rounded-sm|md|lg|xl|2xl|3xl|4xl` utility resolves through the calc()s
+	 * in `@theme inline`, so this single line is what makes the app boxy.
 	 */
 	--radius: var(--md-sys-shape-corner-md);
 }
@@ -372,13 +390,25 @@
 	--color-card: var(--card);
 	--color-foreground: var(--foreground);
 	--color-background: var(--background);
-	--radius-sm: calc(var(--radius) * 0.6);
-	--radius-md: calc(var(--radius) * 0.8);
-	--radius-lg: var(--radius);
-	--radius-xl: calc(var(--radius) * 1.4);
-	--radius-2xl: calc(var(--radius) * 1.8);
-	--radius-3xl: calc(var(--radius) * 2.2);
-	--radius-4xl: calc(var(--radius) * 2.6);
+	/*
+	 * The radius ladder, derived from `--radius` (2px). The multipliers are NOT
+	 * shadcn's defaults (0.6/0.8/1/1.4/1.8/2.2/2.6): at a 2px base those produce
+	 * 1.2/1.6/2/2.8/3.6/4.4/5.2px, and a 1.2px corner is a sub-pixel smear that
+	 * renders differently on every DPR. The ladder is instead pinned to whole
+	 * pixels so each step is a real, visible edge:
+	 *
+	 *   sm 2px   md 2px   lg 4px   xl 6px   2xl 8px   3xl 10px   4xl 12px
+	 *
+	 * `rounded-none` (0) is untouched and is what the generated shadcn controls
+	 * already use, so buttons, inputs and checkboxes stay perfectly square.
+	 */
+	--radius-sm: calc(var(--radius) * 1);
+	--radius-md: calc(var(--radius) * 1);
+	--radius-lg: calc(var(--radius) * 2);
+	--radius-xl: calc(var(--radius) * 3);
+	--radius-2xl: calc(var(--radius) * 4);
+	--radius-3xl: calc(var(--radius) * 5);
+	--radius-4xl: calc(var(--radius) * 6);
 }
 
 @layer base {

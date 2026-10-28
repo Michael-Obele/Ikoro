@@ -17,9 +17,11 @@
 	 * style to drift apart.
 	 */
 	import RotateCcw from 'lucide-svelte/icons/rotate-ccw';
+	import CheckCheck from 'lucide-svelte/icons/check-check';
 	import Button from '$lib/components/ui/button/button.svelte';
 	import TaskGroup from '$lib/components/task/TaskGroup.svelte';
 	import TaskSheet from '$lib/components/task/TaskSheet.svelte';
+	import EmptyState from '$lib/components/shell/EmptyState.svelte';
 	import * as repo from '$lib/db/repo';
 	import type { Task } from '$lib/db/schema';
 	import { liveTasks } from '$lib/stores/view';
@@ -64,13 +66,26 @@
 	</header>
 
 	{#if quiet}
-		<p class="py-24 text-center text-sm text-muted-foreground">Nothing completed yet.</p>
+		<!--
+			Done has no add row — you cannot complete something that does not exist —
+			so this is the one empty state that needs a real action of its own. It
+			points at Today, which is where the work that would fill this screen is.
+		-->
+		<EmptyState
+			icon={CheckCheck}
+			title="Nothing completed yet"
+			hint="Tick a task on Today and it will show up here."
+		>
+			{#snippet action()}
+				<Button variant="outline" size="sm" href="/today">Go to Today</Button>
+			{/snippet}
+		</EmptyState>
 	{:else}
 		{#each groups as group (group.day)}
 			<TaskGroup heading={formatDayHeading(group.day)} tasks={group.tasks}>
 				{#snippet row(task)}
-					<div class="group flex items-center gap-1 rounded-md px-2 hover:bg-accent/40">
-						<button type="button" class="min-w-0 flex-1 py-2 text-left" onclick={() => openTask(task)}>
+					<div class="group flex items-center gap-1 border-b border-outline-variant/40 px-1 last:border-b-0 hover:bg-accent/40">
+						<button type="button" class="min-w-0 flex-1 py-2.5 pr-2 text-left" onclick={() => openTask(task)}>
 							<span class="block truncate text-sm text-muted-foreground line-through">
 								{task.title}
 							</span>
