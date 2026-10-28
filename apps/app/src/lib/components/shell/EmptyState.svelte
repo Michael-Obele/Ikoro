@@ -17,20 +17,27 @@
 	 * parts as the rest of the screen.
 	 */
 	import type { Snippet } from 'svelte';
-    import { type LucideIcon } from '@lucide/svelte';
+	import type { LucideIcon } from '@lucide/svelte';
 
 	let {
-		icon,
+		/**
+		 * A lucide icon component, e.g. `CalendarCheck`. Typed as lucide's own
+		 * `LucideIcon` (`Component<LucideProps>`) rather than a structural
+		 * `Component<{ class?: string }>`: lucide's components take `size`,
+		 * `strokeWidth`, `absoluteStrokeWidth`, `title` and so on, and a narrower
+		 * structural type rejects them.
+		 *
+		 * DESTRUCTURED INTO A CAPITALISED LOCAL NAME (`icon: Icon`) ON PURPOSE. Svelte
+		 * decides whether a tag is a component or an HTML element by its
+		 * capitalisation, so `<icon class="size-5" />` renders an unknown `<icon>`
+		 * element — an empty, zero-size nothing — instead of the icon. `Icon` is the
+		 * name the template can actually render.
+		 */
+		icon: Icon,
 		title,
 		hint,
 		action
 	}: {
-		/**
-		 * A lucide icon component, e.g. `CalendarCheck`. Typed as lucide's own `Icon`
-		 * rather than a structural `Component<{ class?: string }>`: lucide's
-		 * components are `Component<IconProps>`, and a narrower structural type does
-		 * not accept them (their props include `size`, `strokeWidth`, `absoluteStrokeWidth`).
-		 */
 		icon: LucideIcon;
 		/** What is true. One short line. */
 		title: string;
@@ -51,7 +58,7 @@
 		class="mb-4 flex size-12 items-center justify-center border border-outline-variant text-muted-foreground"
 		aria-hidden="true"
 	>
-		<icon class="size-5"></icon>
+		<Icon class="size-5" />
 	</div>
 
 	<p class="text-sm font-medium text-foreground">{title}</p>
