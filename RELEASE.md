@@ -57,18 +57,63 @@ Verify they're set (values stay hidden):
 gh secret list
 ```
 
-## 4. Cut a release
+## 4. Which bump does my commit need? (commit → version)
 
-Bump the version, commit, and tag in one step:
+**Every commit is a patch.** Only two things move the number higher, and both have to be written
+into the commit message:
+
+| Your commit says | Bump | Because |
+| --- | --- | --- |
+| `feat: …` | **minor** `0.3.0 → 0.4.0` | a new capability a user can find |
+| `feat!: …` · `feat(x)!: …` · a `BREAKING CHANGE:` footer | **major** `0.4.0 → 1.0.0` | it changes a data contract, the storage schema, or what an existing install has to do |
+| anything else conventional — `fix:`, `perf:`, `refactor:`, `docs:`, `chore:`, `ci:`, `build:`, `test:`, `style:`, `revert:` | **patch** `0.3.0 → 0.3.1` | nothing a user relies on changed |
+
+The cheap default is deliberate. "Minor" promises the user will find something new, and "major"
+promises that something they already do will stop working; on a store listing neither can be taken
+back. So the bump is never guessed from the diff — it is taken from what the commit says.
+
+Derive it instead of choosing it:
 
 ```bash
-bun scripts/bump-version.ts 0.2.0
-git push && git push --tags
+bun apps/app/scripts/version.ts auto
 ```
 
-`bump-version.ts` writes the version into `apps/app/package.json`, commits it as `chore: bump version to v0.2.0`, and tags `v0.2.0`. It refuses to run on a dirty tree or an existing tag. Pushing the tag triggers the workflow; the signed `app-release.apk` and `app-release.aab` appear on the **Releases** tab when it finishes.
+It prints every commit since the last tag alongside the level it claims, then bumps by the largest.
+A message that is not Conventional Commits cannot claim a level, so `auto` reports it and counts it
+as a patch — which is why the workflow below refuses to ship one.
 
-## 5. Rotating a secret
+The rule, the parser and the guard are one file:
+[`apps/app/scripts/version.ts`](apps/app/scripts/version.ts).
+
+### What the release workflow checks
+
+On every `v*` tag, before anything is built, the run fails if:
+
+- **the tag is smaller than its history claims** — a `feat:` since the previous tag needs a minor, a
+  `!` needs a major. A **bigger** bump is always allowed; only a smaller one is refused.
+- **a commit since the previous tag does not parse** — an unclassifiable message claims nothing, so a
+  feature hiding in one would ship as a patch. Reword it before tagging.
+- the tag and `apps/app/package.json` disagree.
+
+Run the same check locally: `bun apps/app/scripts/version.ts check`.
+
+## 5. Cut a release
+
+Let the commits choose the bump, then commit, tag, and push:
+
+```bash
+bun apps/app/scripts/version.ts auto    # or an explicit 0.4.0 / major / minor / patch
+git add apps/app/package.json
+git commit -m "chore(release): v0.4.0"
+git tag v0.4.0
+git push origin master --tags
+```
+
+`version.ts` only writes the version into `apps/app/package.json` and prints these commands — it
+never commits or tags, because a release tag is a deliberate act. Pushing the tag triggers the
+workflow; the signed APK and AAB appear on the **Releases** tab when it finishes.
+
+## 6. Rotating a secret
 
 GitHub secrets are write-only — there is nothing to read back or "update in place". To change one, re-set it:
 
@@ -82,6 +127,6 @@ The next release run picks it up. No workflow change needed.
 
 ## Troubleshooting
 
-- **`tag X != package.json Y`** — the tag and `apps/app/package.json` disagree. Re-run `bun scripts/bump-version.ts` so they match, then push the new tag.
+- **`tag X != package.json Y`** — the tag and `apps/app/package.json` disagree. Re-run `bun apps/app/scripts/version.ts auto` so they match, then push the new tag.
 - **`ANDROID_KEYSTORE_B64 is not set`** — step 3 was skipped or the secret name has a typo. Names must match exactly.
 - **Verify artifacts are signed fails** — the signing block did not apply. Confirm all four secrets are set; the block is env-gated and silently skips signing when `IKORO_KEYSTORE` is absent.

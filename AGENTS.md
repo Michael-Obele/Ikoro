@@ -251,7 +251,7 @@ or it is not done.
 > wrong `include` glob or a `.gitignore` rule produces "0 tests, exit 0" and looks perfect.
 > Check the count every time.
 
-Current baseline: **`apps/app` 10 test files, 137 tests**; `apps/landing` 1 file, 14 tests. Root
+Current baseline: **`apps/app` 18 test files, 895 tests**; `apps/landing` 1 file, 14 tests. Root
 `bun run test` is green.
 
 ### WRITING TESTS HERE
@@ -331,6 +331,20 @@ Formatting: tabs, single quotes, semicolons. Don't hand-format — run `bun run 
 Conventional Commits, **one milestone per commit**, never two milestones batched together, never
 committed on a red harness. The body lists any new dependency (name + why) and any deviation from
 the plan (what + why).
+
+The type is not decoration — **it is the version number.** One commit is one patch:
+
+| commit | bump |
+| --- | --- |
+| `feat: …` | minor |
+| `feat!: …` · `feat(x)!: …` · a `BREAKING CHANGE:` footer | major |
+| every other conventional type (`fix`, `perf`, `refactor`, `docs`, `chore`, `ci`, `build`, `test`, `style`, `revert`) | patch |
+
+A bump is a promise that cannot be taken back once it is on a store listing, so it is read from the
+commit message rather than guessed from the diff. `bun apps/app/scripts/version.ts auto`
+derives it from the commits since the last tag; the release workflow refuses a tag smaller than the
+history claims, and refuses a commit that does not parse. Rule, parser and guard are one file:
+`apps/app/scripts/version.ts`. Runbook: `RELEASE.md`.
 
 ```
 feat: svelte-idb data layer + repo + valibot schemas (M1)
