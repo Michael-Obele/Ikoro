@@ -188,6 +188,7 @@ export async function createTask(input: TaskInput): Promise<Task> {
 		alarmAt: input.alarmAt ?? null,
 		alarmId: null,
 		alarmFiredAt: null,
+		color: input.color ?? null,
 		sortOrder: input.sortOrder ?? (await db.tasks.where('byList').equals(input.listId).count()),
 		createdAt: ts,
 		updatedAt: ts,

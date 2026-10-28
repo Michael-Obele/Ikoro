@@ -195,6 +195,41 @@ describe('updateTask', () => {
 	});
 });
 
+describe('task color', () => {
+	/**
+	 * `color` is OPTIONAL-BY-DESIGN (no version bump, no index), so these cases
+	 * pin the two properties that make that safe: it defaults to null on create,
+	 * and it round-trips through updateTask like any other field — including the
+	 * explicit null that "None" writes.
+	 */
+	it('defaults to null on create, and survives a create/read round trip when set', async () => {
+		const listId = await freshList();
+		const plain = await repo.createTask({ listId, title: 'plain' });
+		expect(plain.color).toBeNull();
+		expect((await repo.getTask(plain.id))?.color).toBeNull();
+
+		const coloured = await repo.createTask({ listId, title: 'coloured', color: 'teal' });
+		expect(coloured.color).toBe('teal');
+		expect((await repo.getTask(coloured.id))?.color).toBe('teal');
+	});
+
+	it('round-trips through updateTask — set, change, and clear back to null', async () => {
+		const listId = await freshList();
+		const { id } = await repo.createTask({ listId, title: 'x' });
+
+		await repo.updateTask(id, { color: 'blue' });
+		expect((await repo.getTask(id))?.color).toBe('blue');
+
+		await repo.updateTask(id, { color: 'red' });
+		expect((await repo.getTask(id))?.color).toBe('red');
+
+		// The sheet's "None" swatch writes an explicit null; the field must come
+		// back as null, not as the string 'null' or a stale colour.
+		await repo.updateTask(id, { color: null });
+		expect((await repo.getTask(id))?.color).toBeNull();
+	});
+});
+
 describe('reorderLists', () => {
 	it('makes the array index the new sortOrder', async () => {
 		const a = await repo.createList('a');

@@ -106,4 +106,21 @@ describe('TaskRow', () => {
 			'Mark "Call the dentist" as done'
 		);
 	});
+
+	it('renders the colour edge with the palette value when the task has a colour', () => {
+		// INTENTIONAL DOM CHANGE: TaskRow now paints a 3px left edge for coloured
+		// tasks. The assertion is on the inline style, because that is the whole
+		// contract — the resolved palette value, painted as the bar's background.
+		render(TaskRow, { props: { task: fixture({ color: 'teal' }) } });
+
+		const edge = screen.getByTestId('task-color-edge');
+		expect(edge.style.background).toBe('oklch(0.55 0.11 195)');
+		expect(edge.getAttribute('aria-hidden')).toBe('true');
+	});
+
+	it('renders no colour edge when the task has none', () => {
+		render(TaskRow, { props: { task: fixture() } });
+
+		expect(screen.queryByTestId('task-color-edge')).toBeNull();
+	});
 });

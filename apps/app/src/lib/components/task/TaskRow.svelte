@@ -17,6 +17,7 @@
 	import Checkbox from '$lib/components/ui/checkbox/checkbox.svelte';
 	import BellRing from 'lucide-svelte/icons/bell-ring';
 	import * as repo from '$lib/db/repo';
+	import { taskColorValue } from '$lib/task-colors';
 	import type { Task } from '$lib/db/schema';
 	import { formatDue } from '$lib/utils/time';
 
@@ -40,6 +41,8 @@
 	const due = $derived(formatDue(task));
 	const overdue = $derived(due?.tone === 'overdue');
 	const shownDue = $derived(dateLabel === 'time' ? task.dueTime : due?.label);
+	/** Resolved CSS colour for the left edge, or `undefined` when the task has none. */
+	const colorValue = $derived(taskColorValue(task.color));
 
 	async function toggle() {
 		await repo.toggleTask(task.id);
@@ -63,6 +66,24 @@
 	class="group relative flex items-center gap-1 border-b border-outline-variant/40 px-1 transition-colors last:border-b-0 hover:bg-accent/50 data-[completed=true]:opacity-55"
 	data-completed={completed}
 >
+	<!--
+		THE COLOUR EDGE. Absolutely positioned so it can never participate in the
+		flex layout: the 44px checkbox target, the title and the trailing markers
+		column keep exactly the geometry they had, and the bar is pure paint. It
+		spans the full row height, flush to the left border, 3px wide — wide enough
+		to read as a deliberate mark, narrow enough to stay an edge. Decorative by
+		`aria-hidden`: the colour is chosen and named in the editor, and the row
+		stays clean, which is the point of encoding it as a bar.
+	-->
+	{#if colorValue}
+		<span
+			class="pointer-events-none absolute inset-y-0 left-0 w-0.75"
+			style="background: {colorValue}"
+			aria-hidden="true"
+			data-testid="task-color-edge"
+		></span>
+	{/if}
+
 	<!--
 		The checkbox lives inside a 44x44 label rather than being the target itself.
 		The generated Checkbox is 16px with a 12px/8px `after:` halo — about 40x32 of

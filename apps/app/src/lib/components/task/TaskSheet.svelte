@@ -24,6 +24,7 @@
 	import PriorityPicker from './PriorityPicker.svelte';
 	import AlarmSheet from './AlarmSheet.svelte';
 	import * as repo from '$lib/db/repo';
+	import { TASK_COLOR_IDS, TASK_COLORS, taskColorValue } from '$lib/task-colors';
 	import type { Task } from '$lib/db/schema';
 
 	let {
@@ -38,6 +39,9 @@
 
 	const NOTES_DEBOUNCE_MS = 400;
 
+	/** Mirrors PriorityPicker's chip labels — the prose form of the ramp. */
+	const PRIORITY_NAMES = ['None', 'Low', 'Medium', 'High'] as const;
+
 	// Local drafts. The live task is the truth on open, but editing writes
 	// straight through so the row behind the sheet updates as you type.
 	let title = $state('');
@@ -45,6 +49,7 @@
 	let dueDate = $state<string | null>(null);
 	let dueTime = $state<string | null>(null);
 	let priority = $state<Task['priority']>(0);
+	let color = $state<string | null>(null);
 	let lastSavedNotes = $state<string | null>(null);
 	let confirmingDelete = $state(false);
 	let loadedId: string | null = null;
@@ -61,6 +66,7 @@
 			dueDate = task.dueDate;
 			dueTime = task.dueTime;
 			priority = task.priority;
+			color = task.color ?? null;
 			lastSavedNotes = task.notes ?? '';
 			confirmingDelete = false;
 		}
@@ -89,6 +95,16 @@
 	async function savePriority() {
 		if (!task) return;
 		await repo.updateTask(task.id, { priority });
+	}
+
+	/**
+	 * Autosave for the colour, same pattern as `savePriority`: the picker writes
+	 * straight through, no Save button. `null` is the explicit "None" choice.
+	 */
+	async function saveColor(value: string | null) {
+		color = value;
+		if (!task) return;
+		await repo.updateTask(task.id, { color: value });
 	}
 
 	async function remove() {
@@ -160,8 +176,70 @@
 				</div>
 
 				<div class="grid gap-1.5 border-b border-outline-variant py-4">
-					<span class="text-sm font-medium">Priority</span>
+					<!--
+						The picker's chips already carry their own labels; this line states
+						the CURRENT value in prose so the section answers "what is it now?"
+						at a glance, and `aria-live` repeats the change for a screen reader
+						that did not walk the radio group. Styled like the section label so
+						the pair reads as one ruled row.
+					-->
+					<div class="flex items-center justify-between">
+						<span class="text-sm font-medium">Priority</span>
+						<span class="text-sm text-muted-foreground" aria-live="polite">
+							{PRIORITY_NAMES[priority]}
+						</span>
+					</div>
 					<PriorityPicker bind:priority onchange={savePriority} />
+				</div>
+
+				<!--
+					The colour picker. Same swatch language as ThemeSchemePicker: boxy
+					2px corners, a 2px border, and the selected swatch wears a 2px
+					`--primary` ring offset by 2px. "None" is a bordered empty swatch —
+					a real choice, not the absence of one — and sits first so clearing
+					is always one tap to the left.
+				-->
+				<div class="grid gap-1.5 border-b border-outline-variant py-4">
+					<div class="flex items-center justify-between">
+						<span class="text-sm font-medium">Color</span>
+						<span class="text-sm text-muted-foreground" aria-live="polite">
+							{color ? (TASK_COLORS[color]?.label ?? 'Custom') : 'None'}
+						</span>
+					</div>
+					<div class="flex flex-wrap items-center gap-2" role="radiogroup" aria-label="Color">
+						<button
+							type="button"
+							role="radio"
+							aria-checked={color === null}
+							aria-label="No color"
+							title="No color"
+							onclick={() => saveColor(null)}
+							class="size-8 shrink-0 rounded-xs border-2 border-input bg-transparent outline-none transition-[box-shadow,border-color] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 {color ===
+							null
+								? 'border-primary ring-2 ring-primary ring-offset-2 ring-offset-popover'
+								: 'hover:border-foreground'}"
+						>
+							<span class="sr-only">No color</span>
+						</button>
+
+						{#each TASK_COLOR_IDS as id (id)}
+							{@const selected = color === id}
+							<button
+								type="button"
+								role="radio"
+								aria-checked={selected}
+								aria-label="{TASK_COLORS[id].label} color"
+								title={TASK_COLORS[id].label}
+								onclick={() => saveColor(id)}
+								class="size-8 shrink-0 rounded-xs border-2 border-input outline-none transition-[box-shadow,border-color] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 {selected
+									? 'border-primary ring-2 ring-primary ring-offset-2 ring-offset-popover'
+									: 'hover:border-foreground'}"
+								style="background: {TASK_COLORS[id].value}"
+							>
+								<span class="sr-only">{TASK_COLORS[id].label}</span>
+							</button>
+						{/each}
+					</div>
 				</div>
 
 				<!-- The reminder control. It has to be the one field that arms a

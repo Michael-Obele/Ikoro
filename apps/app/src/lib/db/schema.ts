@@ -43,6 +43,14 @@ export interface Task {
 	alarmAt: string | null; // ISO — the instant the alarm should fire
 	alarmId: string | null; // platform id returned by the scheduler
 	alarmFiredAt: string | null;
+	/**
+	 * Optional-by-design: a key into `lib/task-colors.ts` ('red', 'teal', …),
+	 * never a raw hex, so the palette stays auditable. OPTIONAL so adding it
+	 * needs no version bump and no index — IndexedDB stores whole records, an
+	 * absent key reads back as `undefined`, and the schema stays complete at
+	 * version 1. Null is the explicit "no colour" state.
+	 */
+	color?: string | null;
 	sortOrder: number;
 	createdAt: string;
 	updatedAt: string;
@@ -64,6 +72,8 @@ export interface TaskInput {
 	parentId?: string | null;
 	repeat?: null | 'daily' | 'weekdays' | 'weekly' | 'monthly';
 	alarmAt?: string | null;
+	/** Optional task colour — see the comment on `Task.color`. */
+	color?: string | null;
 	sortOrder?: number;
 }
 
