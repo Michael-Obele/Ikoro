@@ -3,6 +3,7 @@ package com.michaelobele.ikoro;
 import android.os.Bundle;
 import com.getcapacitor.BridgeActivity;
 import com.michaelobele.ikoro.alarm.IkoroAlarmPlugin;
+import com.michaelobele.ikoro.dynamiccolors.IkoroDynamicColorsPlugin;
 
 public class MainActivity extends BridgeActivity {
 
@@ -14,6 +15,7 @@ public class MainActivity extends BridgeActivity {
         // The symptom is a JS call to IkoroAlarm that rejects with "not
         // implemented", with nothing in logcat to explain why.
         registerPlugin(IkoroAlarmPlugin.class);
+        registerPlugin(IkoroDynamicColorsPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

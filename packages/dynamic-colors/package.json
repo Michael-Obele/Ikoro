@@ -1,0 +1,39 @@
+{
+	"name": "ikoro-dynamic-colors",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Reads the Android 12+ Material You (Monet) tonal palettes out of the system, so the web layer can build an M3 scheme from the user's wallpaper. Local Capacitor plugin: not published, installed with `bun add file:../../packages/dynamic-colors`.",
+	"type": "module",
+	"main": "dist/esm/index.js",
+	"module": "dist/esm/index.js",
+	"types": "dist/esm/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/esm/index.d.ts",
+			"import": "./dist/esm/index.js",
+			"default": "./dist/esm/index.js"
+		}
+	},
+	"files": [
+		"dist/",
+		"android/",
+		"IkoroDynamicColors.podspec",
+		"README.md"
+	],
+	"scripts": {
+		"build": "tsc",
+		"check": "tsc --noEmit -p tsconfig.json"
+	},
+	"capacitor": {
+		"android": {
+			"src": "android"
+		}
+	},
+	"peerDependencies": {
+		"@capacitor/core": ">=8.0.0"
+	},
+	"devDependencies": {
+		"@capacitor/core": "8.5.2",
+		"typescript": "^6.0.3"
+	}
+}

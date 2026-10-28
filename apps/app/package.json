@@ -67,6 +67,7 @@
 		"@tauri-apps/api": "2.12.1",
 		"@tauri-apps/plugin-notification": "2.5.1",
 		"bits-ui": "2.19.5",
+		"ikoro-dynamic-colors": "workspace:*",
 		"runed": "0.37.1",
 		"sv-agentation": "^0.4.0",
 		"svelte-dnd-action": "0.9.79",

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A library manifest with nothing in it, on purpose.
+
+  Reading the system palettes needs NO permission: android.R.color.system_accent1_*
+  are public framework resources, readable by any app. Declaring a permission here
+  would be a lie about what this plugin does, and a library manifest's permissions
+  are merged into the app's, so it would also be a permission the user is asked
+  about for no reason.
+
+  The namespace is declared in build.gradle (AGP 8 requires it there), so this
+  file exists only to give the module a manifest at all.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" />

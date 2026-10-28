@@ -10,7 +10,11 @@
 	import BottomNav from '$lib/components/shell/BottomNav.svelte';
 	import ListSidebar from '$lib/components/lists/ListSidebar.svelte';
 	import { ensureSeeded } from '$lib/db/seed';
-	import { applyTheme, watchSystemTheme } from '#lib/theme/theme.svelte';
+	import {
+		applyResolvedTheme,
+		watchDynamicColors,
+		watchSystemTheme
+	} from '#lib/theme/theme.svelte';
 	import {
 		onStatus,
 		wireAlarmLifecycle,
@@ -49,9 +53,23 @@
 	// else here touches storage. The inline script in app.html has already put the
 	// class on <html> before first paint; this is the reactive half that keeps it
 	// correct after mount.
+	//
+	// `applyResolvedTheme` rather than `applyTheme`: on Android the wallpaper
+	// palette arrives asynchronously and is per-theme, so the class flip and the
+	// dynamic custom properties have to be written together or they race on the
+	// same tokens.
 	$effect(() => {
-		applyTheme();
+		applyResolvedTheme();
 		return watchSystemTheme();
+	});
+
+	// Material You. A no-op on web and below Android 12 — the plugin answers
+	// `available: false` there and nothing is written. It re-reads on every
+	// resume, because the user can change their wallpaper while the app is in the
+	// background and Android recomputes the palette when they do.
+	$effect(() => {
+		if (!browser) return;
+		return watchDynamicColors();
 	});
 
 	// A fresh install needs a list before any screen can render one. This is a

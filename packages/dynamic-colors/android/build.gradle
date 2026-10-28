@@ -1,0 +1,47 @@
+apply plugin: 'com.android.library'
+
+android {
+    namespace "com.michaelobele.ikoro.dynamiccolors"
+    compileSdk rootProject.ext.compileSdkVersion
+
+    defaultConfig {
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        consumerProguardFiles 'proguard-rules.pro'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+
+    buildFeatures {
+        buildConfig false
+    }
+}
+
+// Kotlin, because the plugin is Kotlin. The Kotlin Gradle Plugin is declared in
+// the ROOT buildscript (apps/app/android/build.gradle) for the native alarm, so
+// this module only has to apply it -- adding a second classpath entry here would
+// be a second version of the same plugin on the build classpath.
+apply plugin: 'kotlin-android'
+
+// Kotlin and Java MUST agree on a JVM target or Gradle 8.14 + AGP 8.13 fail the
+// build outright with "Inconsistent JVM-target compatibility detected". The app
+// module pins 21 with jvmToolchain(21); this does the same, so the library and
+// the app can never drift apart.
+kotlin {
+    jvmToolchain(21)
+}
+
+repositories {
+    google()
+    mavenCentral()
+}
+
+dependencies {
+    implementation project(':capacitor-android')
+    implementation "androidx.core:core-ktx:$androidxCoreVersion"
+    testImplementation "junit:junit:$junitVersion"
+}

@@ -1,0 +1,4 @@
+# The compiled plugin. `bun run build` in this package regenerates it, and the
+# app imports `dist/esm/index.js` through the workspace symlink, so it has to
+# exist locally — but it is build output, not source.
+dist/

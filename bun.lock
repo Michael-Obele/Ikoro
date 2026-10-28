@@ -20,6 +20,7 @@
         "@tauri-apps/api": "2.12.1",
         "@tauri-apps/plugin-notification": "2.5.1",
         "bits-ui": "2.19.5",
+        "ikoro-dynamic-colors": "workspace:*",
         "runed": "0.37.1",
         "sv-agentation": "^0.4.0",
         "svelte-dnd-action": "0.9.79",
@@ -132,6 +133,17 @@
         "typescript-eslint": "^8.60.1",
         "vite": "^8.3.0",
         "vitest": "^5.0.3",
+      },
+    },
+    "packages/dynamic-colors": {
+      "name": "ikoro-dynamic-colors",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@capacitor/core": "8.5.2",
+        "typescript": "^6.0.3",
+      },
+      "peerDependencies": {
+        "@capacitor/core": ">=8.0.0",
       },
     },
     "packages/sync": {
@@ -758,6 +770,8 @@
     "html-encoding-sniffer": ["html-encoding-sniffer@7.0.0", "", { "dependencies": { "@exodus/bytes": "^1.15.1" } }, "sha512-UikN5yr7xsCDAq87Or5or0PAlD3HJJOKVzM05az588WnpDJ4Ux7a2A53Qi6gofGg2/EtvF/H4hCi/TXfCW4Y6w=="],
 
     "ignore": ["ignore@5.3.2", "", {}, "sha512-hsBTNUqQTDwkWtcdYI2i06Y/nUBEsNEDJKjWdigLvegy8kDuJAS8uRlpkkcQpyEXL0Z/pjDy5HBmMjRCJ2gq+g=="],
+
+    "ikoro-dynamic-colors": ["ikoro-dynamic-colors@workspace:packages/dynamic-colors"],
 
     "imurmurhash": ["imurmurhash@0.1.4", "", {}, "sha512-JmXMZ6wuvDmLiHEml9ykzqO6lwFbof0GG4IkcGaENdCRDDmMVnny7s5HsIgHCbaq0w2MyPhDqkhTUgS2LU2PHA=="],
 
