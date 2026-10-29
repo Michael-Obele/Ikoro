@@ -2,3 +2,9 @@
 # app imports `dist/esm/index.js` through the workspace symlink, so it has to
 # exist locally — but it is build output, not source.
 dist/
+
+# Gradle output for the Android library module. `./gradlew assembleDebug` in
+# apps/app/android builds this module too and drops ~120 intermediates here.
+# The root .gitignore only covers apps/app/android/build, so without this line
+# the whole tree shows up as untracked.
+android/build/
