@@ -9,15 +9,14 @@ import androidx.core.content.ContextCompat
 /**
  * WHY THIS FILE EXISTS
  *
- * AlarmManager cannot start a service or an activity directly -- it delivers a
- * PendingIntent, and a broadcast is the cheapest thing to deliver. This receiver
- * is that hop, and nothing else: it takes the alarm's identity off the intent,
- * forgets the alarm, and hands off to the service that rings.
+ * AlarmManager cannot start a service or an activity directly -- it delivers a PendingIntent, and a
+ * broadcast is the cheapest thing to deliver. This receiver is that hop, and nothing else: it takes
+ * the alarm's identity off the intent, forgets the alarm, and hands off to the service that rings.
  *
- * It must stay this thin. A BroadcastReceiver gets about ten seconds of process
- * life and no promise of staying alive, so anything slow done here is work that
- * can be killed halfway. The noise, the notification and the vibration all
- * belong to the foreground service on the other side of that hand-off.
+ * It must stay this thin. A BroadcastReceiver gets about ten seconds of process life and no promise
+ * of staying alive, so anything slow done here is work that can be killed halfway. The noise, the
+ * notification and the vibration all belong to the foreground service on the other side of that
+ * hand-off.
  */
 class IkoroAlarmReceiver : BroadcastReceiver() {
 
@@ -39,14 +38,19 @@ class IkoroAlarmReceiver : BroadcastReceiver() {
         // leave a phantom alarm in the store that rescheduleAll would re-arm.
         AlarmStore.remove(context, id)
 
-        val ring = Intent(context, IkoroAlarmService::class.java).apply {
-            putExtra(IkoroAlarms.EXTRA_ID, id)
-            putExtra(IkoroAlarms.EXTRA_TASK_ID, taskId)
-            putExtra(IkoroAlarms.EXTRA_TITLE, title)
-            putExtra(IkoroAlarms.EXTRA_TRIGGER, intent.getLongExtra(IkoroAlarms.EXTRA_TRIGGER, 0L))
-            intent.getStringExtra(IkoroAlarms.EXTRA_RINGTONE)
-                ?.let { putExtra(IkoroAlarms.EXTRA_RINGTONE, it) }
-        }
+        val ring =
+                Intent(context, IkoroAlarmService::class.java).apply {
+                    putExtra(IkoroAlarms.EXTRA_ID, id)
+                    putExtra(IkoroAlarms.EXTRA_TASK_ID, taskId)
+                    putExtra(IkoroAlarms.EXTRA_TITLE, title)
+                    putExtra(
+                            IkoroAlarms.EXTRA_TRIGGER,
+                            intent.getLongExtra(IkoroAlarms.EXTRA_TRIGGER, 0L)
+                    )
+                    intent.getStringExtra(IkoroAlarms.EXTRA_RINGTONE)?.let {
+                        putExtra(IkoroAlarms.EXTRA_RINGTONE, it)
+                    }
+                }
 
         try {
             ContextCompat.startForegroundService(context, ring)
