@@ -5,9 +5,9 @@
 [build]
   command = "bun run --filter landing build"
   publish = "apps/landing/build"
-  # Monorepo default rebuilds on every root push; scope it to the site.
+  # Monorepo default rebuilds on every root push; scope it to the site. Also watch apps/app/package.json because the site derives its fallback version from that file, so a bump there must rebuild the site.
   # https://docs.netlify.com/build/configure-builds/ignore-builds
-  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF apps/landing/ netlify.toml"
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF apps/landing/ netlify.toml apps/app/package.json"
 
 [build.environment]
   NODE_VERSION = "24"
