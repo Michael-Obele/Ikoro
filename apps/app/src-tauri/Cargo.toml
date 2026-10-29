@@ -1,6 +1,6 @@
 [package]
 name = "ikoro"
-version = "0.1.0"
+version = "0.3.2"
 description = "An Ịbani is the slit gong its striker carries: it is heard when it is sounded, and not a moment before."
 authors = ["Michael Obele"]
 edition = "2021"

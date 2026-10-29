@@ -3,7 +3,8 @@
 # It runs on every push to master, keeps ONE open release PR that accumulates
 # the commits since the last tag, and — when you merge that PR — bumps
 # apps/app/package.json, writes the changelog, and cuts the tag. That tag is
-# then handed to release-android.yml, which builds and publishes the APK + AAB.
+# then handed to release-android.yml and release-desktop.yml, which build and
+# publish the APK + AAB and the Linux desktop bundles.
 #
 # WHY THE BUILD IS DISPATCHED EXPLICITLY, AND NOT TRIGGERED BY THE TAG PUSH:
 # events caused by GITHUB_TOKEN do not create workflow runs, so a tag pushed by
@@ -68,7 +69,7 @@ jobs:
           done
 
       # The tag has to be readable here: dispatching at an empty ref would run
-      # the build against master and trip its own tag assertion instead of
+      # the builds against master and trip their own tag assertions instead of
       # failing where the bug is.
       - name: Check the tag release-please just cut
         id: tag
@@ -81,18 +82,19 @@ jobs:
             echo "release_created is true but apps/app--tag_name is empty."
             echo "release-please changed its output keys — dispatch by hand:"
             echo "  gh workflow run release-android.yml --ref v<version>"
+            echo "  gh workflow run release-desktop.yml --ref v<version>"
             exit 1
           fi
           echo "tag=$TAG"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       # workflow_dispatch is the one event GITHUB_TOKEN is allowed to trigger.
-      # --ref <tag> makes GITHUB_REF_NAME the tag, which is what the build
-      # asserts on, and makes its checkout land on the tagged commit.
+      # --ref <tag> makes GITHUB_REF_NAME the tag, which is what the builds
+      # assert on, and makes their checkouts land on the tagged commit.
       #
       # --repo is required: this job has no checkout, so `gh` has no git remote
       # to infer the repository from and dies with "not a git repository".
-      - name: Start the Android build for that tag
+      - name: Start the Android and Desktop builds for that tag
         if: "${{ steps.tag.outputs.tag != '' }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -101,3 +103,5 @@ jobs:
           set -euo pipefail
           gh workflow run release-android.yml --ref "$TAG" --repo "$GITHUB_REPOSITORY"
           echo "dispatched release-android.yml at $TAG"
+          gh workflow run release-desktop.yml --ref "$TAG" --repo "$GITHUB_REPOSITORY"
+          echo "dispatched release-desktop.yml at $TAG"

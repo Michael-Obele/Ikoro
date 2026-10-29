@@ -1,8 +1,8 @@
-# Releasing Ikoro (Android)
+# Releasing Ikoro
 
-How to set up signing and cut a release that uploads a signed APK + AAB to GitHub Releases.
+How to set up signing and cut a release that uploads a signed APK + AAB and Linux desktop bundles to GitHub Releases.
 
-The build lives in [.github/workflows/release-android.yml](.github/workflows/release-android.yml). It triggers on any tag `v*` and asserts the tag equals `apps/app/package.json`'s `version` before building — a release whose Settings screen and package manager disagree about the version is worse than no release.
+The Android build lives in [.github/workflows/release-android.yml](.github/workflows/release-android.yml) and the desktop build in [.github/workflows/release-desktop.yml](.github/workflows/release-desktop.yml). Both trigger on any tag `v*` and assert the tag equals `apps/app/package.json`'s `version` before building — a release whose Settings screen and package manager disagree about the version is worse than no release.
 
 The tag is not cut by hand: [release-please](https://github.com/googleapis/release-please) reads the commits, keeps a release PR open, and tags when you merge it (`.github/workflows/release-please.yml`, `release-please-config.json`).
 
@@ -110,8 +110,9 @@ No tagging, no version editing. Push commits to `master`, then merge the PR rele
 3. **Merge the PR.** release-please then writes `apps/app/package.json` and the changelog, cuts tag
    `v<version>`, and publishes the GitHub Release. Its branch (`release-please--branches--master`) is
    deleted by a step in `release-please.yml` so the branch list stays clean.
-4. **The build starts.** `release-please.yml` dispatches `release-android.yml` at the new tag, which
-   signs and attaches `Ikoro-v<version>.apk` and `.aab` to the release.
+4. **The builds start.** `release-please.yml` dispatches `release-android.yml` and `release-desktop.yml`
+   at the new tag. Android signs and attaches `Ikoro-v<version>.apk` and `.aab`; desktop attaches
+   `Ikoro-v<version>.deb` and `.AppImage` (plus `.rpm` when the runner can produce it).
 
 > **Only commits that touch `apps/app` earn a release.** release-please filters by the package path,
 > so a week of `.github/` and `docs/` work produces no PR — and no version. That is deliberate: a CI
@@ -122,12 +123,37 @@ No tagging, no version editing. Push commits to `master`, then merge the PR rele
 To preview the next version without merging anything: look at the release PR's title. That number is
 what release-please computed from the commits in it.
 
-To rebuild a release whose artifacts are missing, dispatch the build by hand — it refuses a ref that
-is not a version tag. Note that it runs the workflow **as that tag had it**, so a fix to the build
+To rebuild a release whose artifacts are missing, dispatch the builds by hand — they refuse a ref that
+is not a version tag. Note that each runs the workflow **as that tag had it**, so a fix to a build
 pipeline only takes effect from the next tag onward:
 
 ```bash
 gh workflow run release-android.yml --ref v0.3.2
+gh workflow run release-desktop.yml --ref v0.3.2
+```
+
+## Desktop builds (Linux .deb + .AppImage)
+
+The same tag flow builds Linux desktop bundles via `release-desktop.yml`: the sync step copies
+`apps/app/package.json`'s version into `src-tauri/Cargo.toml` (Tauri reads the version from there —
+`tauri.conf.json` has no `version` key on purpose), then `bunx tauri build` produces the `.deb` and
+`.AppImage`, plus the `.rpm` when the runner has `rpmbuild`. The `.rpm` is opportunistic: the run
+copies it when present and never fails when it is missing. `deb` + `AppImage` are the promise.
+
+No desktop secrets exist. Linux bundles are unsigned, so there is no keystore step — contrast with
+Android's four secrets in step 3.
+
+Windows and macOS are deliberately not built. D16 scoped OS-scheduled alarms to Linux systemd user
+timers first; on the other two the app can only do timer-mode alarms (the app must stay open), which
+breaks the product's central promise. Shipping those binaries would advertise a degraded promise as
+a release. They are an M12 TODO, not a missing matrix entry.
+
+Build locally from `apps/app` — `bunx tauri build` from the repo root fails with the misleading
+"could not determine executable to run for package tauri":
+
+```bash
+cd apps/app
+bunx tauri build
 ```
 
 ## 6. Rotating a secret

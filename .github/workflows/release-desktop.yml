@@ -1,0 +1,221 @@
+# Release pipeline for the desktop app (M6: Linux-only Tauri bundles).
+#
+# Merging the release PR cut by release-please tags `v<version>` where <version>
+# is exactly apps/app/package.json's `version`, and this builds the static SPA
+# via Tauri's beforeBuildCommand and bundles a Linux .deb + .AppImage (.rpm
+# when the runner can), attaching them to the GitHub Release. You do not tag by
+# hand any more — see .github/workflows/release-please.yml and RELEASE.md.
+#
+# Secrets: NONE for Linux bundles (unsigned). There is no desktop keystore, no
+# signing step — contrast with release-android.yml's four ANDROID_* secrets.
+#
+# BUN ONLY: this repo never uses npm/npx/pnpm/yarn. `bunx` is the npx
+# equivalent and is what runs the Tauri CLI.
+#
+# WHY LINUX-ONLY: D16 scoped OS-scheduled alarms to Linux systemd user timers
+# first. On Windows/macOS the app can only do timer-mode alarms (the app must
+# stay open), which breaks the product's central promise — "you set a time,
+# and the notification fires at that time" — so shipping those binaries would
+# advertise a degraded promise as a release. Windows/macOS bundles are an M12
+# TODO, not a missing matrix entry. Do not add them here until the schedulers
+# exist and are verified on hardware.
+#
+# ---------------------------------------------------------------------------
+# VERSION POLICY — release-please decides the number, this file checks it.
+# Full runbook: RELEASE.md.
+#
+#   every commit is a PATCH      whatever the type — `feat:` included
+#                                (release-please: bump-patch-for-minor-pre-major)
+#   a `!` commit is a MINOR      type!: / type(scope)!: / a BREAKING CHANGE:
+#                                footer (release-please: bump-minor-pre-major)
+#   no MAJOR before 1.0.0
+#
+# release-please reads the commits and maintains the release PR; merging it
+# writes package.json, the changelog, and the tag that starts this run. This
+# workflow then re-derives the bump from the commits since the previous tag and
+# fails when the tag is smaller than they claim — and when any of those commits
+# does not parse, because release-please drops an unreadable message without
+# failing anything. A bigger bump is always allowed; only a smaller one is not,
+# since a published version can never be taken back. The arithmetic lives in
+# apps/app/scripts/version.ts.
+# ---------------------------------------------------------------------------
+
+name: Release Desktop
+
+on:
+  push:
+    tags:
+      - 'v*'
+  # release-please triggers this itself, because a tag it pushes with
+  # GITHUB_TOKEN would never start a run. workflow_dispatch is the documented
+  # exception, so the release job dispatches it at the tag:
+  #   gh workflow run release-desktop.yml --ref v0.3.2
+  workflow_dispatch:
+
+# One release at a time per tag; never cancel a half-finished upload. Keyed on
+# the ref, which is the tag both for a pushed tag and for a dispatch.
+concurrency:
+  group: release-desktop-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build Linux desktop bundles
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      # The version-policy guard compares the tag against the commits since the
+      # *previous* tag, and `git describe` has to see every tag — a shallow
+      # clone has neither the history nor the tags, and the guard would then
+      # pass by finding nothing to check. Full history is the price of a
+      # version that cannot lie about what it contains.
+      - name: Checkout (full history + tags)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.0'
+
+      # The union of the official Tauri v2 GitHub pipeline guide's dependency
+      # list and what this machine actually needed (gdk-sys fails to build
+      # without libgtk-3-dev, and the AppImage needs libfuse2). Explicit
+      # because ubuntu-latest images change under you — a bare `apt-get
+      # install` that worked last month can silently lose a package.
+      - name: Install Linux system dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev patchelf xdg-utils file libfuse2 build-essential curl wget
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      # Without this every run recompiles the whole Tauri tree (~15+ min).
+      # The cache key is Cargo.lock, so the sync step below (which only
+      # touches Cargo.toml's own version line) still hits — cargo rewrites
+      # the lock's `ikoro` entry on build, it is never hand-edited.
+      - name: Cache Rust dependencies
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: 'apps/app/src-tauri -> target'
+
+      # A tag that does not match the app version would ship a build whose
+      # versionName disagrees with the release it is attached to.
+      - name: Assert tag matches apps/app/package.json version
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG=$(node -p "require('./apps/app/package.json').version")
+          echo "tag=$TAG package.json=$PKG"
+          [ "$TAG" = "$PKG" ] || { echo "tag $TAG != package.json $PKG"; exit 1; }
+
+      # The version policy, enforced. Say what the tag claims and what the
+      # commits since the last one claim — release-please computed the former,
+      # this recomputes it, and a disagreement means a release PR was merged
+      # over commits it never saw. Deliberately before anything is built: a
+      # wrong version should cost seconds, not a full Tauri compile nobody can
+      # publish. See the header.
+      - name: Assert version bump matches the commits since the last tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          # GITHUB_REF_NAME is the tag for a pushed tag and for a dispatch at one.
+          # A dispatch at a branch would check the wrong thing, so say so plainly.
+          case "$GITHUB_REF_NAME" in
+            v*) bun apps/app/scripts/version.ts check ;;
+            *) echo "GITHUB_REF_NAME=$GITHUB_REF_NAME is not a version tag"
+               echo "dispatch this workflow at the tag: gh workflow run release-desktop.yml --ref v<version>"
+               exit 1 ;;
+          esac
+
+      # release-please only touches apps/app/package.json. Cargo.toml is the
+      # single Rust-side source (tauri.conf.json has no "version" key, so
+      # Tauri falls back to it), and without this sync the bundles would ship
+      # whatever Cargo.toml last said. Cargo.lock is NOT touched — cargo
+      # rewrites its own `ikoro` entry from Cargo.toml on build.
+      - name: Sync the desktop version from package.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun apps/app/scripts/tauri-version.ts sync
+          bun apps/app/scripts/tauri-version.ts check
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # `bunx tauri build` from the repo root fails with the misleading
+      # "could not determine executable to run for package tauri" — the Tauri
+      # CLI lives in apps/app, so run from there. working-directory does that.
+      # tauri.conf.json's beforeBuildCommand already runs `bun run build` for
+      # the SPA, so there is no separate web-build step here.
+      - name: Build desktop bundles
+        working-directory: apps/app
+        run: bunx tauri build
+
+      # Rename to a public-facing name: a bundle called "ikoro_0.3.2_amd64.deb"
+      # tells the person downloading it nothing about which release it came
+      # from. "Ikoro-v0.3.2.deb" does. The tag IS the version (the assert step
+      # above guarantees tag == package.json version), so github.ref_name is
+      # the right source — no second copy of the version to drift. Renaming
+      # happens AFTER verification so the verify step always runs against the
+      # path Tauri actually wrote.
+      #
+      # The .rpm is opportunistic: it is produced only when rpmbuild exists on
+      # the runner. Copy it when present, never fail when missing — deb +
+      # AppImage are the promise, rpm is a bonus.
+      - name: Verify desktop artifacts exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEB=$(find apps/app/src-tauri/target/release/bundle/deb -maxdepth 1 -name '*.deb' | head -1)
+          APPIMAGE=$(find apps/app/src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' | head -1)
+          [ -n "${DEB:-}" ] && [ -s "$DEB" ] || { echo "no .deb bundle found"; exit 1; }
+          [ -n "${APPIMAGE:-}" ] && [ -s "$APPIMAGE" ] || { echo "no .AppImage bundle found"; exit 1; }
+          ls -l "$DEB" "$APPIMAGE"
+          cp "$DEB" "Ikoro-${GITHUB_REF_NAME}.deb"
+          cp "$APPIMAGE" "Ikoro-${GITHUB_REF_NAME}.AppImage"
+          ls -l "Ikoro-${GITHUB_REF_NAME}.deb" "Ikoro-${GITHUB_REF_NAME}.AppImage"
+          RPM=$(find apps/app/src-tauri/target/release/bundle/rpm -maxdepth 1 -name '*.rpm' 2>/dev/null | head -1 || true)
+          if [ -n "${RPM:-}" ] && [ -s "$RPM" ]; then
+            cp "$RPM" "Ikoro-${GITHUB_REF_NAME}.rpm"
+            ls -l "Ikoro-${GITHUB_REF_NAME}.rpm"
+          else
+            echo "no .rpm bundle (rpmbuild not available) — skipping, deb+AppImage are the promise"
+          fi
+
+      # Attach the artifacts with the plain REST call, not action-gh-release.
+      #
+      # That action calls `PATCH /releases/{id}` before uploading, and when the
+      # release ALREADY exists — which it now always does, because release-please
+      # created it — that PATCH 403s with "Resource not accessible by integration"
+      # even though this workflow has contents: write (softprops/action-gh-release
+      # #836, broken from v3.0.2). It only ever worked here because it used to
+      # CREATE the release. `gh release upload` posts assets and nothing else, so
+      # the buggy call never happens.
+      #
+      # A manually pushed tag has no release yet, so create it first; release-please
+      # tags already have one, and its notes are left alone.
+      - name: Attach artifacts to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="$GITHUB_REF_NAME"
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes
+          fi
+          shopt -s nullglob
+          FILES=(Ikoro-"$TAG".deb Ikoro-"$TAG".AppImage Ikoro-"$TAG".rpm)
+          [ "${#FILES[@]}" -ge 2 ] || { echo "expected deb+AppImage for $TAG, found ${#FILES[@]} files"; exit 1; }
+          ls -l "${FILES[@]}"
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber "${FILES[@]}"
