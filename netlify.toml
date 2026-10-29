@@ -1,0 +1,23 @@
+# Ikoro landing site — Netlify build config.
+# Config only: creating the Netlify site and deploying stay human actions.
+# Root toml, root base: bun.lock and packageManager live at the repo root,
+# so Netlify installs with bun there and builds just the landing workspace.
+[build]
+  command = "bun run --filter landing build"
+  publish = "apps/landing/build"
+  # Monorepo default rebuilds on every root push; scope it to the site.
+  # https://docs.netlify.com/build/configure-builds/ignore-builds
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF apps/landing/ netlify.toml"
+
+[build.environment]
+  NODE_VERSION = "24"
+
+[[headers]]
+  for = "/_app/immutable/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"

@@ -13,7 +13,11 @@ bun run test             # the copy guards
 bun run lint             # prettier + eslint
 ```
 
-Deploying is the user's call, and this workspace does not configure a host.
+Deploying is a human action. Netlify builds this site from the config at the
+repo root (`netlify.toml`): it builds the `landing` workspace and publishes
+`apps/landing/build`. Creating the Netlify site, linking it to the repo, and
+triggering deploys all stay with a person. This workspace only holds the config
+the site needs to build.
 
 ## Where the copy lives
 
@@ -23,12 +27,13 @@ file, and `tests/content.test.ts` fails if one of them turns into something the
 build cannot do (a platform marked released, a link to a route that does not
 exist, a tracker smuggled into the markup).
 
-Two fields are switched by hand, on purpose, so nobody ships a claim by accident:
+Two fields are switched by hand, on purpose, so nobody ships a claim by accident.
+Both are guarded by tests, so changing one without meaning it fails the build.
 
-| Field                | When it changes                                                                                                                                                  |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `releaseNotice`      | delete it the day `v0.1.0` is published; it is the "nothing to download yet" notice on `/` and `/download`                                                       |
-| `platforms[].status` | set the Android row to `released` when there is a file to download — the test that says "claims nothing is downloadable" then fails until you do it deliberately |
+| Field                | What it means now                                                                                                                                                 |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `releaseNotice`      | states what the published release offers. Today that is v0.3.2 on GitHub Releases as an APK plus an AAB, with no Play Store listing. Update it when a release changes what is published |
+| `platforms[].status` | marks which platforms have a real download. Android is `released` because v0.3.2 ships files. Linux stays `unreleased` until its bundles ship. Flip a row only when a platform gains or loses a real download |
 
 ## Adding a shadcn component
 
