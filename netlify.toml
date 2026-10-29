@@ -1,4 +1,4 @@
-# Ikoro landing site — Netlify build config.
+# Ikoro landing site: Netlify build config.
 # Config only: creating the Netlify site and deploying stay human actions.
 # Root toml, root base: bun.lock and packageManager live at the repo root,
 # so Netlify installs with bun there and builds just the landing workspace.
