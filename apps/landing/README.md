@@ -30,10 +30,13 @@ exist, a tracker smuggled into the markup).
 Two fields are switched by hand, on purpose, so nobody ships a claim by accident.
 Both are guarded by tests, so changing one without meaning it fails the build.
 
-| Field                | What it means now                                                                                                                                                 |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `releaseNotice`      | states what the published release offers. Today that is v0.3.2 on GitHub Releases as an APK plus an AAB, with no Play Store listing. Update it when a release changes what is published |
-| `platforms[].status` | marks which platforms have a real download. Android is `released` because v0.3.2 ships files. Linux stays `unreleased` until its bundles ship. Flip a row only when a platform gains or loses a real download |
+Release facts come from GitHub at build time, and from apps/app/package.json
+when GitHub is unreachable. The version is never a hand-switched field: the
+layout derives it from the app version, and the tag and asset URLs follow the
+release flow pattern. The hand-switched fields that remain are
+`platforms[].status` (flip a row only when a platform gains or loses a real
+download) and the claims in `releaseNoticeFor`, `limits` and `releases[]`
+(curated copy, not release facts).
 
 ## Adding a shadcn component
 

@@ -1,10 +1,10 @@
 /**
- * Build-time GitHub release lookup: transport + parsing only, no copy strings.
+ * Build-time GitHub release lookup: transport + parsing + derivation, no copy strings.
  *
  * The one caller is the root layout `load`, which runs during prerender — so
- * everything here degrades to `null` instead of throwing. A throw would fail
- * the whole static build; `null` renders the curated fallback the site
- * already ships. No secrets, no env vars: the repo is public and one call per
+ * nothing here throws. A throw would fail the whole static build; the fetch
+ * degrades to `null` and the layout derives the release from the app version
+ * instead. No secrets, no env vars: the repo is public and one call per
  * build is nowhere near the unauthenticated rate limit.
  */
 
@@ -14,21 +14,53 @@ export interface ReleaseInfo {
 	tagUrl: string;
 	apkUrl: string;
 	aabUrl: string;
-	apkSizeBytes: number;
-	aabSizeBytes: number;
-	publishedAt: string;
+	/** Present on the live path; unknowable when derived offline. */
+	apkSizeBytes?: number;
+	/** Present on the live path; unknowable when derived offline. */
+	aabSizeBytes?: number;
+	/** Present on the live path; unknowable when derived offline. */
+	publishedAt?: string;
+}
+
+/**
+ * Identity of this repo. Hardcoding identity is fine: the owner and name do
+ * not change per release. The URL patterns below are verified against the
+ * real v0.3.2 response and the release-please/gh-upload flow that names
+ * assets `Ikoro-v{version}.apk` / `Ikoro-v{version}.aab`.
+ */
+const REPO_OWNER = 'Michael-Obele';
+const REPO_NAME = 'Ikoro';
+
+/**
+ * Builds a ReleaseInfo from a version alone, with no network and no snapshot.
+ * The version comes from `apps/app/package.json` (release-please bumps it at
+ * every release); the tag and asset URLs are deterministic given the version.
+ * Sizes and the published date are omitted — they are unknowable offline.
+ */
+export function deriveRelease(version: string): ReleaseInfo {
+	return {
+		version,
+		tagUrl: `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/tag/v${version}`,
+		apkUrl: `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/v${version}/Ikoro-v${version}.apk`,
+		aabUrl: `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/v${version}/Ikoro-v${version}.aab`
+	};
 }
 
 const LATEST_RELEASE_URL = 'https://api.github.com/repos/Michael-Obele/Ikoro/releases/latest';
 
-/** The first asset whose name ends with `ext`, or null when none is usable. */
-function findAsset(assets: unknown[], ext: '.apk' | '.aab'): { url: string; size: number } | null {
+/**
+ * The first asset whose name ends with `ext`, or null when none is usable.
+ * A present size must be a finite number; an absent size is omitted (the
+ * caller still parses OK). A wrong-typed size is not usable.
+ */
+function findAsset(assets: unknown[], ext: '.apk' | '.aab'): { url: string; size?: number } | null {
 	for (const entry of assets) {
 		if (typeof entry !== 'object' || entry === null) continue;
 		const record = entry as Record<string, unknown>;
 		if (typeof record.name !== 'string' || !record.name.endsWith(ext)) continue;
-		if (typeof record.size !== 'number' || !Number.isFinite(record.size)) continue;
 		if (typeof record.browser_download_url !== 'string') continue;
+		if (record.size === undefined) return { url: record.browser_download_url };
+		if (typeof record.size !== 'number' || !Number.isFinite(record.size)) continue;
 		return { url: record.browser_download_url, size: record.size };
 	}
 	return null;
@@ -54,15 +86,16 @@ export function parseLatestRelease(json: unknown): ReleaseInfo | null {
 		const apk = findAsset(assets, '.apk');
 		const aab = findAsset(assets, '.aab');
 		if (apk === null || aab === null) return null;
-		return {
+		const release: ReleaseInfo = {
 			version,
 			tagUrl: html_url,
 			apkUrl: apk.url,
 			aabUrl: aab.url,
-			apkSizeBytes: apk.size,
-			aabSizeBytes: aab.size,
 			publishedAt: published_at
 		};
+		if (apk.size !== undefined) release.apkSizeBytes = apk.size;
+		if (aab.size !== undefined) release.aabSizeBytes = aab.size;
+		return release;
 	} catch {
 		return null;
 	}
@@ -70,8 +103,9 @@ export function parseLatestRelease(json: unknown): ReleaseInfo | null {
 
 /**
  * Fetches the latest release. Non-ok responses, network errors, timeouts and
- * unparseable bodies are all `null` — the pages render the curated fallback.
- * Never throws. `fetchImpl` is injectable so tests never touch the network.
+ * unparseable bodies are all `null` — the layout derives the release from
+ * the app version instead. Never throws. `fetchImpl` is injectable so tests
+ * never touch the network.
  */
 export async function fetchLatestRelease(
 	fetchImpl: typeof fetch = fetch

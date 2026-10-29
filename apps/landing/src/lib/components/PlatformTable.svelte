@@ -1,6 +1,12 @@
 <script lang="ts">
 	import { Badge, type BadgeVariant } from '$lib/components/ui';
-	import { platforms, type Platform } from '$lib/content';
+	import type { Platform } from '$lib/content';
+
+	interface Props {
+		rows: Platform[];
+	}
+
+	let { rows }: Props = $props();
 
 	/**
 	 * The honest platform table.
@@ -35,7 +41,7 @@
 			</tr>
 		</thead>
 		<tbody>
-			{#each platforms as platform (platform.id)}
+			{#each rows as platform (platform.id)}
 				<tr class="border-b align-top last:border-0">
 					<th scope="row" class="py-4 pr-4 font-medium">{platform.name}</th>
 					<td class="py-4 pr-4">

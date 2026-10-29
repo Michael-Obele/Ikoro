@@ -16,11 +16,6 @@ export const site = {
 	name: 'Ikoro',
 	pronunciation: 'ih-KOR-oh',
 	tagline: 'The gong that calls you.',
-	/**
-	 * The documented FALLBACK number, used when the build cannot reach GitHub.
-	 * Kept in step with apps/app/package.json by tests. One product, one number.
-	 */
-	version: '0.3.2',
 	repo: 'https://github.com/Michael-Obele/Ikoro',
 	releases: 'https://github.com/Michael-Obele/Ikoro/releases',
 	issues: 'https://github.com/Michael-Obele/Ikoro/issues'
@@ -103,60 +98,20 @@ export interface Platform {
 	action?: string;
 }
 
-/** The files v0.3.2 actually published. Direct links; they exist today. */
-export const androidAssets = {
-	tag: 'https://github.com/Michael-Obele/Ikoro/releases/tag/v0.3.2',
-	apk: 'https://github.com/Michael-Obele/Ikoro/releases/download/v0.3.2/Ikoro-v0.3.2.apk',
-	aab: 'https://github.com/Michael-Obele/Ikoro/releases/download/v0.3.2/Ikoro-v0.3.2.aab'
-} as const;
-
-/**
- * The curated last-known release, shown when the build cannot reach GitHub.
- * Snapshot of the verified v0.3.2 response (2026-10-28): sizes are the real
- * byte counts, publishedAt is the newest `releases[]` entry date.
- */
-export const FALLBACK_RELEASE: ReleaseInfo = {
-	version: site.version,
-	tagUrl: androidAssets.tag,
-	apkUrl: androidAssets.apk,
-	aabUrl: androidAssets.aab,
-	apkSizeBytes: 3519874,
-	aabSizeBytes: 3369152,
-	publishedAt: '2026-10-28T11:13:48Z'
-};
-
-/** The version to print: the live one when the fetch worked, else the fallback. */
-export function versionOf(r: ReleaseInfo | null): string {
-	return r?.version ?? site.version;
-}
-
-/** The download links to print: the live ones when the fetch worked, else curated. */
-export function androidAssetsFor(r: ReleaseInfo | null): {
-	tag: string;
-	apk: string;
-	aab: string;
-} {
-	if (r === null) return { ...androidAssets };
-	return { tag: r.tagUrl, apk: r.apkUrl, aab: r.aabUrl };
-}
-
 /**
  * Shown on the home page and on /download. States what is published and where
  * it lives. The buttons point at real files; nothing here is a download until it is.
+ * The size and date clauses appear only when the release knows them (the live
+ * path); the derived path omits them instead of inventing numbers.
  */
-export function releaseNoticeFor(r: ReleaseInfo | null): string {
-	if (r === null) {
-		return (
-			`v${site.version} is published on GitHub Releases as an APK and an AAB. There is no Play ` +
-			'Store listing, so you sideload it. Alarms are verified on a physical device with ' +
-			'the app closed.'
-		);
-	}
+export function releaseNoticeFor(r: ReleaseInfo): string {
+	const size = r.apkSizeBytes !== undefined ? ` (${formatBytes(r.apkSizeBytes)})` : '';
+	const published =
+		r.publishedAt !== undefined ? ` Published ${formatReleaseDate(r.publishedAt)}.` : '';
 	return (
-		`v${r.version} is published on GitHub Releases as an APK (${formatBytes(r.apkSizeBytes)}) and ` +
-		'an AAB. There is no Play Store listing, so you sideload it. Published ' +
-		`${formatReleaseDate(r.publishedAt)}. Alarms are verified on a physical device with ` +
-		'the app closed.'
+		`v${r.version} is published on GitHub Releases as an APK${size} and ` +
+		'an AAB. There is no Play Store listing, so you sideload it.' +
+		`${published} Alarms are verified on a physical device with the app closed.`
 	);
 }
 
@@ -201,20 +156,28 @@ export function isNewer(a: string, b: string): boolean {
 	return false;
 }
 
-/** The honest platform table. Nothing here promises a capability M8 did not observe. */
+/**
+ * The Android row without its version facts: the detail is standing copy
+ * (what the platform does does not change per release), while the href and
+ * action are filled in by `platformRows` from the release.
+ */
+const androidBase: Omit<Platform, 'href' | 'action'> = {
+	id: 'android',
+	name: 'Android 8 and later',
+	status: 'released',
+	detail:
+		'Sideload the APK. The alarm is scheduled through Android itself with ' +
+		'setAlarmClock, so it arrives with Ikoro closed. Verified on a physical Pixel ' +
+		'with the app force-stopped. Not on the Play Store in this version — sideloading ' +
+		'is how you install it. The release also carries an AAB.'
+};
+
+/**
+ * The platform rows that never change: every row except Android, whose href
+ * and action are filled in by `platformRows` from the release (the version
+ * moves every release, so it cannot be a literal here).
+ */
 export const platforms: Platform[] = [
-	{
-		id: 'android',
-		name: 'Android 8 and later',
-		status: 'released',
-		detail:
-			'Sideload the APK. The alarm is scheduled through Android itself with ' +
-			'setAlarmClock, so it arrives with Ikoro closed. Verified on a physical Pixel ' +
-			'with the app force-stopped. Not on the Play Store in this version — sideloading ' +
-			'is how you install it. The release also carries an AAB.',
-		href: androidAssets.tag,
-		action: 'v0.3.2 release'
-	},
 	{
 		id: 'linux-desktop',
 		name: 'Linux desktop',
@@ -244,6 +207,15 @@ export const platforms: Platform[] = [
 			'while the tab is open, and the app says so where you set it.'
 	}
 ];
+
+/**
+ * The honest platform table. The Android row's href and action come from the
+ * release, so a new version never needs a hand edit here. Nothing here
+ * promises a capability M8 did not observe.
+ */
+export function platformRows(r: ReleaseInfo): Platform[] {
+	return [{ ...androidBase, href: r.tagUrl, action: `v${r.version} release` }, ...platforms];
+}
 
 /** The same table as the short version, for the home page. */
 export const limits: string[] = [

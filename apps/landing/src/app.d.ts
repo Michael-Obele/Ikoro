@@ -7,8 +7,8 @@ declare global {
 		// interface Error {}
 		// interface Locals {}
 		interface PageData {
-			/** The live release from the root layout load, or null when the fetch failed. */
-			release: ReleaseInfo | null;
+			/** The live release, or the app-version derivation when GitHub is unreachable. */
+			release: ReleaseInfo;
 		}
 		// interface PageState {}
 		// interface Platform {}

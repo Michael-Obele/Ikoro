@@ -10,9 +10,7 @@
 	 * the release. Never renders GitHub's auto-generated body.
 	 */
 	const lagging = $derived(
-		page.data.release !== null && isNewer(page.data.release.version, releases[0].version)
-			? page.data.release
-			: null
+		isNewer(page.data.release.version, releases[0].version) ? page.data.release : null
 	);
 </script>
 

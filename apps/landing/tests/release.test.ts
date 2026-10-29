@@ -4,21 +4,15 @@
  * Class of bug caught: the landing page renders a version number and download
  * links that are only as true as the last person who hand-edited them. This
  * file pins the GitHub API parsing (shape drift, missing assets, error paths
- * that must degrade to the curated fallback instead of throwing during
+ * that must degrade to the app-version derivation instead of throwing during
  * prerender) and the display formatters (a locale-dependent date or a wrong
  * byte divisor ships a wrong claim to static HTML with no server to fix it).
  * No network here — `fetch` is always an injected fake.
  */
 import { describe, expect, it } from 'vitest';
-import {
-	formatBytes,
-	formatReleaseDate,
-	isNewer,
-	releaseNoticeFor,
-	site,
-	versionOf
-} from '#lib/content';
-import { fetchLatestRelease, parseLatestRelease } from '#lib/release';
+import type { ReleaseInfo } from '#lib/release';
+import { formatBytes, formatReleaseDate, isNewer, releaseNoticeFor } from '#lib/content';
+import { deriveRelease, fetchLatestRelease, parseLatestRelease } from '#lib/release';
 
 /**
  * The real shape of GET /repos/Michael-Obele/Ikoro/releases/latest on
@@ -93,6 +87,41 @@ describe('parseLatestRelease', () => {
 	it('returns null for an unparseable published_at instead of throwing at render time', () => {
 		expect(parseLatestRelease({ ...LATEST_FIXTURE, published_at: 'not-a-date' })).toBeNull();
 	});
+
+	it('parses a body without sizes, omitting the size fields', () => {
+		const withoutSizes = {
+			...LATEST_FIXTURE,
+			assets: LATEST_FIXTURE.assets.map((a) => ({
+				name: a.name,
+				browser_download_url: a.browser_download_url
+			}))
+		};
+		expect(parseLatestRelease(withoutSizes)).toEqual({
+			version: '0.3.2',
+			tagUrl: 'https://github.com/Michael-Obele/Ikoro/releases/tag/v0.3.2',
+			apkUrl: 'https://github.com/Michael-Obele/Ikoro/releases/download/v0.3.2/Ikoro-v0.3.2.apk',
+			aabUrl: 'https://github.com/Michael-Obele/Ikoro/releases/download/v0.3.2/Ikoro-v0.3.2.aab',
+			publishedAt: '2026-10-28T11:13:48Z'
+		});
+	});
+});
+
+describe('deriveRelease', () => {
+	it('builds the exact verified URL patterns for a sample version', () => {
+		expect(deriveRelease('0.3.2')).toEqual({
+			version: '0.3.2',
+			tagUrl: 'https://github.com/Michael-Obele/Ikoro/releases/tag/v0.3.2',
+			apkUrl: 'https://github.com/Michael-Obele/Ikoro/releases/download/v0.3.2/Ikoro-v0.3.2.apk',
+			aabUrl: 'https://github.com/Michael-Obele/Ikoro/releases/download/v0.3.2/Ikoro-v0.3.2.aab'
+		});
+	});
+
+	it('omits sizes and the published date, which are unknowable offline', () => {
+		const derived = deriveRelease('0.3.2');
+		expect(derived.apkSizeBytes).toBeUndefined();
+		expect(derived.aabSizeBytes).toBeUndefined();
+		expect(derived.publishedAt).toBeUndefined();
+	});
 });
 
 describe('fetchLatestRelease', () => {
@@ -164,18 +193,19 @@ describe('release display helpers', () => {
 		expect(isNewer('0.3.10', '0.3.9')).toBe(true);
 	});
 
-	it('falls back to the curated copy when the fetch failed', () => {
-		// Against site.version, not a hardcoded string: the fallback moves with
-		// the app version, and this test must move with it.
-		expect(versionOf(null)).toBe(site.version);
-		expect(releaseNoticeFor(null)).toContain(site.version);
+	it('derives the notice from the app version when GitHub is unreachable', () => {
+		const derived = deriveRelease('0.3.2');
+		expect(releaseNoticeFor(derived)).toContain('0.3.2');
+		expect(releaseNoticeFor(derived).toLowerCase()).toContain('play store');
+		expect(releaseNoticeFor(derived)).not.toContain('Published');
+		expect(releaseNoticeFor(derived)).not.toContain('MB');
 	});
 
-	it('names the live version and the Play Store gap in the live notice', () => {
-		const live = parseLatestRelease(LATEST_FIXTURE);
-		expect(live).not.toBeNull();
-		expect(versionOf(live)).toBe('0.3.2');
+	it('names the live version, size, date and the Play Store gap in the live notice', () => {
+		const live = parseLatestRelease(LATEST_FIXTURE) as ReleaseInfo;
 		expect(releaseNoticeFor(live)).toContain('0.3.2');
 		expect(releaseNoticeFor(live).toLowerCase()).toContain('play store');
+		expect(releaseNoticeFor(live)).toContain('3.4 MB');
+		expect(releaseNoticeFor(live)).toContain('Published 28 Oct 2026');
 	});
 });

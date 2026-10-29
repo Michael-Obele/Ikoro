@@ -28,7 +28,6 @@
 		releases,
 		site,
 		taskShape,
-		versionOf,
 		views
 	} from '$lib/content';
 </script>
@@ -69,7 +68,7 @@
 		     assistive technology announce it as an urgent live update. -->
 		<Alert role="note" class="mt-12">
 			<CircleAlert aria-hidden="true" />
-			<AlertTitle>v{versionOf(page.data.release)} is out</AlertTitle>
+			<AlertTitle>v{page.data.release.version} is out</AlertTitle>
 			<AlertDescription>{releaseNoticeFor(page.data.release)}</AlertDescription>
 		</Alert>
 	</div>

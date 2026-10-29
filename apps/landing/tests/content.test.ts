@@ -9,22 +9,23 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-	androidAssets,
-	androidAssetsFor,
-	FALLBACK_RELEASE,
 	isNewer,
 	limits,
-	platforms,
+	platformRows,
 	privacy,
 	releaseNoticeFor,
 	releases,
 	routes,
-	site,
-	versionOf,
 	views
 } from '#lib/content';
+import { deriveRelease } from '#lib/release';
 
 const SRC = resolve(import.meta.dirname, '../src');
+
+/** The app version: the single source the derived release comes from. */
+const appPkg = JSON.parse(
+	readFileSync(resolve(import.meta.dirname, '../../app/package.json'), 'utf8')
+) as { version: string };
 
 /** Every `.svelte` / `.ts` file under src, as [path, contents]. */
 function sourceFiles(dir: string): Array<[string, string]> {
@@ -40,7 +41,7 @@ const sources = sourceFiles(SRC);
 
 describe('the platform table', () => {
 	it('gives every platform a status and an explanation', () => {
-		for (const platform of platforms) {
+		for (const platform of platformRows(deriveRelease(appPkg.version))) {
 			expect(platform.status, platform.id).toMatch(
 				/^(released|unreleased|building|preview|unsupported)$/
 			);
@@ -50,62 +51,53 @@ describe('the platform table', () => {
 	});
 
 	it('uses every status at most once, so a table cannot quietly say "everything works"', () => {
-		const released = platforms.filter((p) => p.status === 'released');
+		const released = platformRows(deriveRelease(appPkg.version)).filter(
+			(p) => p.status === 'released'
+		);
 		expect(released.length, 'more than one platform claims a published build').toBeLessThanOrEqual(
 			1
 		);
 	});
 
-	// v0.3.2 shipped Android: exactly one platform claims a published build,
-	// and the notice says what is published instead of saying nothing is.
+	// The derived release names the published build; the notice says what is
+	// published instead of saying nothing is.
 	it('claims a download only where a release exists', () => {
-		const released = platforms.filter((p) => p.status === 'released');
+		const rows = platformRows(deriveRelease(appPkg.version));
+		const released = rows.filter((p) => p.status === 'released');
 		expect(
 			released.map((p) => p.id),
 			'only Android has a published build'
 		).toEqual(['android']);
-		const fallbackNotice = releaseNoticeFor(null);
-		expect(fallbackNotice, 'the notice must name the published version').toContain(site.version);
-		expect(fallbackNotice.toLowerCase(), 'the notice must admit the Play Store gap').toContain(
+		const derivedNotice = releaseNoticeFor(deriveRelease(appPkg.version));
+		expect(derivedNotice, 'the notice must name the published version').toContain(
+			`v${appPkg.version}`
+		);
+		expect(derivedNotice.toLowerCase(), 'the notice must admit the Play Store gap').toContain(
 			'play store'
 		);
-		// The live notice names the live version, not the fallback.
-		const live = { ...FALLBACK_RELEASE, version: '9.9.9' };
-		expect(releaseNoticeFor(live)).toContain('9.9.9');
+		// A newer derivation names the newer version.
+		expect(releaseNoticeFor(deriveRelease('9.9.9'))).toContain('9.9.9');
 	});
 
 	it('links the real published files, and nothing that does not exist', () => {
-		for (const url of [androidAssets.apk, androidAssets.aab, androidAssets.tag]) {
-			expect(url).toContain(`v${site.version}`);
+		const derived = deriveRelease(appPkg.version);
+		for (const url of [derived.apkUrl, derived.aabUrl, derived.tagUrl]) {
+			expect(url).toContain(`v${appPkg.version}`);
 		}
-		// The fallback generator returns the curated links; the live generator
-		// returns the live URLs untouched.
-		const fallback = androidAssetsFor(null);
-		expect(fallback).toEqual({ ...androidAssets });
-		for (const url of [fallback.apk, fallback.aab, fallback.tag]) {
-			expect(url).toContain(`v${site.version}`);
-		}
-		const live = {
-			...FALLBACK_RELEASE,
-			tagUrl: 'https://example.com/tag',
-			apkUrl: 'https://example.com/app.apk',
-			aabUrl: 'https://example.com/app.aab'
-		};
-		expect(androidAssetsFor(live)).toEqual({
-			tag: 'https://example.com/tag',
-			apk: 'https://example.com/app.apk',
-			aab: 'https://example.com/app.aab'
-		});
-		expect(androidAssets.apk.endsWith('.apk')).toBe(true);
-		expect(androidAssets.aab.endsWith('.aab')).toBe(true);
+		const android = platformRows(derived).find((p) => p.id === 'android');
+		expect(android?.href).toBe(derived.tagUrl);
+		expect(android?.action).toBe(`v${appPkg.version} release`);
+		expect(derived.apkUrl.endsWith('.apk')).toBe(true);
+		expect(derived.aabUrl.endsWith('.aab')).toBe(true);
 		for (const [, text] of sources) {
 			expect(text, 'no dead desktop download').not.toMatch(/href="[^"]*\.(deb|appimage)/i);
 		}
 	});
 
 	it('states the Linux / Windows-macOS alarm split', () => {
-		const linux = platforms.find((p) => p.id === 'linux-desktop');
-		const other = platforms.find((p) => p.id === 'windows-macos');
+		const rows = platformRows(deriveRelease(appPkg.version));
+		const linux = rows.find((p) => p.id === 'linux-desktop');
+		const other = rows.find((p) => p.id === 'windows-macos');
 		expect(linux?.detail.toLowerCase()).toContain('systemd');
 		expect(linux?.detail.toLowerCase()).toContain('closed');
 		expect(other?.detail.toLowerCase()).toContain('windows and macos');
@@ -118,7 +110,7 @@ describe('the platform table', () => {
 	});
 
 	it('never offers an action it has no target for', () => {
-		for (const platform of platforms) {
+		for (const platform of platformRows(deriveRelease(appPkg.version))) {
 			expect(Boolean(platform.href), platform.id).toBe(Boolean(platform.action));
 		}
 	});
@@ -208,17 +200,15 @@ describe('the content itself', () => {
 		expect(shipped).not.toMatch(/repeating tasks/);
 	});
 
-	it('keeps the version in step with the app', () => {
-		const appPkg = JSON.parse(
-			readFileSync(resolve(import.meta.dirname, '../../app/package.json'), 'utf8')
-		) as { version: string };
-		expect(site.version, 'the site and the app must report the same version').toBe(appPkg.version);
-		// The null fallback is what a build that cannot reach GitHub prints, so
-		// it must move with the app version too.
-		expect(FALLBACK_RELEASE.version, 'the fallback release must stay in step with the app').toBe(
-			appPkg.version
-		);
-		expect(versionOf(null)).toBe(appPkg.version);
+	it('derives the release from the app version, structurally in step', () => {
+		// No site.version anymore: both sides derive from the same place, so
+		// the test asserts the derivation, not equality of two hand-kept numbers.
+		const derived = deriveRelease(appPkg.version);
+		expect(derived.version).toBe(appPkg.version);
+		const android = platformRows(derived).find((p) => p.id === 'android');
+		expect(android?.href).toContain(`v${appPkg.version}`);
+		expect(android?.action).toContain(`v${appPkg.version}`);
+		expect(releaseNoticeFor(derived)).toContain(`v${appPkg.version}`);
 	});
 
 	it('keeps releases newest-first: the changelog lag-row logic reads releases[0]', () => {
