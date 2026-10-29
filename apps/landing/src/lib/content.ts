@@ -15,20 +15,20 @@ export const site = {
 	pronunciation: 'ih-KOR-oh',
 	tagline: 'The gong that calls you.',
 	/** Kept in step with apps/app/package.json. One product, one number. */
-	version: '0.1.0',
+	version: '0.3.2',
 	repo: 'https://github.com/Michael-Obele/Ikoro',
 	releases: 'https://github.com/Michael-Obele/Ikoro/releases',
 	issues: 'https://github.com/Michael-Obele/Ikoro/issues'
 } as const;
 
 /**
- * Shown on the home page and on /download until the first release exists. Delete
- * the field and the two callouts on the day `v0.1.0` is published — the buttons
- * are already pointing where the file will be.
+ * Shown on the home page and on /download. States what is published and where
+ * it lives. The buttons point at real files; nothing here is a download until it is.
  */
 export const releaseNotice =
-	'v0.1.0 has not been published yet. Nothing here is a download until it is: the ' +
-	'links below point at the releases page, and they start working when a release is cut.';
+	'v0.3.2 is published on GitHub Releases as an APK and an AAB. There is no Play ' +
+	'Store listing, so you sideload it. Alarms are verified on a physical device with ' +
+	'the app closed.';
 
 /** The one sentence the product exists to make true. */
 export const promise = {
@@ -107,27 +107,36 @@ export interface Platform {
 	action?: string;
 }
 
+/** The files v0.3.2 actually published. Direct links; they exist today. */
+export const androidAssets = {
+	tag: 'https://github.com/Michael-Obele/Ikoro/releases/tag/v0.3.2',
+	apk: 'https://github.com/Michael-Obele/Ikoro/releases/download/v0.3.2/Ikoro-v0.3.2.apk',
+	aab: 'https://github.com/Michael-Obele/Ikoro/releases/download/v0.3.2/Ikoro-v0.3.2.aab'
+} as const;
+
 /** The honest platform table. Nothing here promises a capability M8 did not observe. */
 export const platforms: Platform[] = [
 	{
 		id: 'android',
 		name: 'Android 8 and later',
-		status: 'unreleased',
+		status: 'released',
 		detail:
-			'Sideload an APK. The alarm is scheduled through Android itself, so it ' +
-			'arrives with Ikoro closed. Not on the Play Store in this version — sideloading ' +
-			'is how you install it.',
-		href: site.releases,
-		action: 'Releases page'
+			'Sideload the APK. The alarm is scheduled through Android itself with ' +
+			'setAlarmClock, so it arrives with Ikoro closed. Verified on a physical Pixel ' +
+			'with the app force-stopped. Not on the Play Store in this version — sideloading ' +
+			'is how you install it. The release also carries an AAB.',
+		href: androidAssets.tag,
+		action: 'v0.3.2 release'
 	},
 	{
 		id: 'linux-desktop',
 		name: 'Linux desktop',
-		status: 'building',
+		status: 'unreleased',
 		detail:
-			'The desktop build is the same interface with its own window. It has not been ' +
-			'built yet. Whether it can schedule a reminder while closed is decided when it ' +
-			'is, and this table will say whichever answer that turns out to be.'
+			'The desktop build is the same interface with its own window. On Linux, ' +
+			'reminders fire with the app closed through systemd user timers. Linux bundles ' +
+			'(.deb/.AppImage) ship from the next release onward — there is no file to ' +
+			'download yet.'
 	},
 	{
 		id: 'windows-macos',
@@ -135,9 +144,9 @@ export const platforms: Platform[] = [
 		status: 'unsupported',
 		detail:
 			'Ikoro runs, and reminders fire while it is running. Reminders that arrive ' +
-			'with the app closed are not supported on desktop in this version: the desktop ' +
-			'shell this project uses cannot schedule a notification — it shows one ' +
-			'immediately — so there is nothing honest to offer here yet.'
+			'with the app closed are not supported on Windows and macOS in this version: the ' +
+			'desktop shell this project uses cannot schedule a notification — it shows one ' +
+			'immediately. Linux is the exception, in the row above.'
 	},
 	{
 		id: 'browser',
@@ -151,9 +160,10 @@ export const platforms: Platform[] = [
 
 /** The same table as the short version, for the home page. */
 export const limits: string[] = [
+	'Linux reminders fire with the app closed, through systemd timers.',
 	'Windows and macOS reminders only fire while Ikoro is running.',
 	'The browser build only reminds you while the tab is open.',
-	'No repeating tasks and no subtasks in this version.',
+	'No repeating tasks in this version. Subtasks ship one level deep.',
 	'No Play Store listing. Sideload the APK.',
 	'No sync yet. There is no server the app talks to.'
 ];
@@ -232,25 +242,29 @@ export interface Release {
 
 export const releases: Release[] = [
 	{
-		version: '0.1.0',
-		date: 'in progress',
+		version: '0.3.2',
+		date: '2026-10-28',
 		summary:
-			'The first version. Lists and tasks, three screens, Android alarms scheduled ' +
-			'by the operating system, and a JSON backup you can read without this project.',
+			'Lists and tasks, Android alarms verified on device, Linux desktop alarms that ' +
+			'fire with the app closed, subtasks one level deep, and a theme picker with ' +
+			'previews. Linux bundles ship from the next release onward.',
 		included: [
 			'Lists: create, rename, reorder, delete',
-			'Tasks: title, note, date, time, priority, subtask field reserved but unused',
+			'Tasks: title, note, date, time, priority, subtasks one level deep, per-task color',
 			'Today, Upcoming, Lists and Done screens',
-			'Android exact alarms, scheduled with the operating system, not by the app',
+			'Android exact alarms with setAlarmClock, verified on device with the app closed',
+			'Linux desktop alarms through systemd user timers, firing with the app closed',
 			'A banner that appears when notification or exact-alarm permission is missing',
-			'Reminders rescheduled when the app comes back to the foreground',
-			'JSON export and import of every list and task'
+			'Reminders rescheduled when the app comes back to the foreground, re-armed on boot',
+			'JSON export and import of every list and task, including color and parentId',
+			'Theme picker with miniature previews'
 		],
 		notIncluded: [
-			'No desktop shell, so no Windows or macOS build',
+			'No Play Store listing — sideload the APK',
+			'No desktop download in this version — Linux .deb/.AppImage ship next',
+			'No closed-app reminders on Windows and macOS; they fire while the app runs',
 			'No sync, and no account',
-			'No repeating tasks and no subtasks',
-			'No Play Store listing',
+			'No repeating tasks',
 			'No iOS build'
 		]
 	}

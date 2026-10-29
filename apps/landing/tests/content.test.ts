@@ -8,7 +8,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { limits, platforms, privacy, releases, routes, site, views } from '#lib/content';
+import { androidAssets, limits, platforms, privacy, releaseNotice, releases, routes, site, views } from '#lib/content';
 
 const SRC = resolve(import.meta.dirname, '../src');
 
@@ -42,12 +42,41 @@ describe('the platform table', () => {
 		);
 	});
 
-	// The one test that must be edited rather than deleted when v0.1.0 ships.
-	it('claims nothing is downloadable until a release exists', () => {
+	// v0.3.2 shipped Android: exactly one platform claims a published build,
+	// and the notice says what is published instead of saying nothing is.
+	it('claims a download only where a release exists', () => {
+		const released = platforms.filter((p) => p.status === 'released');
+		expect(released.map((p) => p.id), 'only Android has a published build').toEqual(['android']);
+		expect(releaseNotice, 'the notice must name the published version').toContain(site.version);
+		expect(releaseNotice.toLowerCase(), 'the notice must admit the Play Store gap').toContain(
+			'play store'
+		);
+	});
+
+	it('links the real published files, and nothing that does not exist', () => {
+		for (const url of [androidAssets.apk, androidAssets.aab, androidAssets.tag]) {
+			expect(url).toContain(`v${site.version}`);
+		}
+		expect(androidAssets.apk.endsWith('.apk')).toBe(true);
+		expect(androidAssets.aab.endsWith('.aab')).toBe(true);
+		for (const [, text] of sources) {
+			expect(text, 'no dead desktop download').not.toMatch(/href="[^"]*\.(deb|appimage)/i);
+		}
+	});
+
+	it('states the Linux / Windows-macOS alarm split', () => {
+		const linux = platforms.find((p) => p.id === 'linux-desktop');
+		const other = platforms.find((p) => p.id === 'windows-macos');
+		expect(linux?.detail.toLowerCase()).toContain('systemd');
+		expect(linux?.detail.toLowerCase()).toContain('closed');
+		expect(other?.detail.toLowerCase()).toContain('windows and macos');
 		expect(
-			platforms.some((p) => p.status === 'released'),
-			'a platform is marked released — update this test deliberately, and delete the release notice'
-		).toBe(false);
+			limits.some(
+				(limit) =>
+					limit.toLowerCase().includes('linux') && limit.toLowerCase().includes('closed')
+			),
+			'the home-page limits must admit the Linux split'
+		).toBe(true);
 	});
 
 	it('never offers an action it has no target for', () => {

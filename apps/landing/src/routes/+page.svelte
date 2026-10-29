@@ -66,7 +66,7 @@
 		     assistive technology announce it as an urgent live update. -->
 		<Alert role="note" class="mt-12">
 			<CircleAlert aria-hidden="true" />
-			<AlertTitle>Nothing to download yet</AlertTitle>
+			<AlertTitle>v{site.version} is out</AlertTitle>
 			<AlertDescription>{releaseNotice}</AlertDescription>
 		</Alert>
 	</div>

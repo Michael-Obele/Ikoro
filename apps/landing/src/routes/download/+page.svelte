@@ -10,10 +10,11 @@
 	import { CircleAlert, Download } from '@lucide/svelte';
 	import PlatformTable from '$lib/components/PlatformTable.svelte';
 	import Section from '$lib/components/Section.svelte';
-	import { platforms, releaseNotice, site } from '$lib/content';
+	import { androidAssets, platforms, releaseNotice, site } from '$lib/content';
 
 	/** The steps are only worth printing while there is something to install. */
 	const android = platforms.find((p) => p.id === 'android');
+	const linux = platforms.find((p) => p.id === 'linux-desktop');
 </script>
 
 <svelte:head>
@@ -38,9 +39,26 @@
 	<div class="mx-auto w-full max-w-5xl px-4 sm:px-6 lg:px-8">
 		<Alert role="note">
 			<CircleAlert aria-hidden="true" />
-			<AlertTitle>Nothing to download yet</AlertTitle>
+			<AlertTitle>v{site.version} is out</AlertTitle>
 			<AlertDescription>{releaseNotice}</AlertDescription>
 		</Alert>
+
+		<div class="mt-10 flex flex-wrap gap-3">
+			<Button href={androidAssets.apk} class="gap-2">
+				<Download class="size-4" aria-hidden="true" />
+				Ikoro v{site.version} APK
+			</Button>
+			<Button href={androidAssets.aab} variant="outline" class="gap-2">
+				<Download class="size-4" aria-hidden="true" />
+				Ikoro v{site.version} AAB
+			</Button>
+		</div>
+
+		{#if linux}
+			<p class="mt-6 max-w-3xl text-sm text-muted-foreground">
+				Linux: {linux.detail}
+			</p>
+		{/if}
 
 		<div class="mt-10">
 			<PlatformTable />
