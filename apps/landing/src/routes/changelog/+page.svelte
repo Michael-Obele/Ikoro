@@ -1,8 +1,23 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { Badge } from '$lib/components/ui';
+	import { Badge, Button } from '$lib/components/ui';
 	import Section from '$lib/components/Section.svelte';
-	import { isNewer, lagNotice, releases, site } from '$lib/content';
+	import {
+		changelogLimit,
+		formatReleaseDate,
+		isNewer,
+		lagNotice,
+		releases,
+		site
+	} from '$lib/content';
+
+	/**
+	 * The newest `changelogLimit` versions. The cap is a ceiling on how much
+	 * history this page has actually written up, not a claim that every release
+	 * has an entry — an entry is curated copy, and a version with none cannot be
+	 * invented into one.
+	 */
+	const shown = $derived(releases.slice(0, changelogLimit));
 
 	/**
 	 * When the live release is newer than the newest curated entry, the notes
@@ -10,7 +25,7 @@
 	 * the release. Never renders GitHub's auto-generated body.
 	 */
 	const lagging = $derived(
-		isNewer(page.data.release.version, releases[0].version) ? page.data.release : null
+		isNewer(page.data.release.version, shown[0].version) ? page.data.release : null
 	);
 </script>
 
@@ -26,6 +41,9 @@
 			Every entry lists what is missing as well as what is in it. A changelog that only lists the
 			good parts is marketing.
 		</p>
+		<p class="mt-3 font-mono text-xs tracking-widest text-muted-foreground uppercase">
+			{shown.length} of the newest {changelogLimit} versions
+		</p>
 		{#if lagging}
 			<p class="mt-4 max-w-2xl text-base">
 				{lagNotice(lagging.version)}
@@ -35,13 +53,13 @@
 	</div>
 </section>
 
-{#each releases as release, index (release.version)}
+{#each shown as release, index (release.version)}
+	<!--
+		No 01 / 02 / 03 markers: the version IS the order, and re-stating it as a
+		decorative index would encode nothing the reader did not already have.
+	-->
 	<Section id={index === 0 ? release.version : undefined} title="v{release.version}">
-		<div class="flex flex-wrap items-center gap-3">
-			<Badge variant={release.date === 'in progress' ? 'secondary' : 'default'}>
-				{release.date === 'in progress' ? 'Not released' : release.date}
-			</Badge>
-		</div>
+		<Badge variant="outline" class="font-mono">{formatReleaseDate(release.date)}</Badge>
 
 		<p class="mt-6 max-w-3xl text-base">{release.summary}</p>
 
@@ -72,3 +90,13 @@
 		</div>
 	</Section>
 {/each}
+
+<Section
+	title="Before that"
+	lede="The history starts at the first tagged build. Earlier work is in the commit log, unsorted and not written up."
+>
+	<div class="flex flex-wrap gap-3">
+		<Button href={site.releases} variant="outline">Every release on GitHub</Button>
+		<Button href={site.repo} variant="ghost">The commit log</Button>
+	</div>
+</Section>

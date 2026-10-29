@@ -9,16 +9,17 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+	changelogLimit,
 	isNewer,
 	limits,
 	platformRows,
 	privacy,
-	releaseNoticeFor,
+	releaseNotice,
 	releases,
 	routes,
 	views
 } from '#lib/content';
-import { deriveRelease } from '#lib/release';
+import { deriveRelease, parseLatestRelease, type ReleaseInfo } from '#lib/release';
 
 const SRC = resolve(import.meta.dirname, '../src');
 
@@ -39,6 +40,27 @@ function sourceFiles(dir: string): Array<[string, string]> {
 
 const sources = sourceFiles(SRC);
 
+/**
+ * A release that really exists, with all five files on it — the only shape
+ * that may claim a download. Sizes are the ones GitHub reported for v0.3.4.
+ */
+const COMPLETE_RELEASE = parseLatestRelease({
+	tag_name: `v${appPkg.version}`,
+	published_at: '2026-10-29T12:58:00Z',
+	html_url: 'https://github.com/Michael-Obele/Ikoro/releases/tag/v' + appPkg.version,
+	assets: [
+		{ name: 'Ikoro.aab', size: 3375468, browser_download_url: 'https://example.test/a.aab' },
+		{ name: 'Ikoro.apk', size: 3526226, browser_download_url: 'https://example.test/a.apk' },
+		{
+			name: 'Ikoro.AppImage',
+			size: 85862904,
+			browser_download_url: 'https://example.test/a.AppImage'
+		},
+		{ name: 'Ikoro.deb', size: 2173842, browser_download_url: 'https://example.test/a.deb' },
+		{ name: 'Ikoro.rpm', size: 2174515, browser_download_url: 'https://example.test/a.rpm' }
+	]
+}) as ReleaseInfo;
+
 describe('the platform table', () => {
 	it('gives every platform a status and an explanation', () => {
 		for (const platform of platformRows(deriveRelease(appPkg.version))) {
@@ -50,48 +72,71 @@ describe('the platform table', () => {
 		}
 	});
 
-	it('uses every status at most once, so a table cannot quietly say "everything works"', () => {
+	/**
+	 * The table is the site's honesty instrument, so its statuses must be facts
+	 * about the release rather than adjectives about the platform. An offline
+	 * build knows a version number and nothing else, so it releases nothing.
+	 */
+	it('releases nothing at all when the release could not be checked', () => {
 		const released = platformRows(deriveRelease(appPkg.version)).filter(
 			(p) => p.status === 'released'
 		);
-		expect(released.length, 'more than one platform claims a published build').toBeLessThanOrEqual(
-			1
-		);
+		expect(released.map((p) => p.id), 'no file was confirmed, so nothing is offered').toEqual([]);
 	});
 
-	// The derived release names the published build; the notice says what is
-	// published instead of saying nothing is.
-	it('claims a download only where a release exists', () => {
-		const rows = platformRows(deriveRelease(appPkg.version));
-		const released = rows.filter((p) => p.status === 'released');
+	it('releases exactly the platforms whose files the release carries', () => {
+		const released = platformRows(COMPLETE_RELEASE)
+			.filter((p) => p.status === 'released')
+			.map((p) => p.id);
+		expect(released).toEqual(['android', 'linux-desktop']);
+
+		// And a release that carries Android only releases Android only.
+		const androidOnly = parseLatestRelease({
+			tag_name: `v${appPkg.version}`,
+			published_at: '2026-10-29T12:58:00Z',
+			html_url: 'https://github.com/Michael-Obele/Ikoro/releases/tag/v' + appPkg.version,
+			assets: [{ name: 'Ikoro.apk', size: 1, browser_download_url: 'https://example.test/a.apk' }]
+		}) as ReleaseInfo;
 		expect(
-			released.map((p) => p.id),
-			'only Android has a published build'
+			platformRows(androidOnly)
+				.filter((p) => p.status === 'released')
+				.map((p) => p.id)
 		).toEqual(['android']);
-		const derivedNotice = releaseNoticeFor(deriveRelease(appPkg.version));
-		expect(derivedNotice, 'the notice must name the published version').toContain(
-			`v${appPkg.version}`
-		);
-		expect(derivedNotice.toLowerCase(), 'the notice must admit the Play Store gap').toContain(
+	});
+
+	it('keeps a platform that is not released in the table, so absence is never silence', () => {
+		const rows = platformRows(COMPLETE_RELEASE);
+		expect(rows).toHaveLength(4);
+		expect(rows.filter((p) => p.status === 'released').length).toBeLessThan(rows.length);
+	});
+
+	it('names the version in the notice, and the newer version in a newer notice', () => {
+		const derivedNotice = releaseNotice(deriveRelease(appPkg.version));
+		expect(derivedNotice.title).toContain(`v${appPkg.version}`);
+		const readyNotice = releaseNotice(COMPLETE_RELEASE);
+		expect(readyNotice.body).toContain(`v${appPkg.version}`);
+		expect(readyNotice.body.toLowerCase(), 'the notice must admit the Play Store gap').toContain(
 			'play store'
 		);
-		// A newer derivation names the newer version.
-		expect(releaseNoticeFor(deriveRelease('9.9.9'))).toContain('9.9.9');
+		expect(releaseNotice(deriveRelease('9.9.9')).title).toContain('9.9.9');
 	});
 
-	it('links the real published files, and nothing that does not exist', () => {
+	/**
+	 * The download page must never build a URL. Every link it renders comes out of
+	 * `release.assets`, which only ever holds what GitHub reported — a literal or
+	 * interpolated `.../releases/download/...` anywhere else is the 404 waiting to
+	 * happen again. (The one legal home for that string is release.ts, which
+	 * `tests/no-hardcoded-release.test.ts` exempts by name.)
+	 */
+	it('links the release page, never a guessed download URL', () => {
 		const derived = deriveRelease(appPkg.version);
-		for (const url of [derived.apkUrl, derived.aabUrl, derived.tagUrl]) {
-			expect(url).toContain(`v${appPkg.version}`);
+		for (const row of platformRows(derived)) {
+			if (row.href !== undefined) expect(row.href).toBe(derived.tagUrl);
 		}
 		const android = platformRows(derived).find((p) => p.id === 'android');
-		expect(android?.href).toBe(derived.tagUrl);
 		expect(android?.action).toBe(`v${appPkg.version} release`);
-		expect(derived.apkUrl.endsWith('.apk')).toBe(true);
-		expect(derived.aabUrl.endsWith('.aab')).toBe(true);
-		for (const [, text] of sources) {
-			expect(text, 'no dead desktop download').not.toMatch(/href="[^"]*\.(deb|appimage)/i);
-		}
+		// A derived release carries no file, so it can render no download button.
+		expect(Object.keys(derived.assets)).toEqual([]);
 	});
 
 	it('states the Linux / Windows-macOS alarm split', () => {
@@ -208,12 +253,33 @@ describe('the content itself', () => {
 		const android = platformRows(derived).find((p) => p.id === 'android');
 		expect(android?.href).toContain(`v${appPkg.version}`);
 		expect(android?.action).toContain(`v${appPkg.version}`);
-		expect(releaseNoticeFor(derived)).toContain(`v${appPkg.version}`);
+		expect(releaseNotice(derived).title).toContain(`v${appPkg.version}`);
 	});
 
 	it('keeps releases newest-first: the changelog lag-row logic reads releases[0]', () => {
 		for (let i = 0; i < releases.length - 1; i++) {
 			expect(isNewer(releases[i].version, releases[i + 1].version)).toBe(true);
+		}
+	});
+
+	/**
+	 * The changelog prints `releases.slice(0, changelogLimit)`, so a history
+	 * longer than the limit silently stops being reachable — and the last entry
+	 * would lose its "Before that" tail. Cap the curated history instead of the
+	 * render, and the two cannot drift apart.
+	 */
+	it('has a curated history no longer than the page will print', () => {
+		expect(releases.length).toBeLessThanOrEqual(changelogLimit);
+		expect(releases.length, 'a changelog with one entry is not a changelog').toBeGreaterThan(3);
+	});
+
+	it('gives every changelog entry a date, a summary and both lists', () => {
+		for (const release of releases) {
+			expect(release.date, release.version).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+			expect(release.summary.length, release.version).toBeGreaterThan(20);
+			// The page's own rule: a changelog that only lists the good parts is marketing.
+			expect(release.included.length, release.version).toBeGreaterThan(0);
+			expect(release.notIncluded.length, release.version).toBeGreaterThan(0);
 		}
 	});
 });

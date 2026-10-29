@@ -28,9 +28,9 @@ function sourceFiles(dir: string): Array<[string, string]> {
 }
 
 /**
- * release.ts is exempt: it holds the derivation patterns (tag + apk + aab URL
- * builders from repo identity + version), and that is their one legitimate
- * home. Every other src file must derive, never declare.
+ * release.ts is exempt: it holds the derivation patterns (the tag URL builder,
+ * the published-file extensions), and that is their one legitimate home. Every
+ * other src file must derive, never declare.
  */
 const sources = sourceFiles(SRC);
 

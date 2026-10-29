@@ -24,12 +24,20 @@
 		nameStory,
 		privacy,
 		promise,
-		releaseNoticeFor,
+		releaseNotice,
 		releases,
 		site,
 		taskShape,
 		views
 	} from '$lib/content';
+
+	/**
+	 * The release in the header, in words that match what the release actually
+	 * has. A tagged-but-still-building release says so here too — the home page
+	 * is the first place a download begins, so it cannot be the one page that
+	 * claims a file exists before it does.
+	 */
+	const notice = $derived(releaseNotice(page.data.release));
 </script>
 
 <svelte:head>
@@ -68,8 +76,8 @@
 		     assistive technology announce it as an urgent live update. -->
 		<Alert role="note" class="mt-12">
 			<CircleAlert aria-hidden="true" />
-			<AlertTitle>v{page.data.release.version} is out</AlertTitle>
-			<AlertDescription>{releaseNoticeFor(page.data.release)}</AlertDescription>
+			<AlertTitle>{notice.title}</AlertTitle>
+			<AlertDescription>{notice.body}</AlertDescription>
 		</Alert>
 	</div>
 </section>
