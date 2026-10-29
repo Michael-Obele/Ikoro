@@ -18,6 +18,13 @@ export interface AlarmRequest {
 	taskId: string;
 	title: string;
 	at: string; // ISO 8601, absolute
+	/**
+	 * The sound to ring with — a `content://` uri the user picked in the system
+	 * ringtone picker, or null/absent for the device default. Device-scoped by
+	 * nature (a media uri means nothing on another phone), so it never reaches
+	 * the export file; the task row carries it for THIS device.
+	 */
+	ringtone?: string | null;
 }
 
 export interface AlarmPermissionStatus {

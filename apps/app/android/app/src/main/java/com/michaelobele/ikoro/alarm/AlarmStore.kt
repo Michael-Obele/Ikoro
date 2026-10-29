@@ -22,7 +22,14 @@ internal data class StoredAlarm(
     val id: Int,
     val taskId: String,
     val title: String,
-    val triggerAtMillis: Long
+    val triggerAtMillis: Long,
+    /**
+     * The sound this alarm should ring with, as a `content://` uri the user
+     * picked in the system ringtone picker, or null for "the device default".
+     * Read back with `optString` and mapped to null when absent, so blobs
+     * written before ringtones existed still parse.
+     */
+    val ringtone: String? = null
 )
 
 internal object AlarmStore {
@@ -48,6 +55,7 @@ internal object AlarmStore {
     private const val KEY_TASK_ID = "taskId"
     private const val KEY_TITLE = "title"
     private const val KEY_TRIGGER = "triggerAtMillis"
+    private const val KEY_RINGTONE = "ringtone"
 
     /**
      * Always the application context: a store must never be the thing that keeps an
@@ -170,7 +178,8 @@ internal object AlarmStore {
                         id = entry.optInt(KEY_ID, 0),
                         taskId = taskId,
                         title = entry.optString(KEY_TITLE, ""),
-                        triggerAtMillis = entry.optLong(KEY_TRIGGER, 0L)
+                        triggerAtMillis = entry.optLong(KEY_TRIGGER, 0L),
+                        ringtone = entry.optString(KEY_RINGTONE, "").ifEmpty { null }
                     )
                 )
             }
@@ -190,6 +199,9 @@ internal object AlarmStore {
                     put(KEY_TASK_ID, alarm.taskId)
                     put(KEY_TITLE, alarm.title)
                     put(KEY_TRIGGER, alarm.triggerAtMillis)
+                    // Omitted entirely when null: an older app reading this blob
+                    // still parses it, and "no key" is the same fact as "null".
+                    alarm.ringtone?.let { put(KEY_RINGTONE, it) }
                 }
             )
         }

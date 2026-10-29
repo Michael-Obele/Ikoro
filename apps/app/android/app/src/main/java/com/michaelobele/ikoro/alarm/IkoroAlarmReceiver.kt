@@ -44,6 +44,8 @@ class IkoroAlarmReceiver : BroadcastReceiver() {
             putExtra(IkoroAlarms.EXTRA_TASK_ID, taskId)
             putExtra(IkoroAlarms.EXTRA_TITLE, title)
             putExtra(IkoroAlarms.EXTRA_TRIGGER, intent.getLongExtra(IkoroAlarms.EXTRA_TRIGGER, 0L))
+            intent.getStringExtra(IkoroAlarms.EXTRA_RINGTONE)
+                ?.let { putExtra(IkoroAlarms.EXTRA_RINGTONE, it) }
         }
 
         try {

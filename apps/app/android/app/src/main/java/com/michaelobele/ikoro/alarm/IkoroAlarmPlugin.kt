@@ -1,19 +1,24 @@
 package com.michaelobele.ikoro.alarm
 
 import android.Manifest
+import android.app.Activity
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
+import androidx.activity.result.ActivityResult
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.PermissionState
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
+import com.getcapacitor.annotation.ActivityCallback
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
@@ -89,6 +94,8 @@ class IkoroAlarmPlugin : Plugin() {
         val taskId = call.getString("taskId")
         val at = call.getString("at")
         val title = call.getString("title").orEmpty()
+        // Optional. Absent or blank means "the device default alarm sound".
+        val ringtone = call.getString("ringtone")?.takeIf { it.isNotBlank() }
 
         if (id == null || taskId.isNullOrEmpty() || at.isNullOrEmpty()) {
             call.reject("schedule requires id, taskId and at")
@@ -116,7 +123,7 @@ class IkoroAlarmPlugin : Plugin() {
             return
         }
 
-        if (!IkoroAlarms.schedule(context, id, taskId, title, triggerAtMillis)) {
+        if (!IkoroAlarms.schedule(context, id, taskId, title, triggerAtMillis, ringtone)) {
             call.reject("could not arm the alarm: exact alarm permission was refused")
             return
         }
@@ -319,6 +326,151 @@ class IkoroAlarmPlugin : Plugin() {
         } catch (error: Exception) {
             Log.w(TAG, "could not open the full-screen intent settings screen", error)
             call.reject("could not open the full-screen intent settings screen")
+        }
+    }
+
+    // ------------------------------------------------------------ pickRingtone
+
+    /**
+     * Hand the user the SYSTEM ringtone picker and report what they chose.
+     *
+     *   in  { existing?: string }     // the uri to pre-check, if any
+     *   out { cancelled: boolean, uri: string | null }
+     *
+     * The platform's own picker, launched with ACTION_RINGTONE_PICKER, rather
+     * than a list built in the web view: it already lists every sound the device
+     * offers, previews each one on tap, survives OEM customisations, and costs
+     * zero UI code here. `uri` is null ONLY when the user picked Silent;
+     * cancelled=true means they backed out and the caller keeps what it had.
+     */
+    @PluginMethod
+    fun pickRingtone(call: PluginCall) {
+        val existing = call.getString("existing")?.takeIf { it.isNotBlank() }?.let(Uri::parse)
+
+        val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+            // ALARM, not RINGTONE: this sound loops on the alarm stream, so the
+            // list should be the sounds meant for alarms.
+            putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true)
+            putExtra(
+                RingtoneManager.EXTRA_RINGTONE_DEFAULT_URI,
+                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+            )
+            existing?.let { putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, it) }
+            putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Reminder sound")
+        }
+
+        try {
+            startActivityForResult(call, intent, "ringtonePicked")
+        } catch (error: Exception) {
+            Log.w(TAG, "could not open the ringtone picker", error)
+            call.reject("could not open the ringtone picker")
+        }
+    }
+
+    /**
+     * The picker's answer, delivered by Capacitor's activity-result machinery
+     * (the `@ActivityCallback` name-matched path — the pre-3.0
+     * `handleOnActivityResult` override no longer exists in Capacitor 8).
+     *
+     * Backing out is NOT picking Silent: the picker yields no uri for both, and
+     * conflating them would wipe the user's sound every time they closed it by
+     * mistake.
+     */
+    @ActivityCallback
+    private fun ringtonePicked(call: PluginCall, result: ActivityResult) {
+        val data = result.data
+        if (result.resultCode != Activity.RESULT_OK || data == null) {
+            call.resolve(JSObject().put("cancelled", true).put("uri", null as String?))
+            return
+        }
+        val uri: Uri? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            data.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI, Uri::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            data.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+        }
+        // A null uri here with RESULT_OK means the user picked Silent.
+        call.resolve(JSObject().put("cancelled", false).put("uri", uri?.toString()))
+    }
+
+    // ----------------------------------------------------------- ringtoneTitle
+
+    /**
+     * The display name of a picked sound, for showing "Bells" instead of a
+     * content:// uri in the UI.
+     *
+     *   in  { uri: string }
+     *   out { title: string | null }
+     */
+    @PluginMethod
+    fun ringtoneTitle(call: PluginCall) {
+        val uri = call.getString("uri")?.let(Uri::parse)
+        val title = uri?.let { RingtoneManager.getRingtone(context, it)?.getTitle(context) }
+        call.resolve(JSObject().put("title", title))
+    }
+
+    // --------------------------------------------------------- getBatteryStatus
+
+    /**
+     * The two facts that decide whether an alarm can be trusted on this device
+     * RIGHT NOW.
+     *
+     *   in  {}
+     *   out { powerSaveMode: boolean, ignoringBatteryOptimizations: boolean }
+     */
+    @PluginMethod
+    fun getBatteryStatus(call: PluginCall) {
+        val power = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+        call.resolve(
+            JSObject()
+                .put("powerSaveMode", power.isPowerSaveMode)
+                .put("ignoringBatteryOptimizations", power.isIgnoringBatteryOptimizations(context.packageName))
+        )
+    }
+
+    // --------------------------------------------- requestIgnoreBatteryOptimizations
+
+    /**
+     * Show the system dialog that puts Ikoro on the battery-optimisation
+     * allowlist. Returns {}.
+     */
+    @PluginMethod
+    fun requestIgnoreBatteryOptimizations(call: PluginCall) {
+        try {
+            context.startActivity(
+                Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = Uri.parse("package:" + context.packageName)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            )
+            call.resolve(JSObject())
+        } catch (error: Exception) {
+            Log.w(TAG, "could not open the battery exemption dialog", error)
+            call.reject("could not open the battery exemption dialog")
+        }
+    }
+
+    // --------------------------------------------------- openBatterySaverSettings
+
+    /**
+     * Open the system battery-saver screen. Returns {}. Battery saver itself
+     * cannot be switched off by an app -- pointing the user at the screen that
+     * can is the honest version of "turn it off".
+     */
+    @PluginMethod
+    fun openBatterySaverSettings(call: PluginCall) {
+        try {
+            context.startActivity(
+                Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            )
+            call.resolve(JSObject())
+        } catch (error: Exception) {
+            Log.w(TAG, "could not open battery saver settings", error)
+            call.reject("could not open battery saver settings")
         }
     }
 

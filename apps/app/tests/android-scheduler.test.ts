@@ -66,9 +66,23 @@ describe('schedule', () => {
 			id: hashId('task-1'),
 			taskId: 'task-1',
 			title: 'Call the dentist',
-			at: FUTURE
+			at: FUTURE,
+			ringtone: null
 		});
 		expect(outcome).toEqual({ ok: true, platformId: String(hashId('task-1')), exact: true });
+	});
+
+	it("passes the task's ringtone through to the native plugin", async () => {
+		await new AndroidScheduler().schedule({
+			taskId: 'task-1',
+			title: 'x',
+			at: FUTURE,
+			ringtone: 'content://media/external/audio/media/7'
+		});
+
+		expect(plugin.schedule.mock.calls[0][0].ringtone).toBe(
+			'content://media/external/audio/media/7'
+		);
 	});
 
 	it('derives the same id every time, so re-arming never duplicates an alarm', async () => {

@@ -54,6 +54,16 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!--
+      REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+                            lets the battery-saver banner show the system dialog
+                            that puts Ikoro on the power allowlist. setAlarmClock
+                            alarms are already Doze-exempt, but a device in
+                            battery saver can still delay everything it can, and
+                            the allowlist is the user's own switch against that.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"

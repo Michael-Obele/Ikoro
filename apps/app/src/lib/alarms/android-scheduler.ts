@@ -129,7 +129,8 @@ export class AndroidScheduler implements AlarmScheduler {
 				id: platformId,
 				taskId: alarm.taskId,
 				title: alarm.title,
-				at: alarm.at
+				at: alarm.at,
+				ringtone: alarm.ringtone ?? null
 			});
 			return { ok: true, platformId: String(platformId), exact: true };
 		} catch (error) {

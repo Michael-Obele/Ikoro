@@ -224,16 +224,25 @@ const round = (value: number): string => {
 };
 
 /**
- * `#rrggbb` -> `oklch(L C H)` in the stylesheet's own format.
+ * OKLCH components -> the stylesheet's own `oklch(L C H)` string.
  *
  * A near-grey has an arbitrary hue (atan2 of two tiny numbers), so its hue is
  * written as 0 rather than as noise that changes between two identical greys.
  * Chroma below 0.0005 is the threshold: at that point the hue is not visible.
+ * Every oklch string this module emits goes through here — the direct
+ * conversion and the interpolation below — so the format is one definition.
+ */
+function formatOklch(L: number, C: number, h: number): string {
+	const hue = C < 0.0005 ? 0 : h;
+	return `oklch(${round(L)} ${round(C)} ${round(hue)})`;
+}
+
+/**
+ * `#rrggbb` -> `oklch(L C H)` in the stylesheet's own format.
  */
 export function hexToOklch(hex: string): string {
 	const { L, C, h } = rgbToOklch(hexToRgb(hex));
-	const hue = C < 0.0005 ? 0 : h;
-	return `oklch(${round(L)} ${round(C)} ${round(hue)})`;
+	return formatOklch(L, C, h);
 }
 
 /* ------------------------------------------------------------------ *
@@ -241,18 +250,30 @@ export function hexToOklch(hex: string): string {
  * ------------------------------------------------------------------ */
 
 /**
- * Look up one tone, falling back to the nearest tone that IS present.
+ * Look up one tone, interpolating between the two that bracket it when the
+ * palette does not carry it exactly.
  *
- * Android 12+ always supplies all thirteen tones, so the fallback is for the
- * cases that are not the spec: an OEM build missing a resource (the Kotlin side
- * skips it), or a caller passing a hand-made palette in a test. Falling back to
- * the nearest tone keeps the scheme coherent; falling back to black would put a
- * colour the user never chose on screen.
+ * THE COARSE GRID IS THE WHOLE PROBLEM THIS SOLVES. Android publishes only
+ * thirteen tones per palette — 0, 10, 50, 100..1000 (verified against the
+ * `R.color.system_accent1_*` reference) — but the M3 role table asks for fine
+ * tones like 4, 12, 17, 22, 30, 40, 92..99. The old "nearest tone" fallback
+ * snapped each of those onto the coarse grid: in dark mode every container tone
+ * (4, 12, 17, 22) landed on 10 — the same tone as `surface` itself — and
+ * `outline-variant` (30, which draws every input border) snapped to 10 too. The
+ * scheme went flat and its control boundaries disappeared, which is what made
+ * the dynamic scheme unreadable on a real device while the synthetic unit-test
+ * fixture (which carried every wanted tone) stayed green.
+ *
+ * So: an exact hit is returned verbatim; otherwise the value is interpolated in
+ * OKLCH between the two bracketing tones. Linear in L keeps the tone ladder
+ * monotonic; hue takes the short way round. A wanted tone outside the palette
+ * clamps to the nearest end, which is the honest answer for an OEM that dropped
+ * a resource — a real colour from this palette, never an invented one.
  */
-function tone(palette: TonalPalette | undefined, wanted: number): string | null {
+function toneOklch(palette: TonalPalette | undefined, wanted: number): string | null {
 	if (!palette) return null;
 	const exact = palette[String(wanted)];
-	if (exact) return exact;
+	if (exact) return hexToOklch(exact);
 
 	const available = Object.keys(palette)
 		.map(Number)
@@ -260,11 +281,43 @@ function tone(palette: TonalPalette | undefined, wanted: number): string | null 
 		.sort((a, b) => a - b);
 	if (available.length === 0) return null;
 
-	let best = available[0];
-	for (const candidate of available) {
-		if (Math.abs(candidate - wanted) < Math.abs(best - wanted)) best = candidate;
+	const nearest = (target: number): number => {
+		let best = available[0] as number;
+		for (const candidate of available) {
+			if (Math.abs(candidate - target) < Math.abs(best - target)) best = candidate;
+		}
+		return best;
+	};
+
+	const first = available[0] as number;
+	if (wanted <= first) return hexToOklch(palette[String(first)]!);
+	const last = available[available.length - 1] as number;
+	if (wanted >= last) return hexToOklch(palette[String(last)]!);
+
+	// The two bracketing tones: the last one below `wanted`, the first above it.
+	const low = nearestBelow(available, wanted) ?? nearest(wanted);
+	const high = available.find((t) => t > low) ?? last;
+
+	const a = rgbToOklch(hexToRgb(palette[String(low)]!));
+	const b = rgbToOklch(hexToRgb(palette[String(high)]!));
+	const t = (wanted - low) / (high - low);
+
+	// Hue takes the short arc: 350° -> 10° must pass through 0, not through 180.
+	let dh = b.h - a.h;
+	if (dh > 180) dh -= 360;
+	if (dh < -180) dh += 360;
+	let h = a.h + dh * t;
+	if (h < 0) h += 360;
+
+	return formatOklch(a.L + (b.L - a.L) * t, a.C + (b.C - a.C) * t, h);
+}
+
+function nearestBelow(available: number[], wanted: number): number | null {
+	let best: number | null = null;
+	for (const tone of available) {
+		if (tone < wanted && (best === null || tone > best)) best = tone;
 	}
-	return palette[String(best)] ?? null;
+	return best;
 }
 
 /**
@@ -280,8 +333,8 @@ function buildScheme(palettes: Palettes, scheme: 'light' | 'dark'): TokenMap {
 
 	for (const spec of ROLES) {
 		const [paletteName, wanted] = spec[scheme];
-		const hex = tone(palettes[paletteName], wanted);
-		if (hex) roles[spec.role] = hexToOklch(hex);
+		const value = toneOklch(palettes[paletteName], wanted);
+		if (value) roles[spec.role] = value;
 	}
 
 	// Error is fixed, not wallpaper-derived.

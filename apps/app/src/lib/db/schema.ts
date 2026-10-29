@@ -51,6 +51,17 @@ export interface Task {
 	 * version 1. Null is the explicit "no colour" state.
 	 */
 	color?: string | null;
+	/**
+	 * This device's sound for this task's alarm: the `content://` uri the system
+	 * ringtone picker returned, or null/absent for "the global default". OPTIONAL
+	 * for the same reason `color` is — no version bump, no index.
+	 *
+	 * DEVICE-SCOPED, like `alarmId`: a media uri from this phone's media store
+	 * means nothing on another device, so it never reaches the export file (the
+	 * backup schema is an allow-list that does not carry it). The Kotlin alarm
+	 * store is what actually needs it at fire time, copied in at arm time.
+	 */
+	ringtone?: string | null;
 	sortOrder: number;
 	createdAt: string;
 	updatedAt: string;
@@ -74,6 +85,8 @@ export interface TaskInput {
 	alarmAt?: string | null;
 	/** Optional task colour — see the comment on `Task.color`. */
 	color?: string | null;
+	/** Optional per-task alarm sound — see the comment on `Task.ringtone`. */
+	ringtone?: string | null;
 	sortOrder?: number;
 }
 

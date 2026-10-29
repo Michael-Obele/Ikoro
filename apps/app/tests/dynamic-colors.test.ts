@@ -246,6 +246,83 @@ describe('hexToOklch', () => {
 	});
 });
 
+describe('buildMonetSchemes — the REAL Android tone grid', () => {
+	/**
+	 * THE GRID ANDROID ACTUALLY PUBLISHES — 0, 10, 50, 100..1000, verified against
+	 * the `R.color.system_accent1_*` reference. None of the M3 role table's fine
+	 * tones (4, 12, 17, 22, 30, 40, 92..99) exist on it.
+	 *
+	 * The synthetic fixture above deliberately carries every wanted tone so the
+	 * mapping itself can be asserted exactly; this one deliberately does NOT, so
+	 * the fallback path is exercised the way a real device exercises it. The bug
+	 * this guards: the old nearest-tone snap put dark surface, every dark
+	 * container (4/12/17/22) and outline-variant (30, which draws every input
+	 * border) on the SAME tone 10 — the scheme went flat and its boundaries
+	 * vanished, which is what "dark mode is unreadable with material colour" was.
+	 */
+	const REAL_TONES = [0, 10, 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
+	const REAL: Palettes = {
+		accent1: palette('a1', REAL_TONES),
+		accent2: palette('a2', REAL_TONES),
+		accent3: palette('a3', REAL_TONES),
+		neutral1: palette('b1', REAL_TONES),
+		neutral2: palette('b2', REAL_TONES)
+	};
+	const real = buildMonetSchemes(REAL);
+
+	/** OKLCH lightness out of a token string, for ordering assertions. */
+	const L = (token: string | undefined): number => Number(token?.split(' ')[0]?.slice(6));
+
+	it('keeps the dark container ladder strictly ordered instead of collapsing to tone 10', () => {
+		const ladder = [
+			real.dark['--md-sys-color-surface-container-lowest'], // tone 4, between 0 and 10
+			real.dark['--md-sys-color-surface-container'], //       tone 12, between 10 and 50
+			real.dark['--md-sys-color-surface-container-high'], //  tone 17
+			real.dark['--md-sys-color-surface-container-highest'] // tone 22
+		].map(L);
+		for (let i = 1; i < ladder.length; i++) {
+			expect(ladder[i] as number, `ladder step ${i}`).toBeGreaterThan(ladder[i - 1] as number);
+		}
+		// …and the page surface itself is no longer painted over by its containers:
+		// card (tone 12) must be a different colour from surface (tone 10).
+		expect(real.dark['--card']).not.toBe(real.dark['--background']);
+		expect(real.dark['--muted']).not.toBe(real.dark['--background']);
+		expect(real.light['--card']).not.toBe(real.light['--background']);
+	});
+
+	it('keeps dark outline-variant (every input border) off the surface tone', () => {
+		// Tone 30 used to snap to 10: borders matched the page and controls lost
+		// their boundaries. It must now sit strictly between tone 10 and tone 50.
+		const border = L(real.dark['--border']);
+		expect(border).toBeGreaterThan(L(hexToOklch(REAL.neutral1!['10']!)));
+		expect(border).toBeLessThan(L(hexToOklch(REAL.neutral2!['50']!)));
+		expect(real.dark['--border']).not.toBe(real.dark['--background']);
+		expect(real.light['--border']).not.toBe(real.light['--background']);
+	});
+
+	it('returns available tones verbatim — interpolation never touches an exact hit', () => {
+		// On the real grid the exact tones a role can land on are 0, 10, 50 and 100;
+		// everything else (80, 90, 99, …) is interpolated and asserted below.
+		expect(real.dark['--md-sys-color-surface']).toBe(hexToOklch(REAL.neutral1!['10']!));
+		expect(real.light['--md-sys-color-on-surface']).toBe(hexToOklch(REAL.neutral1!['10']!));
+		expect(real.light['--md-sys-color-scrim']).toBe(hexToOklch(REAL.neutral1!['0']!));
+		// Light surface is tone 99, which the real grid does NOT carry: it must
+		// interpolate between 50 and 100 rather than snap to either end.
+		const surface = L(real.light['--md-sys-color-surface']);
+		expect(surface).toBeGreaterThan(L(hexToOklch(REAL.neutral1!['50']!)));
+		expect(surface).toBeLessThan(L(hexToOklch(REAL.neutral1!['100']!)));
+	});
+
+	it('still emits every alias its role has, so no token goes half-populated', () => {
+		for (const scheme of ['light', 'dark'] as const) {
+			expect(real[scheme]['--background']).toBeDefined();
+			expect(real[scheme]['--foreground']).toBeDefined();
+			expect(real[scheme]['--border']).toBeDefined();
+			expect(real[scheme]['--input']).toBeDefined();
+		}
+	});
+});
+
 describe('applyTokens / clearTokens', () => {
 	/** A stand-in for `document.documentElement` — the node is not what is under test. */
 	function fakeRoot() {

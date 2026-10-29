@@ -8,6 +8,7 @@
 	 */
 	import AlarmHealth from '$lib/components/ui/AlarmHealth.svelte';
 	import Backup from '$lib/components/ui/Backup.svelte';
+	import RingtoneSetting from '$lib/components/ui/RingtoneSetting.svelte';
 	import SyncPanel from '$lib/components/ui/SyncPanel.svelte';
 	import ThemeToggle from '$lib/components/theme/ThemeToggle.svelte';
 	import ThemeSchemePicker from '$lib/components/theme/ThemeSchemePicker.svelte';
@@ -47,7 +48,10 @@
 
 		<section>
 			<h2 class="mb-1 text-sm font-medium">Notifications</h2>
-			<AlarmHealth />
+			<div class="grid gap-3">
+				<RingtoneSetting />
+				<AlarmHealth />
+			</div>
 		</section>
 
 		<section>

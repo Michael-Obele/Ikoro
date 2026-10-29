@@ -9,6 +9,7 @@ import android.content.Intent
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
@@ -38,6 +39,14 @@ class IkoroAlarmService : Service() {
     private var player: MediaPlayer? = null
     private var vibrator: Vibrator? = null
 
+    /**
+     * The sound the CURRENT ring was armed with, kept across the service's
+     * actions so Snooze re-arms with the same ringtone. The snooze intent comes
+     * from the ringing screen, which knows nothing about uri strings -- this
+     * field is what carries the fact from the ring that just happened.
+     */
+    private var ringtone: String? = null
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -53,6 +62,7 @@ class IkoroAlarmService : Service() {
         val id = intent.getIntExtra(IkoroAlarms.EXTRA_ID, -1)
         val taskId = intent.getStringExtra(IkoroAlarms.EXTRA_TASK_ID).orEmpty()
         val title = intent.getStringExtra(IkoroAlarms.EXTRA_TITLE).orEmpty()
+        ringtone = intent.getStringExtra(IkoroAlarms.EXTRA_RINGTONE)
 
         when (intent.action) {
             ACTION_DISMISS -> {
@@ -65,7 +75,7 @@ class IkoroAlarmService : Service() {
                 // Re-arm BEFORE stopping the ring, so a failure to re-arm still
                 // leaves the user with silence rather than a ringing phone they
                 // have already answered.
-                IkoroAlarms.snooze(this, id, taskId, title)
+                IkoroAlarms.snooze(this, id, taskId, title, ringtone)
                 IkoroAlarmPlugin.notifyAlarmEvent(taskId, IkoroAlarmPlugin.EVENT_SNOOZED)
                 stopRinging()
                 return START_NOT_STICKY
@@ -89,7 +99,6 @@ class IkoroAlarmService : Service() {
         // second ringtone on top of the first -- two players at once is louder,
         // and neither of them is independently stoppable.
         releasePlayer()
-
         ensureChannel()
 
         val alarmIntent = Intent(this, IkoroAlarmActivity::class.java).apply {
@@ -181,38 +190,59 @@ class IkoroAlarmService : Service() {
      * stream a silent-ringer user has already turned down. It is the correct
      * stream for this and the only one an alarm may use.
      *
+     * The task's CHOSEN sound is tried first, then the device default. A picked
+     * uri can go stale (a downloaded sound the user deleted, an OEM that moved
+     * its media), and an alarm that cannot read its sound must still ring with
+     * something: silence is the one outcome this product cannot afford.
+     *
      * Everything is wrapped: a device with no alarm sound configured must produce
      * a screen and a vibration, not a crash in the middle of the night.
      */
     private fun startPlayer() {
-        val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+        val fallback = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
             ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-        if (uri == null) {
+
+        val candidates = buildList {
+            ringtone?.let { add(Uri.parse(it)) }
+            fallback?.let { add(it) }
+        }
+
+        if (candidates.isEmpty()) {
             Log.w(TAG, "no alarm or ringtone sound configured; ringing silently")
             return
         }
 
-        val created = MediaPlayer()
-        try {
-            created.setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ALARM)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build()
-            )
-            created.setDataSource(this, uri)
-            created.isLooping = true
-            // Without the wake lock the ringtone stops the moment the screen sleeps,
-            // which is exactly the state an alarm fires in.
-            created.setWakeMode(this, PowerManager.PARTIAL_WAKE_LOCK)
-            created.prepare()
-            created.start()
-            player = created
-        } catch (error: Exception) {
-            Log.e(TAG, "could not play the alarm ringtone; the alarm still shows", error)
-            // Release the half-configured player rather than leaking it: it was
-            // never assigned to the field, so nothing else can clean it up.
-            created.release()
+        for ((index, uri) in candidates.withIndex()) {
+            // Created OUTSIDE the try: the catch releases it, and a val declared
+            // inside the try is not in scope there.
+            val created = MediaPlayer()
+            try {
+                created.setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+                created.setDataSource(this, uri)
+                created.isLooping = true
+                // Without the wake lock the ringtone stops the moment the screen sleeps,
+                // which is exactly the state an alarm fires in.
+                created.setWakeMode(this, PowerManager.PARTIAL_WAKE_LOCK)
+                created.prepare()
+                created.start()
+                player = created
+                return
+            } catch (error: Exception) {
+                val which = if (index == 0 && candidates.size > 1) "the chosen" else "the default"
+                Log.w(TAG, "could not play $which alarm ringtone; ${if (index == 0) "falling back" else "the alarm still shows"}", error)
+                // Release the half-configured player rather than leaking it: it was
+                // never assigned to the field, so nothing else can clean it up.
+                try {
+                    created.release()
+                } catch (releaseError: Exception) {
+                    Log.w(TAG, "could not release the failed ringtone player", releaseError)
+                }
+            }
         }
     }
 

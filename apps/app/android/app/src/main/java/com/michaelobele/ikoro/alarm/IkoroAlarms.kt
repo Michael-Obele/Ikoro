@@ -27,6 +27,7 @@ internal object IkoroAlarms {
     const val EXTRA_TASK_ID = "ikoro.taskId"
     const val EXTRA_TITLE = "ikoro.title"
     const val EXTRA_TRIGGER = "ikoro.triggerAtMillis"
+    const val EXTRA_RINGTONE = "ikoro.ringtone"
 
     /** How far Snooze pushes an alarm out. Five minutes: long enough to get up, short enough that the task does not dissolve. */
     const val SNOOZE_MILLIS = 5 * 60 * 1000L
@@ -58,10 +59,11 @@ internal object IkoroAlarms {
         id: Int,
         taskId: String,
         title: String,
-        triggerAtMillis: Long
+        triggerAtMillis: Long,
+        ringtone: String? = null
     ): Boolean {
         if (!canScheduleExact(context)) return false
-        val alarm = StoredAlarm(id, taskId, title, triggerAtMillis)
+        val alarm = StoredAlarm(id, taskId, title, triggerAtMillis, ringtone)
         if (!arm(context, alarm)) return false
         AlarmStore.put(context, alarm)
         return true
@@ -113,7 +115,14 @@ internal object IkoroAlarms {
                 AlarmStore.remove(context, alarm.id)
                 continue
             }
-            schedule(context, alarm.id, alarm.taskId, alarm.title, alarm.triggerAtMillis)
+            schedule(
+                context,
+                alarm.id,
+                alarm.taskId,
+                alarm.title,
+                alarm.triggerAtMillis,
+                alarm.ringtone
+            )
         }
     }
 
@@ -124,8 +133,8 @@ internal object IkoroAlarms {
      * alarm replaces the old one in both AlarmManager and the store and a
      * snoozed task can never end up with two pending alarms.
      */
-    fun snooze(context: Context, id: Int, taskId: String, title: String) {
-        schedule(context, id, taskId, title, System.currentTimeMillis() + SNOOZE_MILLIS)
+    fun snooze(context: Context, id: Int, taskId: String, title: String, ringtone: String? = null) {
+        schedule(context, id, taskId, title, System.currentTimeMillis() + SNOOZE_MILLIS, ringtone)
     }
 
     private fun alarmManager(context: Context): AlarmManager =
@@ -205,6 +214,10 @@ internal object IkoroAlarms {
             intent.putExtra(EXTRA_TASK_ID, alarm.taskId)
             intent.putExtra(EXTRA_TITLE, alarm.title)
             intent.putExtra(EXTRA_TRIGGER, alarm.triggerAtMillis)
+            // Only when set: an intent extra that is absent and an extra that is
+            // null read back the same, but omitting keeps the parcel small and
+            // makes "this alarm wants the default sound" explicit in the payload.
+            alarm.ringtone?.let { intent.putExtra(EXTRA_RINGTONE, it) }
         }
         return PendingIntent.getBroadcast(context.applicationContext, id, intent, flags)
     }

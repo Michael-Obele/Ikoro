@@ -14,6 +14,7 @@
  * it. Everything is derived by diffing the two — never by trusting either alone.
  */
 import { db, type Task } from '$lib/db/schema';
+import { ringtoneFor } from './ringtone';
 import type { AlarmScheduler } from './types';
 
 /**
@@ -144,7 +145,8 @@ export async function reconcile({
 		const outcome = await scheduler.schedule({
 			taskId: task.id,
 			title: task.title,
-			at: alarmAt as string
+			at: alarmAt as string,
+			ringtone: ringtoneFor(task)
 		});
 
 		if (!outcome.ok) {

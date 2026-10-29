@@ -14,11 +14,19 @@
 	import Switch from '$lib/components/ui/switch/switch.svelte';
 	import Label from '$lib/components/ui/label/label.svelte';
 	import Input from '$lib/components/ui/input/input.svelte';
+	import Button from '$lib/components/ui/button/button.svelte';
 	import Info from 'lucide-svelte/icons/info';
+	import Music from 'lucide-svelte/icons/music';
 	import TriangleAlert from 'lucide-svelte/icons/triangle-alert';
 	import * as repo from '$lib/db/repo';
 	import type { Task } from '$lib/db/schema';
 	import { getScheduler, BROWSER_LIMITATION } from '$lib/alarms/scheduler';
+	import {
+		pickRingtone,
+		ringtoneFor,
+		ringtoneSupported,
+		ringtoneTitleOf
+	} from '$lib/alarms/ringtone';
 	import { detectPlatform } from '$lib/platform';
 	import { atLocal } from '$lib/utils/time';
 
@@ -31,6 +39,8 @@
 	>(null);
 	let busy = $state(false);
 	let loadedId: string | null = null;
+	let sound = $state<string | null>(null);
+	let soundLabel = $state('Default');
 
 	$effect(() => {
 		if (task.id !== loadedId) {
@@ -38,8 +48,56 @@
 			armed = task.alarmAt !== null;
 			time = task.dueTime ?? defaultTime();
 			outcome = null;
+			sound = task.ringtone ?? null;
 		}
 	});
+
+	// The NAME of the sound, resolved natively. Runs whenever `sound` changes —
+	// including when the picker below returns — and degrades to a plain word
+	// when the uri cannot be resolved (a sound the device no longer has).
+	$effect(() => {
+		void ringtoneTitleOf(sound).then(
+			(title) => (soundLabel = title ?? (sound ? 'Custom sound' : defaultSoundLabel()))
+		);
+	});
+
+	function defaultSoundLabel(): string {
+		return ringtoneFor(task) ? 'All reminders (default)' : 'Default';
+	}
+
+	/**
+	 * The system ringtone picker, then re-arm.
+	 *
+	 * Re-arming matters: an alarm that is already armed carries its sound INSIDE
+	 * the platform's alarm record, so changing the sound on an armed task without
+	 * re-arming it would do nothing until the next reconcile happened to notice.
+	 */
+	async function changeSound() {
+		if (busy) return;
+		const pick = await pickRingtone(ringtoneFor(task));
+		if (pick.cancelled) return;
+		await repo.updateTask(task.id, { ringtone: pick.uri });
+		sound = pick.uri;
+		if (armed) {
+			busy = true;
+			if (task.alarmId) await getScheduler().cancel(task.alarmId);
+			await arm(true, time, pick.uri);
+			busy = false;
+		}
+	}
+
+	/** Back to "whatever the rest of the app uses". */
+	async function resetSound() {
+		if (busy) return;
+		await repo.updateTask(task.id, { ringtone: null });
+		sound = null;
+		if (armed) {
+			busy = true;
+			if (task.alarmId) await getScheduler().cancel(task.alarmId);
+			await arm(true, time, null);
+			busy = false;
+		}
+	}
 
 	/**
 	 * With no time on the task, the least surprising default is one hour from
@@ -64,7 +122,11 @@
 		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 	}
 
-	async function arm(next: boolean, hhmm: string = time) {
+	async function arm(
+		next: boolean,
+		hhmm: string = time,
+		ringtone: string | null = ringtoneFor(task)
+	) {
 		if (busy) return;
 		busy = true;
 		const scheduler = getScheduler();
@@ -86,7 +148,12 @@
 			return;
 		}
 
-		const result = await scheduler.schedule({ taskId: task.id, title: task.title, at });
+		const result = await scheduler.schedule({
+			taskId: task.id,
+			title: task.title,
+			at,
+			ringtone
+		});
 
 		if (!result.ok) {
 			outcome = { ok: false, reason: result.reason };
@@ -156,6 +223,22 @@
 				oninput={(e) => changeTime(e.currentTarget.value)}
 			/>
 		</div>
+
+		{#if ringtoneSupported()}
+			<div class="flex items-center justify-between gap-3">
+				<div class="flex min-w-0 items-center gap-1.5">
+					<Music class="size-3.5 shrink-0 text-muted-foreground" />
+					<Label class="text-xs text-muted-foreground">Sound</Label>
+					<span class="truncate text-xs">{soundLabel}</span>
+				</div>
+				<div class="flex shrink-0 items-center gap-1">
+					<Button variant="outline" size="sm" disabled={busy} onclick={changeSound}>Change</Button>
+					{#if sound !== null}
+						<Button variant="ghost" size="sm" disabled={busy} onclick={resetSound}>Default</Button>
+					{/if}
+				</div>
+			</div>
+		{/if}
 	{/if}
 
 	{#if isBrowser}

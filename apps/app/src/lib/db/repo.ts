@@ -211,6 +211,7 @@ export async function createTask(input: TaskInput): Promise<Task> {
 		alarmId: null,
 		alarmFiredAt: null,
 		color: input.color ?? null,
+		ringtone: input.ringtone ?? null,
 		sortOrder:
 			input.sortOrder ??
 			(input.parentId

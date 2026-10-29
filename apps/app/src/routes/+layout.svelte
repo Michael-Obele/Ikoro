@@ -7,6 +7,8 @@
 	import { PersistedState } from 'runed';
 	import * as Sheet from '$lib/components/ui/sheet';
 	import PermissionBanner from '$lib/components/ui/PermissionBanner.svelte';
+	import BatteryBanner from '$lib/components/shell/BatteryBanner.svelte';
+	import UpdateBanner from '$lib/components/shell/UpdateBanner.svelte';
 	import BottomNav from '$lib/components/shell/BottomNav.svelte';
 	import ListSidebar from '$lib/components/lists/ListSidebar.svelte';
 	import { ensureSeeded } from '$lib/db/seed';
@@ -99,6 +101,8 @@
 		onfixexact={() => openExactAlarmSettings()}
 		onfixnotifications={() => requestNotificationPermission()}
 	/>
+	<BatteryBanner />
+	<UpdateBanner />
 
 	<div class="flex min-h-0 flex-1">
 		<!-- Desktop gets a real sidebar. On a phone the same component renders inside
