@@ -17,15 +17,17 @@
 		CardTitle
 	} from '$lib/components/ui';
 	import { CircleAlert, Download, ExternalLink } from '@lucide/svelte';
+	import { page } from '$app/state';
 	import Section from '$lib/components/Section.svelte';
 	import {
 		limits,
 		nameStory,
 		privacy,
 		promise,
-		releaseNotice,
+		releaseNoticeFor,
 		site,
 		taskShape,
+		versionOf,
 		views
 	} from '$lib/content';
 </script>
@@ -66,8 +68,8 @@
 		     assistive technology announce it as an urgent live update. -->
 		<Alert role="note" class="mt-12">
 			<CircleAlert aria-hidden="true" />
-			<AlertTitle>v{site.version} is out</AlertTitle>
-			<AlertDescription>{releaseNotice}</AlertDescription>
+			<AlertTitle>v{versionOf(page.data.release)} is out</AlertTitle>
+			<AlertDescription>{releaseNoticeFor(page.data.release)}</AlertDescription>
 		</Alert>
 	</div>
 </section>
@@ -158,7 +160,7 @@
 >
 	<Alert>
 		<CircleAlert aria-hidden="true" />
-		<AlertTitle>In v{site.version}</AlertTitle>
+		<AlertTitle>In v{versionOf(page.data.release)}</AlertTitle>
 		<AlertDescription>
 			<ul class="mt-1 flex flex-col gap-1.5">
 				{#each limits as limit (limit)}

@@ -8,9 +8,13 @@
 		CardContent
 	} from '$lib/components/ui';
 	import { CircleAlert, Download } from '@lucide/svelte';
+	import { page } from '$app/state';
 	import PlatformTable from '$lib/components/PlatformTable.svelte';
 	import Section from '$lib/components/Section.svelte';
-	import { androidAssets, platforms, releaseNotice, site } from '$lib/content';
+	import { androidAssetsFor, platforms, releaseNoticeFor, site, versionOf } from '$lib/content';
+
+	const assets = $derived(androidAssetsFor(page.data.release));
+	const version = $derived(versionOf(page.data.release));
 
 	/** The steps are only worth printing while there is something to install. */
 	const android = platforms.find((p) => p.id === 'android');
@@ -39,18 +43,18 @@
 	<div class="mx-auto w-full max-w-5xl px-4 sm:px-6 lg:px-8">
 		<Alert role="note">
 			<CircleAlert aria-hidden="true" />
-			<AlertTitle>v{site.version} is out</AlertTitle>
-			<AlertDescription>{releaseNotice}</AlertDescription>
+			<AlertTitle>v{version} is out</AlertTitle>
+			<AlertDescription>{releaseNoticeFor(page.data.release)}</AlertDescription>
 		</Alert>
 
 		<div class="mt-10 flex flex-wrap gap-3">
-			<Button href={androidAssets.apk} class="gap-2">
+			<Button href={assets.apk} class="gap-2">
 				<Download class="size-4" aria-hidden="true" />
-				Ikoro v{site.version} APK
+				Ikoro v{version} APK
 			</Button>
-			<Button href={androidAssets.aab} variant="outline" class="gap-2">
+			<Button href={assets.aab} variant="outline" class="gap-2">
 				<Download class="size-4" aria-hidden="true" />
-				Ikoro v{site.version} AAB
+				Ikoro v{version} AAB
 			</Button>
 		</div>
 

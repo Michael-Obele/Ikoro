@@ -10,25 +10,21 @@
  * field on the row — a status is never implied by a heading.
  */
 
+import type { ReleaseInfo } from './release';
+
 export const site = {
 	name: 'Ikoro',
 	pronunciation: 'ih-KOR-oh',
 	tagline: 'The gong that calls you.',
-	/** Kept in step with apps/app/package.json. One product, one number. */
+	/**
+	 * The documented FALLBACK number, used when the build cannot reach GitHub.
+	 * Kept in step with apps/app/package.json by tests. One product, one number.
+	 */
 	version: '0.3.2',
 	repo: 'https://github.com/Michael-Obele/Ikoro',
 	releases: 'https://github.com/Michael-Obele/Ikoro/releases',
 	issues: 'https://github.com/Michael-Obele/Ikoro/issues'
 } as const;
-
-/**
- * Shown on the home page and on /download. States what is published and where
- * it lives. The buttons point at real files; nothing here is a download until it is.
- */
-export const releaseNotice =
-	'v0.3.2 is published on GitHub Releases as an APK and an AAB. There is no Play ' +
-	'Store listing, so you sideload it. Alarms are verified on a physical device with ' +
-	'the app closed.';
 
 /** The one sentence the product exists to make true. */
 export const promise = {
@@ -113,6 +109,89 @@ export const androidAssets = {
 	apk: 'https://github.com/Michael-Obele/Ikoro/releases/download/v0.3.2/Ikoro-v0.3.2.apk',
 	aab: 'https://github.com/Michael-Obele/Ikoro/releases/download/v0.3.2/Ikoro-v0.3.2.aab'
 } as const;
+
+/**
+ * The curated last-known release, shown when the build cannot reach GitHub.
+ * Snapshot of the verified v0.3.2 response (2026-10-28): sizes are the real
+ * byte counts, publishedAt is the newest `releases[]` entry date.
+ */
+export const FALLBACK_RELEASE: ReleaseInfo = {
+	version: site.version,
+	tagUrl: androidAssets.tag,
+	apkUrl: androidAssets.apk,
+	aabUrl: androidAssets.aab,
+	apkSizeBytes: 3519874,
+	aabSizeBytes: 3369152,
+	publishedAt: '2026-10-28T11:13:48Z'
+};
+
+/** The version to print: the live one when the fetch worked, else the fallback. */
+export function versionOf(r: ReleaseInfo | null): string {
+	return r?.version ?? site.version;
+}
+
+/** The download links to print: the live ones when the fetch worked, else curated. */
+export function androidAssetsFor(r: ReleaseInfo | null): {
+	tag: string;
+	apk: string;
+	aab: string;
+} {
+	if (r === null) return { ...androidAssets };
+	return { tag: r.tagUrl, apk: r.apkUrl, aab: r.aabUrl };
+}
+
+/**
+ * Shown on the home page and on /download. States what is published and where
+ * it lives. The buttons point at real files; nothing here is a download until it is.
+ */
+export function releaseNoticeFor(r: ReleaseInfo | null): string {
+	if (r === null) {
+		return (
+			`v${site.version} is published on GitHub Releases as an APK and an AAB. There is no Play ` +
+			'Store listing, so you sideload it. Alarms are verified on a physical device with ' +
+			'the app closed.'
+		);
+	}
+	return (
+		`v${r.version} is published on GitHub Releases as an APK (${formatBytes(r.apkSizeBytes)}) and ` +
+		'an AAB. There is no Play Store listing, so you sideload it. Published ' +
+		`${formatReleaseDate(r.publishedAt)}. Alarms are verified on a physical device with ` +
+		'the app closed.'
+	);
+}
+
+/** Bytes to megabytes with one decimal, e.g. `3.4 MB`. */
+export function formatBytes(n: number): string {
+	return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * An ISO timestamp to an en-GB date, e.g. `28 Oct 2026`. The locale and the
+ * options are pinned so the output is deterministic regardless of host locale
+ * (tests run in node, prerender runs on Netlify).
+ */
+export function formatReleaseDate(iso: string): string {
+	return new Intl.DateTimeFormat('en-GB', {
+		day: 'numeric',
+		month: 'short',
+		year: 'numeric'
+	}).format(new Date(iso));
+}
+
+/**
+ * Numeric semver-triple compare: is `a` strictly newer than `b`?
+ * Lexicographic compare would call 0.3.10 older than 0.3.9; this does not.
+ */
+export function isNewer(a: string, b: string): boolean {
+	const pa = a.split('.').map(Number);
+	const pb = b.split('.').map(Number);
+	for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+		const x = pa[i] ?? 0;
+		const y = pb[i] ?? 0;
+		if (x !== y) return x > y;
+	}
+	return false;
+}
 
 /** The honest platform table. Nothing here promises a capability M8 did not observe. */
 export const platforms: Platform[] = [

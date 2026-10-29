@@ -8,7 +8,20 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { androidAssets, limits, platforms, privacy, releaseNotice, releases, routes, site, views } from '#lib/content';
+import {
+	androidAssets,
+	androidAssetsFor,
+	FALLBACK_RELEASE,
+	limits,
+	platforms,
+	privacy,
+	releaseNoticeFor,
+	releases,
+	routes,
+	site,
+	versionOf,
+	views
+} from '#lib/content';
 
 const SRC = resolve(import.meta.dirname, '../src');
 
@@ -46,17 +59,42 @@ describe('the platform table', () => {
 	// and the notice says what is published instead of saying nothing is.
 	it('claims a download only where a release exists', () => {
 		const released = platforms.filter((p) => p.status === 'released');
-		expect(released.map((p) => p.id), 'only Android has a published build').toEqual(['android']);
-		expect(releaseNotice, 'the notice must name the published version').toContain(site.version);
-		expect(releaseNotice.toLowerCase(), 'the notice must admit the Play Store gap').toContain(
+		expect(
+			released.map((p) => p.id),
+			'only Android has a published build'
+		).toEqual(['android']);
+		const fallbackNotice = releaseNoticeFor(null);
+		expect(fallbackNotice, 'the notice must name the published version').toContain(site.version);
+		expect(fallbackNotice.toLowerCase(), 'the notice must admit the Play Store gap').toContain(
 			'play store'
 		);
+		// The live notice names the live version, not the fallback.
+		const live = { ...FALLBACK_RELEASE, version: '9.9.9' };
+		expect(releaseNoticeFor(live)).toContain('9.9.9');
 	});
 
 	it('links the real published files, and nothing that does not exist', () => {
 		for (const url of [androidAssets.apk, androidAssets.aab, androidAssets.tag]) {
 			expect(url).toContain(`v${site.version}`);
 		}
+		// The fallback generator returns the curated links; the live generator
+		// returns the live URLs untouched.
+		const fallback = androidAssetsFor(null);
+		expect(fallback).toEqual({ ...androidAssets });
+		for (const url of [fallback.apk, fallback.aab, fallback.tag]) {
+			expect(url).toContain(`v${site.version}`);
+		}
+		const live = {
+			...FALLBACK_RELEASE,
+			tagUrl: 'https://example.com/tag',
+			apkUrl: 'https://example.com/app.apk',
+			aabUrl: 'https://example.com/app.aab'
+		};
+		expect(androidAssetsFor(live)).toEqual({
+			tag: 'https://example.com/tag',
+			apk: 'https://example.com/app.apk',
+			aab: 'https://example.com/app.aab'
+		});
 		expect(androidAssets.apk.endsWith('.apk')).toBe(true);
 		expect(androidAssets.aab.endsWith('.aab')).toBe(true);
 		for (const [, text] of sources) {
@@ -72,8 +110,7 @@ describe('the platform table', () => {
 		expect(other?.detail.toLowerCase()).toContain('windows and macos');
 		expect(
 			limits.some(
-				(limit) =>
-					limit.toLowerCase().includes('linux') && limit.toLowerCase().includes('closed')
+				(limit) => limit.toLowerCase().includes('linux') && limit.toLowerCase().includes('closed')
 			),
 			'the home-page limits must admit the Linux split'
 		).toBe(true);
@@ -175,5 +212,11 @@ describe('the content itself', () => {
 			readFileSync(resolve(import.meta.dirname, '../../app/package.json'), 'utf8')
 		) as { version: string };
 		expect(site.version, 'the site and the app must report the same version').toBe(appPkg.version);
+		// The null fallback is what a build that cannot reach GitHub prints, so
+		// it must move with the app version too.
+		expect(FALLBACK_RELEASE.version, 'the fallback release must stay in step with the app').toBe(
+			appPkg.version
+		);
+		expect(versionOf(null)).toBe(appPkg.version);
 	});
 });

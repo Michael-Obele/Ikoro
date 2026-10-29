@@ -1,7 +1,19 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import { Badge } from '$lib/components/ui';
 	import Section from '$lib/components/Section.svelte';
-	import { releases, site } from '$lib/content';
+	import { isNewer, releases, site } from '$lib/content';
+
+	/**
+	 * When the live release is newer than the newest curated entry, the notes
+	 * lag behind it — say so at the top instead of pretending the entry covers
+	 * the release. Never renders GitHub's auto-generated body.
+	 */
+	const lagging = $derived(
+		page.data.release !== null && isNewer(page.data.release.version, releases[0].version)
+			? page.data.release
+			: null
+	);
 </script>
 
 <svelte:head>
@@ -16,6 +28,12 @@
 			Every entry lists what is missing as well as what is in it. A changelog that only lists the
 			good parts is marketing.
 		</p>
+		{#if lagging}
+			<p class="mt-4 max-w-2xl text-base">
+				v{lagging.version} is out — the notes below lag until the changelog entry is curated.
+				<a class="underline underline-offset-4" href={lagging.tagUrl}>Read the release</a>
+			</p>
+		{/if}
 	</div>
 </section>
 
