@@ -6,7 +6,9 @@
     <string name="custom_url_scheme">com.michaelobele.ikoro</string>
     <!-- The ringing screen's two buttons. Named here rather than inline in the
          layout so a translator can find them, and so the alarm screen never
-         hardcodes user-facing text. -->
-    <string name="alarm_snooze">Snooze 5 min</string>
+         hardcodes user-facing text. Snooze carries the configured length: the
+         activity formats it at bind time, so the label cannot lie about what
+         the button does. -->
+    <string name="alarm_snooze">Snooze %d min</string>
     <string name="alarm_dismiss">Dismiss</string>
 </resources>

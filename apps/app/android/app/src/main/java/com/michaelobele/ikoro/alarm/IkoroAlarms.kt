@@ -29,8 +29,12 @@ internal object IkoroAlarms {
     const val EXTRA_TRIGGER = "ikoro.triggerAtMillis"
     const val EXTRA_RINGTONE = "ikoro.ringtone"
 
-    /** How far Snooze pushes an alarm out. Five minutes: long enough to get up, short enough that the task does not dissolve. */
-    const val SNOOZE_MILLIS = 5 * 60 * 1000L
+    /**
+     * How far Snooze pushes an alarm out, in millis: the user's chosen length (see
+     * [AlarmStore.snoozeMinutes]), five minutes on a device that has never been asked.
+     */
+    fun snoozeMillis(context: Context): Long =
+            AlarmStore.snoozeMinutes(context) * 60_000L
 
     /**
      * Whether the OS will let us arm an exact alarm.
@@ -127,14 +131,14 @@ internal object IkoroAlarms {
     }
 
     /**
-     * Push a ringing alarm out by [SNOOZE_MILLIS].
+     * Push a ringing alarm out by the user's chosen snooze length.
      *
      * Snooze is a re-arm, not a second alarm: it reuses the same id, so the new
      * alarm replaces the old one in both AlarmManager and the store and a
      * snoozed task can never end up with two pending alarms.
      */
     fun snooze(context: Context, id: Int, taskId: String, title: String, ringtone: String? = null) {
-        schedule(context, id, taskId, title, System.currentTimeMillis() + SNOOZE_MILLIS, ringtone)
+        schedule(context, id, taskId, title, System.currentTimeMillis() + snoozeMillis(context), ringtone)
     }
 
     private fun alarmManager(context: Context): AlarmManager =

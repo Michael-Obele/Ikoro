@@ -474,6 +474,39 @@ class IkoroAlarmPlugin : Plugin() {
         }
     }
 
+    // ----------------------------------------------------------- snoozeMinutes
+
+    /**
+     * The user's chosen snooze length, in minutes.
+     *
+     * in {} out { minutes: number }
+     *
+     * SharedPreferences is the single source of truth -- the ringing screen and the service read
+     * the same value with no Bridge -- so JS asks rather than keeping its own copy.
+     */
+    @PluginMethod
+    fun getSnoozeMinutes(call: PluginCall) {
+        call.resolve(JSObject().put("minutes", AlarmStore.snoozeMinutes(context)))
+    }
+
+    /**
+     * Set the snooze length.
+     *
+     * in { minutes: number } out { minutes: number }
+     *
+     * Resolves with what was ACTUALLY stored: a value outside the offered set falls back to the
+     * default, and the echo is how JS learns that instead of assuming its input was kept.
+     */
+    @PluginMethod
+    fun setSnoozeMinutes(call: PluginCall) {
+        val minutes = call.getInt("minutes")
+        if (minutes == null) {
+            call.reject("setSnoozeMinutes requires minutes")
+            return
+        }
+        call.resolve(JSObject().put("minutes", AlarmStore.setSnoozeMinutes(context, minutes)))
+    }
+
     // ------------------------------------------------------------------- helpers
 
     /**
@@ -557,7 +590,7 @@ class IkoroAlarmPlugin : Plugin() {
         /** The user dismissed the alarm. */
         const val EVENT_DISMISSED = "alarmDismissed"
 
-        /** The user snoozed the alarm; it is re-armed for five minutes' time. */
+        /** The user snoozed the alarm; it is re-armed for their chosen length. */
         const val EVENT_SNOOZED = "alarmSnoozed"
 
         /**

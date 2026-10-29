@@ -99,6 +99,14 @@ export interface IkoroAlarmPlugin {
 	requestIgnoreBatteryOptimizations(): Promise<void>;
 	/** Open the system battery-saver screen (an app cannot switch saver off). */
 	openBatterySaverSettings(): Promise<void>;
+	/** The user's chosen snooze length, in minutes. */
+	getSnoozeMinutes(): Promise<{ minutes: number }>;
+	/**
+	 * Set the snooze length. Resolves with the value the device ACTUALLY stored —
+	 * anything outside 2/5/10/15 falls back to 5, so the UI reads the echo back
+	 * rather than assuming its input was kept.
+	 */
+	setSnoozeMinutes(options: { minutes: number }): Promise<{ minutes: number }>;
 	addListener(
 		eventName: IkoroAlarmEvent,
 		listener: (payload: IkoroAlarmEventPayload) => void

@@ -57,6 +57,14 @@ internal object AlarmStore {
     private const val KEY_TRIGGER = "triggerAtMillis"
     private const val KEY_RINGTONE = "ringtone"
 
+    /** The snooze lengths the UI offers. Anything else is not a choice a human made. */
+    val SNOOZE_CHOICES = setOf(2, 5, 10, 15)
+
+    /** The snooze length for a device that has never been asked. */
+    const val DEFAULT_SNOOZE_MINUTES = 5
+
+    private const val KEY_SNOOZE_MINUTES = "snoozeMinutes"
+
     /**
      * Always the application context: a store must never be the thing that keeps an
      * Activity alive, and the boot receiver has no Activity to hand it anyway.
@@ -133,6 +141,27 @@ internal object AlarmStore {
         // Nothing matched, so nothing changed -- skip the disk write.
         if (remaining.size == current.size) return
         write(context, remaining)
+    }
+
+    /**
+     * The user's chosen snooze length, in minutes.
+     *
+     * Lives here, in the same prefs file as the armed-alarm blob, because it is read by the
+     * ringing screen and the service -- both of which run with no Bridge and no web layer. It is
+     * deliberately NOT mirrored into the web store: two copies of a device setting is two chances
+     * to disagree. A stored value outside [SNOOZE_CHOICES] (a future edit, a hand-poked prefs)
+     * reads back as the default rather than arming something nobody chose.
+     */
+    fun snoozeMinutes(context: Context): Int =
+        prefs(context)
+            .getInt(KEY_SNOOZE_MINUTES, DEFAULT_SNOOZE_MINUTES)
+            .takeIf { it in SNOOZE_CHOICES } ?: DEFAULT_SNOOZE_MINUTES
+
+    /** Store [minutes] if it is one of the offered choices; returns what was ACTUALLY stored. */
+    fun setSnoozeMinutes(context: Context, minutes: Int): Int {
+        val stored = if (minutes in SNOOZE_CHOICES) minutes else DEFAULT_SNOOZE_MINUTES
+        prefs(context).edit().putInt(KEY_SNOOZE_MINUTES, stored).apply()
+        return stored
     }
 
     @Synchronized

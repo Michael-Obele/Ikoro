@@ -104,6 +104,12 @@ class IkoroAlarmActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.alarm_title).text =
             title.ifEmpty { getString(R.string.app_name) }
 
+        // The button says how long it actually snoozes. Re-bound with everything else,
+        // so a settings change made while this screen is up still cannot desync the
+        // label from what the service will do.
+        findViewById<Button>(R.id.alarm_snooze).text =
+            getString(R.string.alarm_snooze, AlarmStore.snoozeMinutes(this))
+
         // Best-effort: a no-op when no bridge or listener is attached. Emitted per
         // bind, so a second alarm is reported as ringing too.
         IkoroAlarmPlugin.notifyAlarmEvent(taskId, IkoroAlarmPlugin.EVENT_RINGING)
