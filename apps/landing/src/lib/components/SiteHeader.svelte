@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui';
+	import ModeToggle from './ModeToggle.svelte';
 	import { Download } from '@lucide/svelte';
 	import { page } from '$app/state';
 	import { site } from '$lib/content';
@@ -51,9 +52,12 @@
 			</ul>
 		</nav>
 
-		<Button href={site.releases} size="sm" class="ml-auto gap-1.5">
-			<Download class="size-4" aria-hidden="true" />
-			Download
-		</Button>
+		<div class="ml-auto flex items-center gap-2">
+			<ModeToggle />
+			<Button href={site.releases} size="sm" class="gap-1.5">
+				<Download class="size-4" aria-hidden="true" />
+				Download
+			</Button>
+		</div>
 	</div>
 </header>

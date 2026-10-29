@@ -33,6 +33,8 @@ export {
 	CardTitle
 } from './card/index.js';
 
+export * as DropdownMenu from './dropdown-menu/index.js';
+
 export { Separator } from './separator/index.js';
 
 // ── the helpers the components are built on ──────────────────────────────────

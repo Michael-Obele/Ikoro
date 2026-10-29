@@ -16,77 +16,398 @@
 @plugin '@tailwindcss/forms';
 @plugin '@tailwindcss/typography';
 
+/*
+ * ============================================================================
+ * MATERIAL 3 COLOUR ROLES
+ * ============================================================================
+ *
+ * WHAT CHANGED. Every shadcn-svelte token NAME is unchanged, so no component
+ * changed. What changed is where the values come from: they are now aliases of
+ * a Material 3 role set, and that role set is first-class (`--md-sys-color-*`).
+ *
+ * THE BRAND SOURCE COLOUR is crimson #e11d48, from the app icon (a near-black
+ * tile, a white mark, a crimson striker). Its OKLCH is oklch(0.586 0.222 17.58)
+ * and every tone here is derived from it. Six tonal palettes:
+ *   primary          hue 17.58, chroma 0.222   the seed itself
+ *   secondary        hue 17.58, chroma 0.075   same hue, a third of the chroma
+ *   tertiary         hue 77.58, chroma 0.110   hue rotated +60 degrees
+ *   neutral          hue 17.58, chroma 0.012   the surfaces
+ *   neutral variant  hue 17.58, chroma 0.024   outlines and secondary text
+ *   error            hue 27.00, chroma 0.200   M3's fixed error hue
+ *
+ * WHY THE NEUTRALS ARE TINTED, AND WHY THAT IS THE WHOLE POINT.
+ *
+ * A colour scheme the user picks has to be visible on the screen they are
+ * looking at, and a screen is mostly surface: page, cards, muted fills, borders,
+ * secondary text. The neutrals used to be near-achromatic — chroma 0.004 and
+ * 0.012 — so switching from crimson to teal repainted the buttons and left every
+ * surface the same warm grey. The picker offered six schemes and the app
+ * delivered one. That is the bug this file fixes: chrome without a tint is not a
+ * theme, it is an accent colour.
+ *
+ * The values are M3 TonalSpot's own proportions rather than a taste call.
+ * Material's TonalSpot requests neutral chroma 6 and neutral-variant chroma 8
+ * against a primary of 36 (material-color-utilities, `CorePalettesTonalSpot`).
+ * In OKLCH at these tones that lands at roughly 0.012 and 0.024 — which is what
+ * is written below. The variant family stays twice the neutral one, exactly as
+ * before, because `--border` and `--input` route through it and SC 1.4.11 needs
+ * them to stay the stronger of the two.
+ *
+ * The tint is FREE, and that is measured rather than hoped. WCAG luminance is
+ * dominated by lightness, and raising chroma at a fixed OKLCH L moves it by well
+ * under a percent. Re-running the 86-pair audit at up to TEN times these chromas
+ * still passes every pair, with the worst margin falling only from 8.52% to
+ * 8.18% (`border on muted`, 3.25:1). So the tint was chosen for what it looks
+ * like, not for what the gate would tolerate — and the gate in
+ * `tests/theme-contrast.test.ts` is what keeps that honest after the fact.
+ *
+ * Two roles are deliberately NOT tinted. `scrim` is a shadow, not a surface, and
+ * a coloured shadow reads as a stain. `surface-container-lowest` is pure white
+ * at L 1, where any chroma at all is outside sRGB and the browser gamut-maps it
+ * back to grey anyway — writing a tint there would be a value the app never
+ * paints.
+ *
+ * THE TONES ARE CIE L*, 0 (black) to 100 (white), NOT OKLCH lightness — which is
+ * what makes them M3 tones and not an arbitrary ramp. The file stores each result
+ * as oklch() to match its existing style, and every chroma below is small enough
+ * to stay inside sRGB at its tone, so the browser renders exactly what is written
+ * here and no CSS gamut mapping is involved.
+ *
+ * NOT DYNAMIC COLOUR, DELIBERATELY. Material You reads a palette out of the
+ * phone's wallpaper. That is an Android SYSTEM capability and Capacitor runs this
+ * app in a WebView, which cannot read the wallpaper — so this palette is NOT
+ * wallpaper-derived and the file does not pretend it is. What it is instead is
+ * swappable from exactly one place: edit the tone table in `:root` and `.dark`
+ * and the whole app follows. If Ikoro ever gains a native M3 theme bridge, these
+ * two blocks are the single seam it has to write into.
+ *
+ * WHY EVERY VALUE IS REPEATED LITERALLY. Each M3 role and its shadcn alias carry
+ * the same colour twice rather than one holding a `var()` to the other.
+ * `tests/theme-contrast.test.ts` parses THIS file and refuses any token it is
+ * asked to measure that is not a literal `oklch(L C H)` — it throws rather than
+ * quietly skipping, so an alias would fail the gate instead of passing it
+ * vacuously. The mapping table is the contract; the literal duplication is what
+ * the audit can actually check.
+ *
+ * THE MAPPING (shadcn token -> M3 role)
+ *
+ *   --background                 -> surface                  --destructive                -> error
+ *   --foreground                 -> on-surface               --destructive-foreground     -> on-error
+ *   --card                       -> surface-container        --border                     -> outline-variant
+ *   --card-foreground            -> on-surface               --input                      -> outline-variant
+ *   --popover                    -> surface-container-high   --ring                       -> primary
+ *   --popover-foreground         -> on-surface               --chart-1                    -> primary
+ *   --primary                    -> primary                  --chart-2                    -> tertiary
+ *   --primary-foreground         -> on-primary               --chart-3                    -> secondary
+ *   --secondary                  -> secondary-container      --chart-4                    -> error
+ *   --secondary-foreground       -> on-secondary-container   --chart-5                    -> outline
+ *   --muted                      -> surface-container-high   --sidebar                    -> surface
+ *   --muted-foreground           -> on-surface-variant       --sidebar-foreground         -> on-surface
+ *   --accent                     -> secondary-container      --sidebar-primary            -> primary
+ *   --accent-foreground          -> on-secondary-container   --sidebar-primary-foreground -> on-primary
+ *   --radius                     -> M3 shape corner (medium) --sidebar-accent             -> secondary-container
+ *                                                            --sidebar-accent-foreground  -> on-secondary-container
+ *                                                            --sidebar-border             -> outline-variant
+ *                                                            --sidebar-ring               -> primary
+ *
+ * WHERE THIS DIVERGES FROM THE M3 SPEC, AND WHY. M3 targets AA (4.5:1). This
+ * repo's gate is AAA — 7:1 for text, 3:1 for non-text — and it wins. Every row
+ * below is a MEASURED failure of the spec tone in this app's own rendering, not a
+ * preference:
+ *
+ *   role                       spec tone measured at the spec tone          shipped   shipped ratio
+ *   primary (light)            40        ring/50 2.54:1 FAIL                11        3.49:1
+ *                                        on-primary 6.14:1 FAIL                       15.89:1
+ *   error (light)              40        /10 tint 4.69:1 FAIL               26        7.63:1
+ *                                        on surface 6.15:1 FAIL                       10.24:1
+ *   error (dark)               80        /20 tint 6.67:1 FAIL               90        8.02:1
+ *   outline-variant (light)    80        border 1.62:1 FAIL                 52        3.96:1
+ *   outline-variant (dark)     30        border 1.75:1 FAIL                 47        3.29:1
+ *   dark container ladder      12 / 17   border on muted 2.88:1 FAIL        8 / 12    3.29:1
+ *                                        input/50 on card 7.13:1 only                 7.60:1
+ *   secondary-container (dark) 30        delete row 7.22:1 only             28        7.80:1
+ *
+ * Three of those deserve a sentence rather than a number:
+ *
+ *   - `--ring` IS `--primary`, and every shadcn control paints
+ *     `focus-visible:ring-ring/50`. What the user sees on focus is therefore the
+ *     token at 50% alpha over whatever surface it sits on, and THAT composite is
+ *     what has to clear 3:1. In the light theme nothing lighter than about tone 13
+ *     does, which is why light `primary` is a deep crimson instead of M3's tone
+ *     40 — still a step lighter and far more chromatic than the near-black
+ *     `oklch(0.205 0 0)` it replaces. In dark the same rule pushes the other way
+ *     and M3's tone 80 passes as shipped.
+ *
+ *     The shipped tone is 11, not 13, and the extra step is the seed schemes'
+ *     doing. Crimson clears the composite at tone 13, but the six schemes are
+ *     hue ROTATIONS of it, and WCAG luminance is a weighted sum of linear RGB
+ *     rather than a function of OKLCH L alone — so teal, whose green-heavy mix
+ *     dominates that sum, measured 2.99:1 at the same lightness. One tone lower
+ *     puts every seed over the line, worst case teal at 3.07:1. Fixing it in the
+ *     reference is what lets `tests/theme-schemes.test.ts` assert 3:1 for all six
+ *     schemes with no per-scheme exception.
+ *   - `--outline-variant` is M3's soft divider, but shadcn routes BOTH `--border`
+ *     and `--input` through it, and those are control boundaries — SC 1.4.11
+ *     requires 3:1 to identify a control. M3's tone 80 is a 1.62:1 hairline, so
+ *     the tone is darkened and the neutral-variant ladder is compressed (outline
+ *     45, outline-variant 52) to keep `outline` the stronger of the two.
+ *   - the DARK `surface-container-*` ladder is compressed to 4/7/8/12/16 rather
+ *     than M3's 4/10/12/17/22, because `bg-input/50` over `--card` is a real
+ *     backdrop for 12px body text in this app and every lighter step took that
+ *     pair below 7:1. The light ladder is the spec's.
+ *
+ * The `on-*` roles are tone 98 in the light theme rather than 100: one step off
+ * pure white, for the same OLED-bloom reason the neutrals were already off
+ * #000/#fff.
+ *
+ * These thresholds are not aspirations. `tests/theme-contrast.test.ts` reads this
+ * file, converts every value through OKLCH -> linear sRGB -> WCAG relative
+ * luminance, composites alpha the way CSS does, and asserts 43 pairs per theme.
+ * If a tone slips, the suite goes red.
+ */
+
+/*
+ * LIGHT SCHEME — M3 light tones, tuned to the gate described at the top of this
+ * file. Every foreground/background pair below is measured at >= 7:1 (WCAG 2.1
+ * AAA for normal text) and every boundary and focus ring at >= 3:1 (SC 1.4.11).
+ */
 :root {
-	--background: oklch(1 0 0);
-	--foreground: oklch(0.145 0 0);
-	--card: oklch(1 0 0);
-	--card-foreground: oklch(0.145 0 0);
-	--popover: oklch(1 0 0);
-	--popover-foreground: oklch(0.145 0 0);
-	--primary: oklch(0.205 0 0);
-	--primary-foreground: oklch(0.985 0 0);
-	--secondary: oklch(0.97 0 0);
-	--secondary-foreground: oklch(0.205 0 0);
-	--muted: oklch(0.97 0 0);
-	--muted-foreground: oklch(0.556 0 0);
-	--accent: oklch(0.97 0 0);
-	--accent-foreground: oklch(0.205 0 0);
-	--destructive: oklch(0.577 0.245 27.325);
-	--border: oklch(0.922 0 0);
-	--input: oklch(0.922 0 0);
-	--ring: oklch(0.708 0 0);
-	--chart-1: oklch(0.87 0 0);
-	--chart-2: oklch(0.556 0 0);
-	--chart-3: oklch(0.439 0 0);
-	--chart-4: oklch(0.371 0 0);
-	--chart-5: oklch(0.269 0 0);
-	--radius: 0.625rem;
-	--sidebar: oklch(0.985 0 0);
-	--sidebar-foreground: oklch(0.145 0 0);
-	--sidebar-primary: oklch(0.205 0 0);
-	--sidebar-primary-foreground: oklch(0.985 0 0);
-	--sidebar-accent: oklch(0.97 0 0);
-	--sidebar-accent-foreground: oklch(0.205 0 0);
-	--sidebar-border: oklch(0.922 0 0);
-	--sidebar-ring: oklch(0.708 0 0);
+	/* ---------------------------------------------------------------- M3 roles */
+	--md-sys-color-primary: oklch(0.246 0.105 17.58);
+	--md-sys-color-on-primary: oklch(0.984 0.007 17.58);
+	--md-sys-color-primary-container: oklch(0.919 0.041 17.58);
+	--md-sys-color-on-primary-container: oklch(0.236 0.094 17.58);
+	--md-sys-color-secondary: oklch(0.492 0.075 17.58);
+	--md-sys-color-on-secondary: oklch(0.984 0.007 17.58);
+	--md-sys-color-secondary-container: oklch(0.919 0.041 17.58);
+	--md-sys-color-on-secondary-container: oklch(0.234 0.075 17.58);
+	--md-sys-color-tertiary: oklch(0.486 0.101 77.58);
+	--md-sys-color-on-tertiary: oklch(0.983 0.014 77.58);
+	--md-sys-color-tertiary-container: oklch(0.916 0.073 77.58);
+	--md-sys-color-on-tertiary-container: oklch(0.226 0.047 77.58);
+	--md-sys-color-error: oklch(0.381 0.155 27);
+	--md-sys-color-on-error: oklch(0.984 0.007 27);
+	--md-sys-color-error-container: oklch(0.918 0.041 27);
+	--md-sys-color-on-error-container: oklch(0.236 0.096 27);
+	--md-sys-color-surface: oklch(0.983 0.012 17.58);
+	--md-sys-color-on-surface: oklch(0.225 0.012 17.58);
+	--md-sys-color-surface-variant: oklch(0.915 0.024 17.58);
+	--md-sys-color-on-surface-variant: oklch(0.398 0.024 17.58);
+	--md-sys-color-surface-container-lowest: oklch(1 0 17.58);
+	--md-sys-color-surface-container-low: oklch(0.966 0.012 17.58);
+	--md-sys-color-surface-container: oklch(0.949 0.012 17.58);
+	--md-sys-color-surface-container-high: oklch(0.932 0.012 17.58);
+	--md-sys-color-surface-container-highest: oklch(0.914 0.012 17.58);
+	--md-sys-color-outline: oklch(0.527 0.024 17.58);
+	--md-sys-color-outline-variant: oklch(0.588 0.024 17.58);
+	--md-sys-color-inverse-surface: oklch(0.311 0.012 17.58);
+	--md-sys-color-inverse-on-surface: oklch(0.957 0.012 17.58);
+	--md-sys-color-scrim: oklch(0.138 0.004 17.58);
+
+	/*
+	 * M3 shape scale — BOXY, DELIBERATELY.
+	 *
+	 * The spec's ladder is 0/4/8/12/16/28. This app ships a sharp, squared-off
+	 * look instead: the medium corner (the one `--radius` points at, and therefore
+	 * the one every shadcn `rounded-*` utility resolves through) is 2px, not 12px.
+	 * Two pixels rather than zero because a true 0 on a filled control reads as a
+	 * rendering bug at 1x, while 2px reads as a deliberate edge.
+	 *
+	 * The ladder is compressed rather than scaled: xs and md are both 2px, so the
+	 * steps above it (lg 4, xl 6) are the only ones that visibly differ. That is
+	 * the point — a boxy system has almost no radius range, and pretending
+	 * otherwise would put a 28px corner back on a dialog.
+	 *
+	 * `full` stays 9999px. It is not a corner size, it is "make this a circle",
+	 * and the things that use it — the switch thumb, the priority dot, the
+	 * avatar — are circular because a circle is what they MEAN.
+	 */
+	--md-sys-shape-corner-none: 0px;
+	--md-sys-shape-corner-xs: 2px;
+	--md-sys-shape-corner-sm: 2px;
+	--md-sys-shape-corner-md: 2px;
+	--md-sys-shape-corner-lg: 4px;
+	--md-sys-shape-corner-xl: 6px;
+	--md-sys-shape-corner-full: 9999px;
+
+	/*
+	 * M3 elevation, the spec's own two-layer shadows at 1/3/6/8/12 dp. M3 gives
+	 * the SAME shadows in both schemes, so they are defined once here rather than
+	 * duplicated into `.dark`. Nothing consumes them yet — they exist so the M3
+	 * surface ladder has its elevation half, and so wiring one up is a token
+	 * reference rather than an invented shadow. On the dark ladder a shadow is
+	 * nearly invisible against a tone-6 surface; M3 answers that with a surface
+	 * tint rather than a heavier shadow, so raising the alpha here would be the
+	 * wrong fix.
+	 */
+	--md-sys-elevation-level0: none;
+	--md-sys-elevation-level1: 0 1px 2px oklch(0 0 0 / 0.3), 0 1px 3px 1px oklch(0 0 0 / 0.15);
+	--md-sys-elevation-level2: 0 1px 2px oklch(0 0 0 / 0.3), 0 2px 6px 2px oklch(0 0 0 / 0.15);
+	--md-sys-elevation-level3: 0 4px 8px 3px oklch(0 0 0 / 0.15), 0 1px 3px oklch(0 0 0 / 0.3);
+	--md-sys-elevation-level4: 0 6px 10px 4px oklch(0 0 0 / 0.15), 0 2px 3px oklch(0 0 0 / 0.3);
+	--md-sys-elevation-level5: 0 8px 12px 6px oklch(0 0 0 / 0.15), 0 4px 4px oklch(0 0 0 / 0.3);
+
+	/* ------------------------------------------- shadcn-svelte compatibility */
+	/* Values repeat the roles above literally, on purpose — see the header. */
+	--background: oklch(0.983 0.012 17.58);
+	--foreground: oklch(0.225 0.012 17.58);
+	--card: oklch(0.949 0.012 17.58);
+	--card-foreground: oklch(0.225 0.012 17.58);
+	--popover: oklch(0.932 0.012 17.58);
+	--popover-foreground: oklch(0.225 0.012 17.58);
+	--primary: oklch(0.246 0.105 17.58);
+	--primary-foreground: oklch(0.984 0.007 17.58);
+	--secondary: oklch(0.919 0.041 17.58);
+	--secondary-foreground: oklch(0.234 0.075 17.58);
+	--muted: oklch(0.932 0.012 17.58);
+	--muted-foreground: oklch(0.398 0.024 17.58);
+	--accent: oklch(0.919 0.041 17.58);
+	--accent-foreground: oklch(0.234 0.075 17.58);
+	--destructive: oklch(0.381 0.155 27);
+	--destructive-foreground: oklch(0.984 0.007 27);
+	--border: oklch(0.588 0.024 17.58);
+	--input: oklch(0.588 0.024 17.58);
+	--ring: oklch(0.246 0.105 17.58);
+
+	/* Data series: M3 charts read primary -> tertiary, so do these. */
+	--chart-1: oklch(0.246 0.105 17.58);
+	--chart-2: oklch(0.486 0.101 77.58);
+	--chart-3: oklch(0.492 0.075 17.58);
+	--chart-4: oklch(0.381 0.155 27);
+	--chart-5: oklch(0.527 0.024 17.58);
+
+	/* The sidebar is a surface, not a separate palette. */
+	--sidebar: oklch(0.983 0.012 17.58);
+	--sidebar-foreground: oklch(0.225 0.012 17.58);
+	--sidebar-primary: oklch(0.246 0.105 17.58);
+	--sidebar-primary-foreground: oklch(0.984 0.007 17.58);
+	--sidebar-accent: oklch(0.919 0.041 17.58);
+	--sidebar-accent-foreground: oklch(0.234 0.075 17.58);
+	--sidebar-border: oklch(0.588 0.024 17.58);
+	--sidebar-ring: oklch(0.246 0.105 17.58);
+
+	/*
+	 * The one shadcn knob the generated components read for shape. It points at
+	 * M3's medium corner, which this app sets to 2px — see the shape scale above.
+	 * Every `rounded-sm|md|lg|xl|2xl|3xl|4xl` utility resolves through the calc()s
+	 * in `@theme inline`, so this single line is what makes the app boxy.
+	 */
+	--radius: var(--md-sys-shape-corner-md);
 }
 
+/*
+ * DARK SCHEME — same thresholds, same audit, opposite direction. The M3 dark
+ * tones are the light ones reflected: primary 13 -> 80, error 26 -> 90, and the
+ * container ladder inverted so "higher" still means "nearer the user".
+ */
 .dark {
-	--background: oklch(0.145 0 0);
-	--foreground: oklch(0.985 0 0);
-	--card: oklch(0.205 0 0);
-	--card-foreground: oklch(0.985 0 0);
-	--popover: oklch(0.205 0 0);
-	--popover-foreground: oklch(0.985 0 0);
-	--primary: oklch(0.922 0 0);
-	--primary-foreground: oklch(0.205 0 0);
-	--secondary: oklch(0.269 0 0);
-	--secondary-foreground: oklch(0.985 0 0);
-	--muted: oklch(0.269 0 0);
-	--muted-foreground: oklch(0.708 0 0);
-	--accent: oklch(0.269 0 0);
-	--accent-foreground: oklch(0.985 0 0);
-	--destructive: oklch(0.704 0.191 22.216);
-	--border: oklch(1 0 0 / 10%);
-	--input: oklch(1 0 0 / 15%);
-	--ring: oklch(0.556 0 0);
-	--chart-1: oklch(0.87 0 0);
-	--chart-2: oklch(0.556 0 0);
-	--chart-3: oklch(0.439 0 0);
-	--chart-4: oklch(0.371 0 0);
-	--chart-5: oklch(0.269 0 0);
-	--sidebar: oklch(0.205 0 0);
-	--sidebar-foreground: oklch(0.985 0 0);
-	--sidebar-primary: oklch(0.488 0.243 264.376);
-	--sidebar-primary-foreground: oklch(0.985 0 0);
-	--sidebar-accent: oklch(0.269 0 0);
-	--sidebar-accent-foreground: oklch(0.985 0 0);
-	--sidebar-border: oklch(1 0 0 / 10%);
-	--sidebar-ring: oklch(0.556 0 0);
+	/* ---------------------------------------------------------------- M3 roles */
+	--md-sys-color-primary: oklch(0.838 0.089 17.58);
+	--md-sys-color-on-primary: oklch(0.327 0.13 17.58);
+	--md-sys-color-primary-container: oklch(0.418 0.167 17.58);
+	--md-sys-color-on-primary-container: oklch(0.919 0.041 17.58);
+	--md-sys-color-secondary: oklch(0.837 0.075 17.58);
+	--md-sys-color-on-secondary: oklch(0.32 0.075 17.58);
+	--md-sys-color-secondary-container: oklch(0.388 0.075 17.58);
+	--md-sys-color-on-secondary-container: oklch(0.919 0.041 17.58);
+	--md-sys-color-tertiary: oklch(0.831 0.11 77.58);
+	--md-sys-color-on-tertiary: oklch(0.313 0.065 77.58);
+	--md-sys-color-tertiary-container: oklch(0.4 0.083 77.58);
+	--md-sys-color-on-tertiary-container: oklch(0.916 0.073 77.58);
+	--md-sys-color-error: oklch(0.918 0.041 27);
+	--md-sys-color-on-error: oklch(0.327 0.133 27);
+	--md-sys-color-error-container: oklch(0.417 0.169 27);
+	--md-sys-color-on-error-container: oklch(0.918 0.041 27);
+	--md-sys-color-surface: oklch(0.19 0.012 17.58);
+	--md-sys-color-on-surface: oklch(0.914 0.012 17.58);
+	--md-sys-color-surface-variant: oklch(0.398 0.024 17.58);
+	--md-sys-color-on-surface-variant: oklch(0.829 0.024 17.58);
+	--md-sys-color-surface-container-lowest: oklch(0.173 0.012 17.58);
+	--md-sys-color-surface-container-low: oklch(0.199 0.012 17.58);
+	--md-sys-color-surface-container: oklch(0.207 0.012 17.58);
+	--md-sys-color-surface-container-high: oklch(0.242 0.012 17.58);
+	--md-sys-color-surface-container-highest: oklch(0.276 0.012 17.58);
+	--md-sys-color-outline: oklch(0.657 0.024 17.58);
+	--md-sys-color-outline-variant: oklch(0.545 0.024 17.58);
+	--md-sys-color-inverse-surface: oklch(0.914 0.012 17.58);
+	--md-sys-color-inverse-on-surface: oklch(0.311 0.012 17.58);
+	--md-sys-color-scrim: oklch(0.138 0.004 17.58);
+
+	/* ------------------------------------------- shadcn-svelte compatibility */
+	--background: oklch(0.19 0.012 17.58);
+	--foreground: oklch(0.914 0.012 17.58);
+	--card: oklch(0.207 0.012 17.58);
+	--card-foreground: oklch(0.914 0.012 17.58);
+	--popover: oklch(0.242 0.012 17.58);
+	--popover-foreground: oklch(0.914 0.012 17.58);
+	--primary: oklch(0.838 0.089 17.58);
+	--primary-foreground: oklch(0.327 0.13 17.58);
+	--secondary: oklch(0.388 0.075 17.58);
+	--secondary-foreground: oklch(0.919 0.041 17.58);
+	--muted: oklch(0.242 0.012 17.58);
+	--muted-foreground: oklch(0.829 0.024 17.58);
+	--accent: oklch(0.388 0.075 17.58);
+	--accent-foreground: oklch(0.919 0.041 17.58);
+	--destructive: oklch(0.918 0.041 27);
+	--destructive-foreground: oklch(0.327 0.133 27);
+	--border: oklch(0.545 0.024 17.58);
+	--input: oklch(0.545 0.024 17.58);
+	--ring: oklch(0.838 0.089 17.58);
+
+	/* Data series: M3 charts read primary -> tertiary, so do these. */
+	--chart-1: oklch(0.838 0.089 17.58);
+	--chart-2: oklch(0.831 0.11 77.58);
+	--chart-3: oklch(0.837 0.075 17.58);
+	--chart-4: oklch(0.918 0.041 27);
+	--chart-5: oklch(0.657 0.024 17.58);
+
+	/* The sidebar is a surface, not a separate palette. */
+	--sidebar: oklch(0.19 0.012 17.58);
+	--sidebar-foreground: oklch(0.914 0.012 17.58);
+	--sidebar-primary: oklch(0.838 0.089 17.58);
+	--sidebar-primary-foreground: oklch(0.327 0.13 17.58);
+	--sidebar-accent: oklch(0.388 0.075 17.58);
+	--sidebar-accent-foreground: oklch(0.919 0.041 17.58);
+	--sidebar-border: oklch(0.545 0.024 17.58);
+	--sidebar-ring: oklch(0.838 0.089 17.58);
 }
 
 @theme inline {
 	--font-mono: 'JetBrains Mono Variable', monospace;
+	/*
+	 * The M3 roles, usable directly: `bg-surface-container-high`,
+	 * `text-on-surface-variant`, `border-outline-variant`. These are purely
+	 * additive — `primary` and `secondary` are deliberately absent because those
+	 * utility names already exist below and already point at the same roles.
+	 */
+	--color-on-primary: var(--md-sys-color-on-primary);
+	--color-primary-container: var(--md-sys-color-primary-container);
+	--color-on-primary-container: var(--md-sys-color-on-primary-container);
+	--color-on-secondary: var(--md-sys-color-on-secondary);
+	--color-secondary-container: var(--md-sys-color-secondary-container);
+	--color-on-secondary-container: var(--md-sys-color-on-secondary-container);
+	--color-tertiary: var(--md-sys-color-tertiary);
+	--color-on-tertiary: var(--md-sys-color-on-tertiary);
+	--color-tertiary-container: var(--md-sys-color-tertiary-container);
+	--color-on-tertiary-container: var(--md-sys-color-on-tertiary-container);
+	--color-error: var(--md-sys-color-error);
+	--color-on-error: var(--md-sys-color-on-error);
+	--color-error-container: var(--md-sys-color-error-container);
+	--color-on-error-container: var(--md-sys-color-on-error-container);
+	--color-surface: var(--md-sys-color-surface);
+	--color-on-surface: var(--md-sys-color-on-surface);
+	--color-surface-variant: var(--md-sys-color-surface-variant);
+	--color-on-surface-variant: var(--md-sys-color-on-surface-variant);
+	--color-surface-container-lowest: var(--md-sys-color-surface-container-lowest);
+	--color-surface-container-low: var(--md-sys-color-surface-container-low);
+	--color-surface-container: var(--md-sys-color-surface-container);
+	--color-surface-container-high: var(--md-sys-color-surface-container-high);
+	--color-surface-container-highest: var(--md-sys-color-surface-container-highest);
+	--color-outline: var(--md-sys-color-outline);
+	--color-outline-variant: var(--md-sys-color-outline-variant);
+	--color-inverse-surface: var(--md-sys-color-inverse-surface);
+	--color-inverse-on-surface: var(--md-sys-color-inverse-on-surface);
+	--color-scrim: var(--md-sys-color-scrim);
 	--color-sidebar-ring: var(--sidebar-ring);
 	--color-sidebar-border: var(--sidebar-border);
 	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -103,6 +424,7 @@
 	--color-ring: var(--ring);
 	--color-input: var(--input);
 	--color-border: var(--border);
+	--color-destructive-foreground: var(--destructive-foreground);
 	--color-destructive: var(--destructive);
 	--color-accent-foreground: var(--accent-foreground);
 	--color-accent: var(--accent);
@@ -118,13 +440,25 @@
 	--color-card: var(--card);
 	--color-foreground: var(--foreground);
 	--color-background: var(--background);
-	--radius-sm: calc(var(--radius) * 0.6);
-	--radius-md: calc(var(--radius) * 0.8);
-	--radius-lg: var(--radius);
-	--radius-xl: calc(var(--radius) * 1.4);
-	--radius-2xl: calc(var(--radius) * 1.8);
-	--radius-3xl: calc(var(--radius) * 2.2);
-	--radius-4xl: calc(var(--radius) * 2.6);
+	/*
+	 * The radius ladder, derived from `--radius` (2px). The multipliers are NOT
+	 * shadcn's defaults (0.6/0.8/1/1.4/1.8/2.2/2.6): at a 2px base those produce
+	 * 1.2/1.6/2/2.8/3.6/4.4/5.2px, and a 1.2px corner is a sub-pixel smear that
+	 * renders differently on every DPR. The ladder is instead pinned to whole
+	 * pixels so each step is a real, visible edge:
+	 *
+	 *   sm 2px   md 2px   lg 4px   xl 6px   2xl 8px   3xl 10px   4xl 12px
+	 *
+	 * `rounded-none` (0) is untouched and is what the generated shadcn controls
+	 * already use, so buttons, inputs and checkboxes stay perfectly square.
+	 */
+	--radius-sm: calc(var(--radius) * 1);
+	--radius-md: calc(var(--radius) * 1);
+	--radius-lg: calc(var(--radius) * 2);
+	--radius-xl: calc(var(--radius) * 3);
+	--radius-2xl: calc(var(--radius) * 4);
+	--radius-3xl: calc(var(--radius) * 5);
+	--radius-4xl: calc(var(--radius) * 6);
 }
 
 @layer base {
@@ -136,6 +470,49 @@
 	}
 	html {
 		@apply font-mono;
+		/* The theme switch toggles a class on <html>; without this the UA
+		   stylesheet keeps painting scrollbars and form controls light. */
+		color-scheme: light;
+	}
+	.dark {
+		color-scheme: dark;
+	}
+
+	/*
+	 * Focus visibility, which is not a nicety here.
+	 *
+	 * The shadcn controls (button, input, textarea, checkbox, switch, toggle) all
+	 * set `outline-none` and draw `focus-visible:ring-ring/50` instead — they opt
+	 * out of this rule because the utilities layer comes later. That leaves every
+	 * element that does NOT manage its own focus: the sidebar's plain buttons, the
+	 * task rows, links. Without a base rule those show nothing at all on keyboard
+	 * focus, and the ring is the only cue a person has for where they are.
+	 *
+	 * Written as the `outline` shorthand rather than `outline-color` so it is
+	 * visible even where something set `outline-color: transparent`.
+	 */
+	:focus-visible {
+		outline: 2px solid var(--ring);
+		outline-offset: 2px;
+	}
+
+	/*
+	 * Nothing in the theme switch animates — the swap is a single class flip and a
+	 * hard cut, deliberately, because a fade during a theme change is exactly the
+	 * kind of motion that costs an ADHD user their place. This block exists for the
+	 * OTHER animations the generated components carry in: dialog, sheet and
+	 * dropdown-menu all use `data-open:animate-in fade-in-0 zoom-in-95`, which is
+	 * unconditional and was previously not gated by anything.
+	 */
+	@media (prefers-reduced-motion: reduce) {
+		*,
+		*::before,
+		*::after {
+			animation-duration: 0.01ms !important;
+			animation-iteration-count: 1 !important;
+			transition-duration: 0.01ms !important;
+			scroll-behavior: auto !important;
+		}
 	}
 }
 

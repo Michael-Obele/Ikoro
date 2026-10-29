@@ -1,6 +1,7 @@
 <script lang="ts">
 	import './layout.css';
 	import { browser, dev } from '$app/env';
+	import { ModeWatcher } from 'mode-watcher';
 	import { Agentation } from 'sv-agentation';
 	import SiteFooter from '$lib/components/SiteFooter.svelte';
 	import SiteHeader from '$lib/components/SiteHeader.svelte';
@@ -8,11 +9,9 @@
 	let { children } = $props();
 </script>
 
-<!-- The app ships light and dark token sets; this site renders the light one and
-     says so, rather than declaring support for a scheme it does not style. -->
-<svelte:head>
-	<meta name="color-scheme" content="light" />
-</svelte:head>
+<!-- The site ships light and dark token sets; ModeWatcher applies the stored
+     or system theme to <html> and owns color-scheme from there. -->
+<ModeWatcher />
 
 <a
 	href="#main"

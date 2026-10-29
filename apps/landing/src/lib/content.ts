@@ -218,10 +218,11 @@ export const sitePrivacy: PrivacyPoint[] = [
 			'Svelte, served as files.'
 	},
 	{
-		claim: 'Nothing is written to your browser.',
+		claim: 'The only thing stored is your theme choice.',
 		detail:
-			'This site sets no cookies and uses no local storage. Your browser cache may ' +
-			'keep the page files, which is what a cache is for.'
+			'Your light, dark or system theme choice is kept in local storage in this ' +
+			'browser, so the site opens in the theme you picked. Nothing else is ' +
+			'stored: no cookies, no trackers, no analytics.'
 	},
 	{
 		claim: 'The host keeps ordinary server logs.',
