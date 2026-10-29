@@ -189,8 +189,17 @@
 		against nothing — and the generated Sheet.Content carries no radius of its
 		own, which means the shape is decided here, once, instead of by whatever
 		`--radius` happens to be.
+
+		`w-full!` and `sm:max-w-md!` carry the important modifier (Tailwind v4
+		appends it) and that is load-bearing, not decorative. The generated
+		sheet-content hard-codes `data-[side=right]:w-3/4` and
+		`data-[side=right]:sm:max-w-sm`, and a data-variant selector out-specifies a
+		plain utility — so the `w-full sm:max-w-md` this used to ask for did nothing
+		and the sheet rendered at 75% of a phone's width with a dead gutter beside
+		it. The generated component is not ours to edit, so the override happens
+		here.
 	-->
-	<Sheet.Content side="right" class="w-full rounded-none sm:max-w-md">
+	<Sheet.Content side="right" class="w-full! rounded-none sm:max-w-md!">
 		{#if task}
 			<!-- The header is separated by a hairline, not by a card. Every section
 			     below is divided the same way, so the sheet reads as one ruled
@@ -200,7 +209,14 @@
 				<Sheet.Description class="sr-only">Edit this task</Sheet.Description>
 			</Sheet.Header>
 
-			<div class="flex flex-col overflow-y-auto px-4 pb-6">
+			<!--
+				`min-h-0 flex-1` is what makes `overflow-y-auto` mean anything. A flex
+				child defaults to `min-height: auto`, so this column grew to its content
+				height and pushed the delete button off the bottom of a phone screen
+				instead of scrolling — the sheet clipped it. On a 620px-tall viewport the
+				body measured 608px against a 564px box.
+			-->
+			<div class="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-6">
 				<div class="grid gap-1.5 border-b border-outline-variant py-4">
 					<Label for="task-title">Title</Label>
 					<Input

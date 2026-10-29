@@ -134,7 +134,15 @@
 </div>
 
 <Sheet.Root bind:open={sheetOpen}>
-	<Sheet.Content side="left" class="w-72 p-0">
+	<!--
+		`w-72!` carries the important modifier for the same reason TaskSheet's does:
+		the generated sheet-content hard-codes `data-[side=left]:w-3/4`, a
+		data-variant selector that out-specifies a plain `w-72`, so the width asked
+		for here was being ignored and the drawer rendered at 75% of the screen.
+		`max-w-[85vw]` keeps a sliver of the page visible on the narrowest phones
+		instead of letting an 18rem panel run edge to edge.
+	-->
+	<Sheet.Content side="left" class="w-72! max-w-[85vw] overflow-y-auto p-0">
 		<!--
 			The drawer needs a real header, for two reasons.
 
