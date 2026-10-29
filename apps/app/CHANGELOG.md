@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.4](https://github.com/Michael-Obele/Ikoro/compare/v0.3.3...v0.3.4) (2026-10-29)
+
+
+### Bug Fixes
+
+* **task-sheet:** override generated sheet width and enable body scroll ([e52b430](https://github.com/Michael-Obele/Ikoro/commit/e52b430356cf0d9a81e284780994d1d8251e8189))
+
 ## [0.3.3](https://github.com/Michael-Obele/Ikoro/compare/v0.3.2...v0.3.3) (2026-10-29)
 
 
