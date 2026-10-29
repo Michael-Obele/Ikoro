@@ -12,6 +12,7 @@ import {
 	androidAssets,
 	androidAssetsFor,
 	FALLBACK_RELEASE,
+	isNewer,
 	limits,
 	platforms,
 	privacy,
@@ -218,5 +219,11 @@ describe('the content itself', () => {
 			appPkg.version
 		);
 		expect(versionOf(null)).toBe(appPkg.version);
+	});
+
+	it('keeps releases newest-first: the changelog lag-row logic reads releases[0]', () => {
+		for (let i = 0; i < releases.length - 1; i++) {
+			expect(isNewer(releases[i].version, releases[i + 1].version)).toBe(true);
+		}
 	});
 });

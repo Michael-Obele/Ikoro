@@ -25,6 +25,7 @@
 		privacy,
 		promise,
 		releaseNoticeFor,
+		releases,
 		site,
 		taskShape,
 		versionOf,
@@ -160,7 +161,8 @@
 >
 	<Alert>
 		<CircleAlert aria-hidden="true" />
-		<AlertTitle>In v{versionOf(page.data.release)}</AlertTitle>
+		<!-- Curated, not live: the limits list is hand-written for the newest curated release. -->
+		<AlertTitle>In v{releases[0].version}</AlertTitle>
 		<AlertDescription>
 			<ul class="mt-1 flex flex-col gap-1.5">
 				{#each limits as limit (limit)}

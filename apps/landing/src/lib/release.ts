@@ -47,6 +47,7 @@ export function parseLatestRelease(json: unknown): ReleaseInfo | null {
 		if (typeof tag_name !== 'string') return null;
 		if (typeof html_url !== 'string') return null;
 		if (typeof published_at !== 'string') return null;
+		if (Number.isNaN(Date.parse(published_at))) return null;
 		if (!Array.isArray(assets)) return null;
 		const version = tag_name.replace(/^v/, '');
 		if (version.length === 0) return null;

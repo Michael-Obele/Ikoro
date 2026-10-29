@@ -2,7 +2,7 @@
 	import { page } from '$app/state';
 	import { Badge } from '$lib/components/ui';
 	import Section from '$lib/components/Section.svelte';
-	import { isNewer, releases, site } from '$lib/content';
+	import { isNewer, lagNotice, releases, site } from '$lib/content';
 
 	/**
 	 * When the live release is newer than the newest curated entry, the notes
@@ -30,7 +30,7 @@
 		</p>
 		{#if lagging}
 			<p class="mt-4 max-w-2xl text-base">
-				v{lagging.version} is out — the notes below lag until the changelog entry is curated.
+				{lagNotice(lagging.version)}
 				<a class="underline underline-offset-4" href={lagging.tagUrl}>Read the release</a>
 			</p>
 		{/if}

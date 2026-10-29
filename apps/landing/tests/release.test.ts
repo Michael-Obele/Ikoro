@@ -89,6 +89,10 @@ describe('parseLatestRelease', () => {
 			})
 		).toBeNull();
 	});
+
+	it('returns null for an unparseable published_at instead of throwing at render time', () => {
+		expect(parseLatestRelease({ ...LATEST_FIXTURE, published_at: 'not-a-date' })).toBeNull();
+	});
 });
 
 describe('fetchLatestRelease', () => {

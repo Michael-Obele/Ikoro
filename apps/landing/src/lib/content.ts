@@ -160,6 +160,14 @@ export function releaseNoticeFor(r: ReleaseInfo | null): string {
 	);
 }
 
+/**
+ * Shown on /changelog when the live release is newer than the newest curated
+ * entry. States the lag instead of pretending the entry covers the release.
+ */
+export function lagNotice(version: string): string {
+	return `v${version} is out — the notes below lag until the changelog entry is curated.`;
+}
+
 /** Bytes to megabytes with one decimal, e.g. `3.4 MB`. */
 export function formatBytes(n: number): string {
 	return `${(n / (1024 * 1024)).toFixed(1)} MB`;
