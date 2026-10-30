@@ -10,7 +10,7 @@
     },
     "apps/app": {
       "name": "app",
-      "version": "0.3.2",
+      "version": "0.3.4",
       "dependencies": {
         "@capacitor/app": "8.1.2",
         "@capacitor/core": "8.5.2",
@@ -26,6 +26,7 @@
         "sv-agentation": "^0.4.0",
         "svelte-dnd-action": "0.9.79",
         "svelte-idb": "0.1.6",
+        "svelte-sonner": "^1.2.2",
         "valibot": "1.5.0",
       },
       "devDependencies": {
@@ -1033,6 +1034,8 @@
 
     "svelte-idb": ["svelte-idb@0.1.6", "", { "dependencies": { "@types/node": "^25.8.0" }, "peerDependencies": { "svelte": "^5.0.0" } }, "sha512-QqObKM0M0M5fvb3BW/7bqEM8j8g+gTNXY3bDjECY38heQOtWTln2MNayhtLaaUyOLfy6l6AKaLvID+RbTu73nw=="],
 
+    "svelte-sonner": ["svelte-sonner@1.2.2", "", { "dependencies": { "runed": "^0.28.0" }, "peerDependencies": { "svelte": "^5.0.0" } }, "sha512-sHAvdhf9PNC7LMBmUSWRGPdxZn17HrW5ITsUKmF4SP9C3IZBE7B3rBw8BEztIiSDcTpEdZcKgmnN+BAhH4M8qQ=="],
+
     "svelte-toolbelt": ["svelte-toolbelt@0.10.6", "", { "dependencies": { "clsx": "^2.1.1", "runed": "^0.35.1", "style-to-object": "^1.0.8" }, "peerDependencies": { "svelte": "^5.30.2" } }, "sha512-YWuX+RE+CnWYx09yseAe4ZVMM7e7GRFZM6OYWpBKOb++s+SQ8RBIMMe+Bs/CznBMc0QPLjr+vDBxTAkozXsFXQ=="],
 
     "tabbable": ["tabbable@6.5.0", "", {}, "sha512-wieBHXygIm7OyQOu5hQlkk62/WyCFYGlWg7L6/ZCUZwx0o398Zkn4pVmMyfYhfMG8kGrj/Krt8eIk6UKC6VzwA=="],
@@ -1204,6 +1207,8 @@
     "svelte-eslint-parser/postcss-selector-parser": ["postcss-selector-parser@7.1.6", "", { "dependencies": { "cssesc": "^3.0.0", "util-deprecate": "^1.0.2" } }, "sha512-7qASPzhKF2l2KLboRZux8CCTRMdGiV08vWmyKzPz22qZ7ZjQBOeY7rNzNoCLSUiftJ7HUq0GERHmxw/t0dCdMw=="],
 
     "svelte-idb/@types/node": ["@types/node@25.9.9", "", { "dependencies": { "undici-types": ">=7.24.0 <7.24.7" } }, "sha512-b4e2xxj/yMeT2hNlD6x7zNFiQK2Dlmkb9CQ6v3/1G2RezKN4YS2lcEv8lzGm1mhs4f2lM4yNAMI/zUDBZBBt7w=="],
+
+    "svelte-sonner/runed": ["runed@0.28.0", "", { "dependencies": { "esm-env": "^1.0.0" }, "peerDependencies": { "svelte": "^5.7.0" } }, "sha512-k2xx7RuO9hWcdd9f+8JoBeqWtYrm5CALfgpkg2YDB80ds/QE4w0qqu34A7fqiAwiBBSBQOid7TLxwxVC27ymWQ=="],
 
     "svelte-toolbelt/runed": ["runed@0.35.1", "", { "dependencies": { "dequal": "^2.0.3", "esm-env": "^1.0.0", "lz-string": "^1.5.0" }, "peerDependencies": { "@sveltejs/kit": "^2.21.0", "svelte": "^5.7.0" }, "optionalPeers": ["@sveltejs/kit"] }, "sha512-2F4Q/FZzbeJTFdIS/PuOoPRSm92sA2LhzTnv6FXhCoENb3huf5+fDuNOg1LNvGOouy3u/225qxmuJvcV3IZK5Q=="],
 

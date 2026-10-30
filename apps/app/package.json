@@ -73,6 +73,7 @@
 		"sv-agentation": "^0.4.0",
 		"svelte-dnd-action": "0.9.79",
 		"svelte-idb": "0.1.6",
+		"svelte-sonner": "^1.2.2",
 		"valibot": "1.5.0"
 	}
 }
