@@ -36,7 +36,9 @@
 	let status = $state<AlarmPermissionStatus | null>(null);
 	let armed = $state(0);
 	let nextUp = $state<{ title: string; dueAt: string } | null>(null);
-	let missed = $state<{ title: string; dueAt: string }[]>([]);
+	let missed = $state<{ taskId: string; title: string; dueAt: string }[]>([]);
+	let degraded = $state<{ taskId: string; title: string; warning: string }[]>([]);
+	let failed = $state<{ taskId: string; reason: string }[]>([]);
 	let busy = $state(false);
 	let desktopProbe = $state<DesktopProbe | null>(null);
 
@@ -54,7 +56,20 @@
 	$effect(() => {
 		const stopStatus = onStatus((next) => (status = next));
 		const stopReport = onReport((next) => {
-			missed = (next?.missed ?? []).map((m) => ({ title: m.title, dueAt: m.dueAt }));
+			missed = (next?.missed ?? []).map((m) => ({
+				taskId: m.taskId,
+				title: m.title,
+				dueAt: m.dueAt
+			}));
+			// Degraded and failed are the two outcomes that used to be computed and
+			// then thrown away. A reminder armed inexactly, or refused outright, is a
+			// broken promise and has to be said out loud — never only logged.
+			degraded = (next?.degraded ?? []).map((d) => ({
+				taskId: d.taskId,
+				title: d.title,
+				warning: d.warning
+			}));
+			failed = (next?.failed ?? []).map((f) => ({ taskId: f.taskId, reason: f.reason }));
 		});
 		void refresh();
 		if (isDesktop) {
@@ -75,6 +90,13 @@
 	 * the warning row below never appears for them.
 	 */
 	const fullScreenDenied = $derived(status?.fullScreenIntent === 'denied');
+
+	/** Why a schedule was refused, in the user's words rather than the seam's. */
+	function failureText(reason: string): string {
+		if (reason === 'permission') return 'Not allowed to set alarms — grant notifications and exact alarms above.';
+		if (reason === 'invalid') return 'The time had already passed when Ikoro tried to arm it.';
+		return 'This device cannot schedule alarms.';
+	}
 
 	/**
 	 * Open the Android 14+ screen that permits full-screen intents.
@@ -152,29 +174,54 @@
 		<div class="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:bg-amber-950/30">
 			<p class="font-medium">Missed while Ikoro was closed</p>
 			<ul class="mt-1 grid gap-0.5 text-muted-foreground">
-				{#each missed as item (item.dueAt)}
+				{#each missed as item (item.taskId)}
 					<li>{item.title} — was due {new Date(item.dueAt).toLocaleString()}</li>
 				{/each}
 			</ul>
 		</div>
 	{/if}
 
+	{#if degraded.length > 0}
+		<div class="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:bg-amber-950/30">
+			<p class="font-medium">These reminders may run late</p>
+			<ul class="mt-1 grid gap-0.5 text-muted-foreground">
+				{#each degraded as item (item.taskId)}
+					<li>{item.title} — {item.warning}</li>
+				{/each}
+			</ul>
+		</div>
+	{/if}
+
+	{#if failed.length > 0}
+		<div class="rounded-md border border-rose-300 bg-rose-50 p-3 text-sm dark:bg-rose-950/30">
+			<p class="font-medium">These reminders could not be armed</p>
+			<ul class="mt-1 grid gap-0.5 text-muted-foreground">
+				{#each failed as item (item.taskId)}
+					<li>{failureText(item.reason)}</li>
+				{/each}
+			</ul>
+		</div>
+	{/if}
+
 	<div class="flex flex-wrap gap-2">
-		<Button variant="outline" size="sm" disabled={busy} onclick={refresh}>
+		<Button variant="outline" size="sm" class="h-10" disabled={busy} onclick={refresh}>
 			<RefreshCw class="size-4" /> Reschedule all
 		</Button>
 		{#if !notificationsOk}
-			<Button variant="outline" size="sm" onclick={requestNotificationPermission}>
+			<Button variant="outline" size="sm" class="h-10" onclick={requestNotificationPermission}>
 				Allow notifications
 			</Button>
 		{/if}
 		{#if !exactOk}
-			<Button variant="outline" size="sm" onclick={openExactAlarmSettings}
-				>Allow exact alarms</Button
+			<Button
+				variant="outline"
+				size="sm"
+				class="h-10"
+				onclick={openExactAlarmSettings}>Allow exact alarms</Button
 			>
 		{/if}
 		{#if fullScreenDenied}
-			<Button variant="outline" size="sm" onclick={fixFullScreenIntent}>
+			<Button variant="outline" size="sm" class="h-10" onclick={fixFullScreenIntent}>
 				Allow full-screen alarms
 			</Button>
 		{/if}

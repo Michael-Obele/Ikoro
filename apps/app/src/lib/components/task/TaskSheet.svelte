@@ -27,7 +27,11 @@
 	import AlarmSheet from './AlarmSheet.svelte';
 	import * as repo from '$lib/db/repo';
 	import { TASK_COLOR_IDS, TASK_COLORS, taskColorValue } from '$lib/task-colors';
-	import { liveSubtasksByParent } from '$lib/stores/view';
+	import { liveSubtasksByParent, liveTasks } from '$lib/stores/view';
+	import { getScheduler, armAlarm } from '$lib/alarms/scheduler';
+	import { ringtoneFor } from '$lib/alarms/ringtone';
+	import { deriveAlarmAt } from '$lib/utils/time';
+	import { toast } from 'svelte-sonner';
 	import type { Task } from '$lib/db/schema';
 
 	let {
@@ -49,8 +53,6 @@
 	// straight through so the row behind the sheet updates as you type.
 	let title = $state('');
 	let notes = $state('');
-	let dueDate = $state<string | null>(null);
-	let dueTime = $state<string | null>(null);
 	let priority = $state<Task['priority']>(0);
 	let color = $state<string | null>(null);
 	let lastSavedNotes = $state<string | null>(null);
@@ -59,21 +61,43 @@
 
 	$effect(() => {
 		// Re-seed the drafts when a DIFFERENT task is opened. Keyed on the id, not
-		// the object, so a live update to the row being edited (a sync pull, a tick
-		// from another tab) refreshes the fields but does not wipe the half-typed
-		// title the user is in the middle of.
+		// the object, so re-opening the same row never wipes the half-typed title
+		// the user is in the middle of. Live updates to the row are handled by
+		// `liveTask` below — this block is only the first fill.
 		if (task && task.id !== loadedId) {
 			loadedId = task.id;
 			title = task.title;
 			notes = task.notes ?? '';
-			dueDate = task.dueDate;
-			dueTime = task.dueTime;
 			priority = task.priority;
 			color = task.color ?? null;
 			lastSavedNotes = task.notes ?? '';
 			confirmingDelete = false;
 		}
 	});
+
+	/**
+	 * The live row behind the sheet.
+	 *
+	 * Routes hand this component the row object they captured at tap time, and a
+	 * snapshot goes stale the moment any field is written. That is exactly what
+	 * made "Remind me" compute the OLD due date after the date above it changed:
+	 * the alarm control read `task.dueDate` from a row that no longer matched the
+	 * store. Re-read the row from the single live subscription instead, and hand
+	 * every child that needs freshness this value.
+	 */
+	const liveTask = $derived.by(() => {
+		const id = task?.id;
+		if (!id) return null;
+		return liveTasks().find((row) => row.id === id) ?? task;
+	});
+
+	//
+	// The schedule has NO draft. `DuePicker` is controlled by these two values and
+	// every edit goes through `queueSchedule` below, so the picker, the alarm
+	// control and the row behind the sheet can never hold three different ideas of
+	// when this task is due.
+	const dueDate = $derived(liveTask?.dueDate ?? null);
+	const dueTime = $derived(liveTask?.dueTime ?? null);
 
 	const saveNotes = useDebounce(async (value: string) => {
 		if (!task) return;
@@ -90,9 +114,127 @@
 		await repo.updateTask(task.id, { title: value.trim() });
 	}
 
-	async function saveSchedule() {
-		if (!task) return;
-		await repo.updateTask(task.id, { dueDate, dueTime });
+	/**
+	 * Write the schedule, and MOVE any armed alarm with it.
+	 *
+	 * `alarmAt` is derived when the alarm is switched on, so it does not follow
+	 * `dueDate`/`dueTime` on its own. Without the re-arm below, moving a task to
+	 * next week left its reminder armed for the old day; once that instant passed,
+	 * `reconcile` retired it as fired and the reminder was simply gone.
+	 *
+	 * `alarmAt` is still never re-derived at FIRE time — only when the user edits
+	 * the schedule, which is a new promise and deserves a new instant.
+	 */
+	let scheduleChain: Promise<void> = Promise.resolve();
+
+	/**
+	 * Serialised: one schedule write at a time.
+	 *
+	 * A date field fires `input` on every keystroke and a native picker emits
+	 * partial values. Without the queue, two changes overlap, both cancel and both
+	 * re-arm, and the slower arm can persist an instant the platform no longer
+	 * holds — with a stable notification id, `reconcile` would then never notice.
+	 *
+	 * The row id is captured at ENQUEUE time. `task` can be re-pointed (a subtask
+	 * tap swaps the sheet without unmounting it), and an entry that looked its
+	 * target up late would write this schedule onto the row the user had moved to.
+	 */
+	function queueSchedule(nextDate: string | null, nextTime: string | null): Promise<void> {
+		const id = liveTask?.id ?? null;
+		if (!id) return Promise.resolve();
+		scheduleChain = scheduleChain.then(
+			() => applySchedule(id, nextDate, nextTime),
+			() => applySchedule(id, nextDate, nextTime)
+		);
+		return scheduleChain;
+	}
+
+	/**
+	 * 300 ms of quiet before anything is written.
+	 *
+	 * The debounce is not politeness — it is what stops the first digit of a typed
+	 * date from clearing the clock and disarming a live reminder. Every call resets
+	 * the timer, so only the settled value lands.
+	 *
+	 * Do NOT call `.cancel()` before calling this: runed's `cancel()` kills the very
+	 * call made immediately after it, silently dropping the edit.
+	 */
+	const applyScheduleDebounced = useDebounce(
+		(nextDate: string | null, nextTime: string | null) => {
+			queueSchedule(nextDate, nextTime).catch(() => {});
+		},
+		300
+	);
+
+	function debounceSchedule(nextDate: string | null, nextTime: string | null) {
+		// A superseded call rejects with 'Cancelled'. That is a normal supersede,
+		// not an error, so it is swallowed rather than logged as unhandled.
+		applyScheduleDebounced(nextDate, nextTime).catch(() => {});
+	}
+
+	/** `''` is a real clear; a partial value is a keystroke still in progress. */
+	function onDateChange(value: string) {
+		if (value !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
+		// Clearing the day clears the time too — a time with no day would silently
+		// do nothing. Both go through the debounce, so a partial '' cannot land.
+		debounceSchedule(value || null, value ? dueTime : null);
+	}
+
+	function onTimeChange(value: string) {
+		if (value !== '' && !/^\d{2}:\d{2}$/.test(value)) return;
+		debounceSchedule(dueDate, value || null);
+	}
+
+	async function applySchedule(
+		rowId: string,
+		nextDate: string | null,
+		nextTime: string | null
+	) {
+		const row = liveTasks().find((candidate) => candidate.id === rowId);
+		if (!row) return;
+		await repo.updateTask(rowId, { dueDate: nextDate, dueTime: nextTime });
+		if (row.alarmAt === null) return;
+
+		const scheduler = getScheduler();
+		const at = deriveAlarmAt(nextDate, nextTime);
+
+		const disarm = async (note: string) => {
+			if (row.alarmId) await scheduler.cancel(row.alarmId);
+			await repo.updateTask(rowId, { alarmAt: null, alarmId: null, alarmFiredAt: null });
+			toast(note);
+		};
+
+		if (!at) {
+			return disarm(
+				nextDate === null
+					? 'Date cleared — reminder switched off.'
+					: 'Time cleared — reminder switched off.'
+			);
+		}
+		if (at === row.alarmAt) return;
+		if (new Date(at).getTime() <= Date.now()) {
+			return disarm('That time has already passed — reminder switched off.');
+		}
+
+		// Cancel only once the replacement is known to be valid and in the future.
+		if (row.alarmId) await scheduler.cancel(row.alarmId);
+		const outcome = await armAlarm(scheduler, {
+			taskId: row.id,
+			title: row.title,
+			at,
+			ringtone: ringtoneFor(row)
+		});
+
+		if (!outcome.ok) {
+			await repo.updateTask(rowId, { alarmAt: null, alarmId: null, alarmFiredAt: null });
+			toast.error('Could not move the reminder — check alarm permissions.');
+			return;
+		}
+
+		await repo.updateTask(rowId, { alarmAt: at, alarmId: outcome.platformId, alarmFiredAt: null });
+		toast.success(`Reminder moved to ${new Date(at).toLocaleString()}`, {
+			description: outcome.exact ? undefined : outcome.warning
+		});
 	}
 
 	async function savePriority() {
@@ -243,7 +385,7 @@
 				</div>
 
 				<div class="border-b border-outline-variant py-4">
-					<DuePicker bind:dueDate bind:dueTime onsetchange={saveSchedule} />
+					<DuePicker {dueDate} {dueTime} ondatechange={onDateChange} ontimechange={onTimeChange} />
 				</div>
 
 				<div class="grid gap-1.5 border-b border-outline-variant py-4">
@@ -315,9 +457,10 @@
 
 				<!-- The reminder control. It has to be the one field that arms a
 				     platform alarm, so it lives with the scheduler rather than in
-				     this file's local state. -->
+				     this file's local state — and it gets the LIVE row, not the
+				     snapshot, or it computes its instant from a stale date. -->
 				<div class="border-b border-outline-variant py-4">
-					<AlarmSheet {task} />
+					<AlarmSheet task={liveTask ?? task} />
 				</div>
 
 				<!--

@@ -169,7 +169,7 @@
 		The trailing markers column. The bell sits to the LEFT of the dot so the dot is
 		always the outermost mark, which is what makes priority a scannable right edge.
 	-->
-	{#if task.alarmAt || task.priority > 0 || subtasks.length > 0}
+	{#if task.alarmAt || task.alarmFiredAt || task.priority > 0 || subtasks.length > 0}
 		<span class="flex shrink-0 items-center gap-1.5 pr-1">
 			{#if subtasks.length > 0}
 				<!-- Progress: "done/total" for the subtasks, before the other markers. -->
@@ -182,7 +182,24 @@
 			{/if}
 
 			{#if task.alarmAt}
-				<BellRing class="size-3.5 text-muted-foreground" role="img" aria-label="Has a reminder" />
+				<!-- Armed: a live promise, so it is drawn in the accent colour and
+				     settles in when it appears — the row is the only place the user
+				     sees that a reminder exists, so the change should be noticed. -->
+				<BellRing
+					class="size-3.5 animate-in text-primary zoom-in-75 fade-in-0 duration-150"
+					role="img"
+					aria-label="Reminder armed"
+				/>
+			{:else if task.alarmFiredAt}
+				<!--
+					Fired: the bell stays as a record that it rang, but faded — it is no
+					longer a promise, and a screen reader must not be told it is armed.
+				-->
+				<BellRing
+					class="size-3.5 text-muted-foreground/50"
+					role="img"
+					aria-label="Reminder has fired"
+				/>
 			{/if}
 
 			{#if task.priority > 0}

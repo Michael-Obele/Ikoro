@@ -14,6 +14,7 @@
  * it. Everything is derived by diffing the two — never by trusting either alone.
  */
 import { db, type Task } from '$lib/db/schema';
+import * as repo from '$lib/db/repo';
 import { ringtoneFor } from './ringtone';
 import type { AlarmScheduler } from './types';
 
@@ -176,44 +177,33 @@ export async function reconcile({
 	return report;
 }
 
-/** Persist the platform id. A single-record write — there is no transaction to widen. */
+/**
+ * Persist the platform id.
+ *
+ * Through `repo.updateTask`, NOT a raw get→put: every task write in the app
+ * shares one queue there, and a reconcile running on resume must not be able to
+ * interleave with a reminder being armed by the sheet — the loser of that race
+ * wipes `alarmAt` while the platform still holds the notification.
+ */
 async function setAlarmId(taskId: string, platformId: string): Promise<void> {
-	const row = await db.tasks.get(taskId);
-	if (!row) return;
-	await db.tasks.put({
-		...(asTask(row) as unknown as Record<string, unknown>),
-		alarmId: platformId,
-		updatedAt: new Date().toISOString(),
-		dirty: 1
-	});
+	await repo.updateTask(taskId, { alarmId: platformId });
 }
 
 async function clearAlarmId(taskId: string): Promise<void> {
-	const row = await db.tasks.get(taskId);
-	if (!row) return;
-	await db.tasks.put({
-		...(asTask(row) as unknown as Record<string, unknown>),
-		alarmId: null,
-		updatedAt: new Date().toISOString(),
-		dirty: 1
-	});
+	await repo.updateTask(taskId, { alarmId: null });
 }
 
 /**
  * Stamp `alarmFiredAt` with the instant the alarm was DUE, not the moment we
  * noticed. The difference matters when the phone was off for eight hours: the
  * user needs to know when it was supposed to ring, not when the app woke up.
+ *
+ * Clearing `alarmAt` here is what RETIRES the alarm. Leaving it set kept
+ * `wantsAlarm` true forever, so every resume re-reported a reminder that had
+ * actually fired and the row kept its bell for good.
  */
 async function markFired(taskId: string, at: string): Promise<void> {
-	const row = await db.tasks.get(taskId);
-	if (!row) return;
-	await db.tasks.put({
-		...(asTask(row) as unknown as Record<string, unknown>),
-		alarmFiredAt: at,
-		alarmId: null,
-		updatedAt: new Date().toISOString(),
-		dirty: 1
-	});
+	await repo.updateTask(taskId, { alarmFiredAt: at, alarmAt: null, alarmId: null });
 }
 
 /** How many alarms the store currently believes are armed — for the health panel. */

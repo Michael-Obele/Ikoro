@@ -7,9 +7,15 @@
 	 * NOT been cleared — see `docs/build/M4-alarm-engine.md` § Findings — so this
 	 * route is the tool that clears it, and it stays until someone runs it.
 	 *
-	 * WHAT IT DOES: schedules a real alarm two minutes out through the real
-	 * Capacitor plugin, with `isExactNotification` and `isExactMandatory` both true,
-	 * and shows every raw value the plugin returned. Nothing here is mocked.
+	 * WHAT IT DOES: schedules a real alarm two minutes out through the SHIPPING alarm
+	 * seam (`getScheduler()` → the `IkoroAlarm` plugin on Android), and shows every raw
+	 * value it returned. Nothing here is mocked.
+	 *
+	 * It used to drive `@capacitor/local-notifications` directly. That plugin is no
+	 * longer what arms a reminder, so the gate was validating a transport the app had
+	 * retired — a green run would have proved nothing about the promise the product
+	 * makes. Going through the seam means this route exercises the same permission
+	 * gate, the same id hashing and the same native plugin that a real reminder does.
 	 *
 	 * HOW TO RUN THE GATE:
 	 *
@@ -28,12 +34,20 @@
 	 *
 	 * When the gate passes, this route can be deleted.
 	 */
-	import { LocalNotifications } from '@capacitor/local-notifications';
 	import Button from '$lib/components/ui/button/button.svelte';
+	import { getScheduler, armAlarm } from '$lib/alarms/scheduler';
 	import { hashId } from '$lib/utils/id';
 
 	/** Two minutes: long enough to arm, short enough not to make anybody wait. */
 	const DELAY_MS = 120_000;
+
+	/**
+	 * A fixed fake task id. The native side only needs an id to key the alarm and
+	 * to name it on the ringing screen, and the shipping `hashId` mapping is what
+	 * turns it into the 32-bit notification id — so this exercises the real path.
+	 */
+	const TASK_ID = 'spike';
+	const PLATFORM_ID = String(hashId(TASK_ID));
 
 	let permissions = $state<unknown>('<not checked>');
 	let exactSetting = $state<unknown>('<not checked>');
@@ -46,8 +60,12 @@
 		busy = true;
 		scheduleError = null;
 		try {
-			permissions = await LocalNotifications.checkPermissions();
-			exactSetting = await LocalNotifications.checkExactNotificationSetting();
+			// The same gate the app runs before arming anything. If this reports
+			// `denied`, a real reminder would have been refused too.
+			const scheduler = getScheduler();
+			const gate = await scheduler.ensureReady();
+			permissions = gate;
+			exactSetting = { exact: gate.exact, fullScreenIntent: gate.fullScreenIntent };
 		} catch (error) {
 			scheduleError = error instanceof Error ? error.message : String(error);
 		} finally {
@@ -61,24 +79,15 @@
 		scheduleError = null;
 		const at = new Date(Date.now() + DELAY_MS);
 		try {
-			scheduleResult = await LocalNotifications.schedule({
-				notifications: [
-					{
-						id: hashId('spike'),
-						title: 'Ikoro spike',
-						body: `test — armed for ${at.toLocaleTimeString()}`,
-						channelId: 'reminders',
-						extra: { taskId: 'spike' },
-						isExactNotification: true,
-						isExactMandatory: true,
-						schedule: { at, allowWhileIdle: true }
-					}
-				]
+			scheduleResult = await armAlarm(getScheduler(), {
+				taskId: TASK_ID,
+				title: 'Ikoro spike',
+				at: at.toISOString(),
+				ringtone: null
 			});
 			armedFor = at;
 		} catch (error) {
-			// Rendered verbatim. A rejection here IS the gate failing loudly —
-			// `isExactMandatory` exists so a denied permission cannot pass quietly.
+			// Rendered verbatim. A rejection here IS the gate failing loudly.
 			scheduleError = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
 		} finally {
 			busy = false;
@@ -88,7 +97,7 @@
 	async function cancel() {
 		busy = true;
 		try {
-			await LocalNotifications.cancel({ notifications: [{ id: hashId('spike') }] });
+			await getScheduler().cancel(PLATFORM_ID);
 			armedFor = null;
 		} catch (error) {
 			scheduleError = error instanceof Error ? error.message : String(error);
@@ -100,7 +109,7 @@
 	async function pending() {
 		busy = true;
 		try {
-			scheduleResult = await LocalNotifications.getPending();
+			scheduleResult = Array.from(await getScheduler().getPending());
 		} catch (error) {
 			scheduleError = error instanceof Error ? error.message : String(error);
 		} finally {
@@ -135,7 +144,7 @@
 
 	<div class="mt-6 grid gap-4 font-mono text-xs">
 		<section>
-			<h2 class="mb-1 font-sans text-sm font-medium">checkPermissions()</h2>
+			<h2 class="mb-1 font-sans text-sm font-medium">ensureReady() — the arm gate</h2>
 			<pre class="overflow-x-auto rounded-md bg-muted p-3">{JSON.stringify(
 					permissions,
 					null,
@@ -144,7 +153,7 @@
 		</section>
 
 		<section>
-			<h2 class="mb-1 font-sans text-sm font-medium">checkExactNotificationSetting()</h2>
+			<h2 class="mb-1 font-sans text-sm font-medium">Exact-alarm setting</h2>
 			<pre class="overflow-x-auto rounded-md bg-muted p-3">{JSON.stringify(
 					exactSetting,
 					null,

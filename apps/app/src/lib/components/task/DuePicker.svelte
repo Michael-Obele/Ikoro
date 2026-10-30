@@ -13,26 +13,29 @@
 	import Input from '$lib/components/ui/input/input.svelte';
 	import Label from '$lib/components/ui/label/label.svelte';
 
+	/**
+	 * CONTROLLED, not bound.
+	 *
+	 * These fields used to own a copy of the schedule, and that copy is what made
+	 * the reminder lie: the alarm control wrote the time it armed, `DuePicker`
+	 * kept showing the draft it opened with, and a later date edit saved the draft
+	 * back over the real one. The values now come from the task row, and every
+	 * edit leaves through a callback. A minimum date of "no date" is still a real
+	 * value — the parent decides what clearing the day means for the clock.
+	 */
 	let {
-		dueDate = $bindable(null),
-		dueTime = $bindable(null),
-		onsetchange
+		dueDate,
+		dueTime,
+		ondatechange,
+		ontimechange
 	}: {
-		dueDate?: string | null;
-		dueTime?: string | null;
-		onsetchange?: () => void;
+		dueDate: string | null;
+		dueTime: string | null;
+		/** Raw input value. `''` is the user clearing the field; the parent decides
+		 *  what that means (and which partial values to ignore). */
+		ondatechange?: (value: string) => void;
+		ontimechange?: (value: string) => void;
 	} = $props();
-
-	function onDateInput(value: string) {
-		dueDate = value || null;
-		if (!dueDate) dueTime = null;
-		onsetchange?.();
-	}
-
-	function onTimeInput(value: string) {
-		dueTime = value || null;
-		onsetchange?.();
-	}
 </script>
 
 <div class="grid grid-cols-2 gap-3">
@@ -42,8 +45,9 @@
 			id="due-date"
 			name="dueDate"
 			type="date"
+			class="h-11"
 			value={dueDate ?? ''}
-			oninput={(e) => onDateInput(e.currentTarget.value)}
+			oninput={(e) => ondatechange?.(e.currentTarget.value)}
 		/>
 	</div>
 
@@ -54,8 +58,9 @@
 			name="dueTime"
 			type="time"
 			disabled={!dueDate}
+			class="h-11"
 			value={dueTime ?? ''}
-			oninput={(e) => onTimeInput(e.currentTarget.value)}
+			oninput={(e) => ontimechange?.(e.currentTarget.value)}
 		/>
 	</div>
 </div>

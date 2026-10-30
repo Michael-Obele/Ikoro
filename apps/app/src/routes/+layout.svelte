@@ -5,6 +5,7 @@
 	import { onNavigate } from '$app/navigation';
 	import { Agentation } from 'sv-agentation';
 	import { PersistedState } from 'runed';
+	import { Toaster } from 'svelte-sonner';
 	import * as Sheet from '$lib/components/ui/sheet';
 	import PermissionBanner from '$lib/components/ui/PermissionBanner.svelte';
 	import BatteryBanner from '$lib/components/shell/BatteryBanner.svelte';
@@ -14,6 +15,7 @@
 	import { ensureSeeded } from '$lib/db/seed';
 	import {
 		applyResolvedTheme,
+		resolvedTheme,
 		watchDynamicColors,
 		watchSystemTheme
 	} from '#lib/theme/theme.svelte';
@@ -117,7 +119,16 @@
 		</aside>
 
 		<div class="flex min-w-0 flex-1 flex-col">
-			<main class="min-h-0 flex-1 overflow-y-auto">
+			<!--
+				`overflow-x-hidden` is explicit, not decorative. A single-axis
+				`overflow-y-auto` makes the OTHER axis compute to `auto` as well (CSS:
+				visible + non-visible ⇒ auto), so one unbreakable string — a sync URL, a
+				backup filename — quietly turned this scroller into a horizontal one and
+			
+the whole app could be dragged sideways. Nothing here is meant to scroll
+				horizontally, so it is clamped.
+			-->
+			<main class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
 				{@render children()}
 			</main>
 		</div>
@@ -132,6 +143,17 @@
 	-->
 	<BottomNav onopenlists={() => (sheetOpen = true)} />
 </div>
+
+<!--
+	One toast host for the whole app.
+
+	`top-center`, not the default bottom: the phone's navigation bar owns the
+	bottom edge, and a toast that covers the control you were reaching for is
+	worse than no toast at all. The theme comes from this app's own theme module
+	(the shadcn wrapper would have pulled in `mode-watcher` — a second, competing
+	source of truth for light/dark).
+-->
+<Toaster theme={resolvedTheme()} position="top-center" closeButton />
 
 <Sheet.Root bind:open={sheetOpen}>
 	<!--

@@ -235,7 +235,29 @@ export async function getTask(id: string): Promise<Task | undefined> {
 	return row ? asTask(row) : undefined;
 }
 
-export async function updateTask(id: string, patch: Partial<Task>): Promise<void> {
+/**
+ * EVERY `updateTask` runs through one queue.
+ *
+ * svelte-idb has no transactions, so this is a read → merge → write. Two calls
+ * that overlap interleave (read A, read B, write A, write B) and the second
+ * write reinstates the fields the first had just set — which is how an alarm
+ * armed from one control could be wiped by a title autosave that started a few
+ * milliseconds earlier. Serialising costs nothing at human speed and removes
+ * the whole class of lost updates.
+ */
+let writeQueue: Promise<unknown> = Promise.resolve();
+
+export function updateTask(id: string, patch: Partial<Task>): Promise<void> {
+	const run = writeQueue.then(
+		() => writeTask(id, patch),
+		() => writeTask(id, patch)
+	);
+	// The chain must not break on a failed write, so the stored tail swallows it.
+	writeQueue = run.catch(() => {});
+	return run;
+}
+
+async function writeTask(id: string, patch: Partial<Task>): Promise<void> {
 	const current = await db.tasks.get(id);
 	if (!current) return;
 	await db.tasks.put({

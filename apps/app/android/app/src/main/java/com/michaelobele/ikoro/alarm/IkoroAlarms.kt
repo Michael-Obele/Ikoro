@@ -99,9 +99,14 @@ internal object IkoroAlarms {
      * scheduler and are dropped with the process that owned them. That is the entire reason this
      * function exists, and the entire reason AlarmStore exists to be its input.
      *
-     * An entry whose moment has already passed is dropped rather than re-armed: re-arming a past
-     * instant fires it immediately, and a reminder that goes off at boot for something due
-     * yesterday is worse than one that never arrives.
+     * An entry whose moment has already passed is NEITHER re-armed NOR removed.
+     *
+     * Re-arming a past instant fires it immediately, and a reminder that goes off at boot for
+     * something due yesterday is worse than one that never arrives. But deleting the entry threw
+     * away the only record that the reminder existed: the store's JavaScript side is what reports
+     * "missed while Ikoro was closed", and it can only do that from a row it can still see. So the
+     * entry is left alone — disarmed, not forgotten — and the next `reconcile()` on app open
+     * reports it and retires it.
      *
      * When the exact-alarm permission is missing, `schedule()` declines and the entry stays in the
      * store untouched. That is deliberate: the alarm is not lost, it is disarmed, and the next
@@ -111,7 +116,8 @@ internal object IkoroAlarms {
         val now = System.currentTimeMillis()
         for (alarm in AlarmStore.all(context)) {
             if (alarm.triggerAtMillis <= now) {
-                AlarmStore.remove(context, alarm.id)
+                // Still in the store, still visible to JS. `schedule()` is skipped
+                // for the same reason it is skipped when permission is missing.
                 continue
             }
             schedule(

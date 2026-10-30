@@ -227,3 +227,36 @@ describe('reconcile — orphans', () => {
 		expect(scheduler.cancelled).toContain('99');
 	});
 });
+
+/**
+ * A fired alarm must be RETIRED, not merely stamped.
+ *
+ * Leaving `alarmAt` set kept `wantsAlarm` true forever, so every resume re-reported
+ * a reminder that had actually fired — and the row kept its bell for good. The
+ * alarm that DID fire is the one case where silence is the correct outcome.
+ */
+describe('reconcile — a fired alarm is retired', () => {
+	it('clears alarmAt once the instant has passed, so the next resume does not report it again', async () => {
+		await putTask({ alarmAt: PAST, alarmId: '42' });
+
+		const first = await reconcile({ scheduler, now: NOW });
+		expect(first.missed.map((m) => m.taskId)).toEqual(['t1']);
+		expect((await readTask('t1'))?.alarmAt).toBeNull();
+		expect((await readTask('t1'))?.alarmFiredAt).toBe(PAST);
+
+		const second = await reconcile({ scheduler, now: NOW });
+		expect(second.missed).toEqual([]);
+		expect(second.armed).toEqual([]);
+		expect(scheduler.scheduled).toHaveLength(0);
+	});
+
+	it('keeps the stamp the platform reported at delivery, not the due instant', async () => {
+		const delivered = '2026-10-03T11:00:04.000Z';
+		await putTask({ alarmAt: PAST, alarmId: '42', alarmFiredAt: delivered });
+
+		await reconcile({ scheduler, now: NOW });
+
+		expect((await readTask('t1'))?.alarmFiredAt).toBe(delivered);
+		expect((await readTask('t1'))?.alarmAt).toBeNull();
+	});
+});

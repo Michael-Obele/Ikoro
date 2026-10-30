@@ -129,8 +129,13 @@ export async function wireAlarmLifecycle(): Promise<() => void> {
 	await syncAlarms();
 
 	const scheduler = getScheduler();
-	scheduler.onAction((taskId) => {
-		void repo.updateTask(taskId, { alarmFiredAt: new Date().toISOString() });
+	scheduler.onAction(() => {
+		// Deliberately NO `alarmFiredAt` write here.
+		//
+		// `reconcile` stamps that field with the DUE instant via `markFired`. Writing
+		// the tap time as well recorded when the user dismissed the notification as
+		// if it were when the alarm was due, which is the one number the "missed
+		// while Ikoro was closed" report depends on.
 		void syncAlarms();
 	});
 
