@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.5](https://github.com/Michael-Obele/Ikoro/compare/v0.3.4...v0.3.5) (2026-10-30)
+
+
+### Features
+
+* **ui:** add sonner toast component and svelte-sonner dependency ([0c2b755](https://github.com/Michael-Obele/Ikoro/commit/0c2b755d328e2159be9c12be2346bc19ee503bc9))
+
+
+### Bug Fixes
+
+* **alarms:** arm from the live row and never lose a reminder ([435c0cd](https://github.com/Michael-Obele/Ikoro/commit/435c0cd852ee5da06e30c862bcb113b4d260c0c2))
+* **ui:** stop Settings scrolling sideways on a phone ([2e78606](https://github.com/Michael-Obele/Ikoro/commit/2e7860676669a813f982c2355210ee8d063ff3f6))
+
 ## [0.3.4](https://github.com/Michael-Obele/Ikoro/compare/v0.3.3...v0.3.4) (2026-10-29)
 
 
