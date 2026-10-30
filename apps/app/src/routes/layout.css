@@ -458,6 +458,13 @@
 	}
 	body {
 		@apply bg-background text-foreground;
+		/*
+		 * The app is set in a monospace face, so every string is as wide as its
+		 * characters and a URL or a file path has no soft break points at all. This
+		 * is the backstop: a long token may wrap mid-word rather than widen its
+		 * container and push the page into a horizontal scroll.
+		 */
+		overflow-wrap: break-word;
 	}
 	html {
 		@apply font-mono;

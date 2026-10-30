@@ -81,7 +81,7 @@
 
 <div class="grid gap-4">
 	<div class="flex flex-wrap gap-2">
-		<Button variant="outline" size="sm" onclick={exportNow} disabled={busy}>
+		<Button variant="outline" size="sm" class="h-10 px-3" onclick={exportNow} disabled={busy}>
 			<Download class="size-4" /> Export
 		</Button>
 
@@ -93,7 +93,7 @@
 				onchange={(e) => choose(e.currentTarget.files?.[0] ?? null)}
 			/>
 			<span
-				class="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors hover:bg-accent"
+				class="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors hover:bg-accent"
 			>
 				<Upload class="size-4" /> Import
 			</span>
@@ -122,14 +122,14 @@
 
 	{#if pending}
 		<div class="rounded-md border p-3 text-sm">
-			<p class="font-medium">Restore from “{pending.name}”?</p>
+			<p class="font-medium wrap-break-word">Restore from “{pending.name}”?</p>
 			<p class="mt-1 text-muted-foreground">
 				Records already on this device keep their newer edits. Only fields missing or older than the
 				local copy are replaced.
 			</p>
 			<div class="mt-3 flex gap-2">
-				<Button size="sm" onclick={confirmImport} disabled={busy}>Restore</Button>
-				<Button size="sm" variant="ghost" onclick={() => choose(null)}>Cancel</Button>
+				<Button size="sm" class="h-10" onclick={confirmImport} disabled={busy}>Restore</Button>
+				<Button size="sm" variant="ghost" class="h-10" onclick={() => choose(null)}>Cancel</Button>
 			</div>
 		</div>
 	{/if}
@@ -152,9 +152,9 @@
 		<div class="rounded-md border border-rose-300 bg-rose-50 p-3 text-sm dark:bg-rose-950/30">
 			<p class="font-medium">{error}</p>
 			{#if problems.length > 0}
-				<ul class="mt-1.5 grid gap-0.5 font-mono text-xs text-muted-foreground">
+				<ul class="mt-1.5 grid min-w-0 gap-0.5 font-mono text-xs text-muted-foreground">
 					{#each problems as problem (problem)}
-						<li>{problem}</li>
+						<li class="break-all">{problem}</li>
 					{/each}
 				</ul>
 			{/if}

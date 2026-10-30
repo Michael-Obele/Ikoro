@@ -29,16 +29,15 @@
 	<title>Settings · Ikoro</title>
 </svelte:head>
 
-<div class="mx-auto w-full max-w-2xl px-4 py-6">
+<div class="mx-auto w-full min-w-0 max-w-2xl px-4 py-6">
 	<h1 class="mb-6 text-xl font-semibold tracking-tight">Settings</h1>
 
-	<div class="grid gap-8">
-		<section>
+	<div class="grid min-w-0 gap-8">
+		<section class="min-w-0">
 			<h2 class="mb-1 text-sm font-medium">Appearance</h2>
 			<p class="mb-3 text-sm text-muted-foreground">
-				Ikoro ships both themes at WCAG AAA contrast. Text is at least 7:1 against its background in
-				either, which is well past the 4.5:1 most apps settle for — if reading this screen feels
-				like work, that is a bug, not a setting.
+				Both themes are held to WCAG AAA contrast — at least 7:1, against the 4.5:1 most apps
+				settle for. If this screen is hard to read, that is a bug, not a setting.
 			</p>
 			<ThemeToggle />
 			<div class="mt-4">
@@ -47,7 +46,7 @@
 			</div>
 		</section>
 
-		<section>
+		<section class="min-w-0">
 			<h2 class="mb-1 text-sm font-medium">Notifications</h2>
 			<div class="grid gap-3">
 				<RingtoneSetting />
@@ -56,17 +55,17 @@
 			</div>
 		</section>
 
-		<section>
+		<section class="min-w-0">
 			<h2 class="mb-1 text-sm font-medium">Backup</h2>
 			<Backup />
 		</section>
 
-		<section>
+		<section class="min-w-0">
 			<h2 class="mb-1 text-sm font-medium">Sync</h2>
 			<SyncPanel />
 		</section>
 
-		<section>
+		<section class="min-w-0">
 			<h2 class="mb-1 text-sm font-medium">Data</h2>
 			<p class="text-sm text-muted-foreground">
 				{lists.length}
@@ -79,12 +78,12 @@
 			</p>
 		</section>
 
-		<section>
+		<section class="min-w-0">
 			<h2 class="mb-1 text-sm font-medium">About</h2>
 			<p class="text-sm text-muted-foreground">
 				<span class="font-medium text-foreground">Ikoro</span> — an Ịbani is the slit gong its striker
-				carries: it is sounded by hand, and it is heard when it is sounded, and not a moment before. This
-				app is named for the same promise. You set a time; the notification arrives at that time.
+				carries: it is heard when it is sounded, and not a moment before. You set a time; the
+				notification arrives at that time.
 			</p>
 			<p class="mt-2 text-xs text-muted-foreground">Version {VERSION}</p>
 		</section>

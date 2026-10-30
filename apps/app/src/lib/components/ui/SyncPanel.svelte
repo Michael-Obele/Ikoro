@@ -78,14 +78,19 @@
 				until you turn this on.
 			</p>
 		</div>
-		<Button variant="outline" size="sm" class="justify-self-start" onclick={() => (editing = true)}>
+		<Button
+			variant="outline"
+			size="sm"
+			class="h-10 px-3"
+			onclick={() => (editing = true)}
+		>
 			<Cloud class="size-4" /> Turn on sync
 		</Button>
 	{:else}
 		<div class="flex items-start gap-2 text-sm">
 			<Cloud class="mt-0.5 size-4 shrink-0 text-emerald-600" />
-			<p>
-				Syncing with <span class="font-medium">{baseUrl || 'your server'}</span>
+			<p class="min-w-0">
+				Syncing with <span class="font-medium break-all">{baseUrl || 'your server'}</span>
 				{#if status.lastSyncedAt}
 					— last synced {new Date(status.lastSyncedAt).toLocaleString()}.
 				{/if}
@@ -95,7 +100,9 @@
 		{#if status.state === 'error' && status.error}
 			<p class="flex items-start gap-2 text-xs font-medium text-amber-600">
 				<TriangleAlert class="mt-0.5 size-3.5 shrink-0" />
-				{status.error} — your changes are safe and will be retried.
+				<span class="min-w-0 wrap-break-word"
+					>{status.error} — your changes are safe and will be retried.</span
+				>
 			</p>
 		{/if}
 
@@ -109,13 +116,14 @@
 			<Button
 				variant="outline"
 				size="sm"
+				class="h-10 px-3"
 				onclick={runSync}
 				disabled={status.state === 'pushing' || status.state === 'pulling'}
 			>
 				<RefreshCw class="size-4" />
 				{status.state === 'pushing' || status.state === 'pulling' ? 'Syncing…' : 'Sync now'}
 			</Button>
-			<Button variant="ghost" size="sm" onclick={turnOff}>Turn off</Button>
+			<Button variant="ghost" size="sm" class="h-10 px-3" onclick={turnOff}>Turn off</Button>
 		</div>
 
 		<p class="text-xs text-muted-foreground">
