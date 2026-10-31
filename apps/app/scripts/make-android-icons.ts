@@ -1,20 +1,6 @@
 /**
- * Writes the Android launcher icon set from the SAME mark geometry the web icons
- * use (`lib/mark.ts`). Run after `make-icons.ts`, or on its own.
- *
- * Two icon systems, one source:
- *
- *   mipmap-*dpi/ic_launcher.png        legacy square/round tiles
- *   mipmap-anydpi-v26/ic_launcher.xml ADAPTIVE icon — a background plate plus a
- *                                      foreground layer the launcher masks to
- *                                      its own shape
- *
- * The adaptive FOREGROUND is drawn at 108dp, not 48: Android crops and shrinks a
- * foreground layer to its own safe zone, so a foreground that fills its canvas
- * has its edges clipped away. The artwork inside it is therefore inset by ~13%,
- * keeping it inside the 72dp safe zone of the 108dp layer.
- *
- *   bun scripts/make-android-icons.ts
+ * Writes the Android launcher icon set from `lib/mark.ts`. Usage: `bun scripts/make-android-icons.ts`.
+ * The adaptive foreground is drawn at 108dp with the art inset ~13% to clear the 72dp safe zone.
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -38,16 +24,22 @@ const ADAPTIVE_DP = 108;
 /** The inset that keeps the artwork inside that layer's 72dp safe zone. */
 const SAFE_ZONE_INSET = 134;
 
-const render = (svg: string, size: number) =>
+// `background` defaults to TRANSPARENT on purpose: an opaque foreground makes
+// <monochrome> a featureless blob, so no themed icon can appear.
+const render = (svg: string, size: number, background: string | null = null) =>
 	new Resvg(svg, {
 		fitTo: { mode: 'width', value: Math.max(1, Math.round(size)) },
-		background: SHELL
+		...(background ? { background } : {})
 	})
 		.render()
 		.asPng();
 
+// Legacy tiles keep the plate; it is baked into the SVG.
 const fullBleed = markSvg({ background: SHELL });
-const safeZone = markSvg({ inset: SAFE_ZONE_INSET, background: SHELL });
+// No plate: the adaptive `<background>` layer supplies it, and a plate here would hide it.
+const safeZone = markSvg({ inset: SAFE_ZONE_INSET });
+// Themed icons: one flat colour, hole punched out, so the launcher tints a real silhouette.
+const silhouette = markSvg({ inset: SAFE_ZONE_INSET, monochrome: true });
 
 for (const [density, px] of Object.entries(DENSITIES)) {
 	const dir = join(RES, `mipmap-${density}`);
@@ -58,13 +50,13 @@ for (const [density, px] of Object.entries(DENSITIES)) {
 	await writeFile(join(dir, 'ic_launcher.png'), tile);
 	await writeFile(join(dir, 'ic_launcher_round.png'), tile);
 
-	// Adaptive foreground: a 108dp layer whose artwork sits inside the 72dp safe
-	// zone, so however the launcher masks it, nothing is cut off.
+	// 108dp layer, art inside the 72dp safe zone, so no launcher mask clips it.
 	const foregroundPx = (px * ADAPTIVE_DP) / 48;
 	await writeFile(join(dir, 'ic_launcher_foreground.png'), render(safeZone, foregroundPx));
+	await writeFile(join(dir, 'ic_launcher_monochrome.png'), render(silhouette, foregroundPx));
 
 	console.log(
-		`  ✓ mipmap-${density}  ${px}px tile + ${Math.round(foregroundPx)}px foreground (${ADAPTIVE_DP}dp layer)`
+		`  ✓ mipmap-${density}  ${px}px tile + ${Math.round(foregroundPx)}px foreground/monochrome (${ADAPTIVE_DP}dp layer)`
 	);
 }
 
@@ -73,11 +65,15 @@ await mkdir(anydpi, { recursive: true });
 
 const adaptive = `<?xml version="1.0" encoding="utf-8"?>
 <!-- Adaptive icon: a solid plate plus a foreground layer the launcher masks to
-     its own shape, so the mark is never clipped. -->
+     its own shape, so the mark is never clipped.
+
+     monochrome is a SEPARATE asset, not the foreground: Android 13+ themed
+     icons keep only the layer's alpha and tint it with the wallpaper colour, so
+     an opaque foreground renders as a solid square and no themed icon appears. -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/ic_launcher_background" />
     <foreground android:drawable="@mipmap/ic_launcher_foreground" />
-    <monochrome android:drawable="@mipmap/ic_launcher_foreground" />
+    <monochrome android:drawable="@mipmap/ic_launcher_monochrome" />
 </adaptive-icon>
 `;
 await writeFile(join(anydpi, 'ic_launcher.xml'), adaptive);
