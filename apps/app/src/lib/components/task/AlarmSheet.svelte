@@ -206,7 +206,8 @@
 				taskId: task.id,
 				title: task.title,
 				at,
-				ringtone
+				ringtone,
+				description: task.notes
 			});
 
 			if (!result.ok) {
@@ -383,7 +384,7 @@
 	hairline between sections — a second box around it would be a card inside a
 	card, and the rounded one it used to be was the only rounded thing on the sheet.
 -->
-<div class="grid gap-2.5">
+<div class="grid grid-cols-1 gap-2.5">
 	<div class="flex items-center justify-between gap-3">
 		<Label for="alarm-{task.id}" class="text-sm font-medium">Remind me</Label>
 		<Switch
@@ -395,7 +396,7 @@
 	</div>
 
 	{#if armed}
-		<div class="grid gap-1.5">
+		<div class="grid grid-cols-1 gap-1.5">
 			<Label for="alarm-time-{task.id}" class="text-xs text-muted-foreground">
 				{whenLabel(task, time)}
 			</Label>

@@ -3,12 +3,15 @@
 	import favicon from '#lib/assets/favicon.svg';
 	import { browser, dev } from '$app/env';
 	import { onNavigate } from '$app/navigation';
+	import { App as CapApp } from '@capacitor/app';
+	import { StatusBar } from '@capacitor/status-bar';
 	import { Agentation } from 'sv-agentation';
 	import { PersistedState } from 'runed';
 	import { Toaster } from 'svelte-sonner';
 	import * as Sheet from '$lib/components/ui/sheet';
 	import PermissionBanner from '$lib/components/ui/PermissionBanner.svelte';
 	import BatteryBanner from '$lib/components/shell/BatteryBanner.svelte';
+	import RingingOverlay from '$lib/components/shell/RingingOverlay.svelte';
 	import UpdateBanner from '$lib/components/shell/UpdateBanner.svelte';
 	import BottomNav from '$lib/components/shell/BottomNav.svelte';
 	import ListSidebar from '$lib/components/lists/ListSidebar.svelte';
@@ -25,6 +28,9 @@
 		openExactAlarmSettings,
 		requestNotificationPermission
 	} from '$lib/alarms/lifecycle';
+	import { detectPlatform } from '$lib/platform';
+	import { IkoroAlarm } from '$lib/alarms/plugin';
+	import { startRinging, stopRinging } from '$lib/alarms/ringing.svelte';
 	import type { AlarmPermissionStatus } from '$lib/alarms/types';
 
 	let { children } = $props();
@@ -81,6 +87,26 @@
 	// when the database is empty.
 	$effect(() => {
 		if (!browser) return;
+
+		/*
+		 * Android 15+ forces edge-to-edge for targetSdk 35+, so the WebView draws
+		 * UNDER the status bar and the first banner sat behind the clock. CSS cannot
+		 * fix it: on Android `env(safe-area-inset-top)` reports 0 for the status bar
+		 * (it only describes display cutouts). The platform plugin is the only thing
+		 * that knows the real inset, so on Android it owns the layout.
+		 */
+		if (detectPlatform() === 'android') {
+			void StatusBar.setOverlaysWebView({ overlay: false });
+
+			// Android only hands out a full-screen takeover while the phone is
+			// locked; in the foreground the alarm becomes a heads-up notification and
+			// nothing else happens. These three events are what let the app show its
+			// own ringing screen instead of just ringing.
+			void IkoroAlarm.addListener('alarmRinging', ({ taskId }) => startRinging(taskId));
+			void IkoroAlarm.addListener('alarmSnoozed', () => stopRinging());
+			void IkoroAlarm.addListener('alarmDismissed', () => stopRinging());
+		}
+
 		void ensureSeeded();
 
 		// The alarm lifecycle owns its own subscriptions; this component only
@@ -88,7 +114,36 @@
 		const stopStatus = onStatus((next) => (status = next));
 		void wireAlarmLifecycle();
 
-		return stopStatus;
+		/*
+		 * Android's hardware Back must close the sheet it is looking at.
+		 *
+		 * Nothing registered `backButton`, so Back fell through to the platform: it
+		 * navigated the route underneath (or left the app) while the dialog stayed
+		 * mounted on top. That is the sheet that looked stuck — tapping Remind me
+		 * raises the system notification prompt, and dismissing it with Back left
+		 * the app behind it with no way out. Closing is delegated to the dialog's
+		 * own close button, so the sheet's teardown (note flushing) still runs.
+		 */
+		let backHandle: { remove: () => Promise<void> } | null = null;
+		void CapApp.addListener('backButton', ({ canGoBack }) => {
+			const dialog = document.querySelector('[role="dialog"]');
+			if (dialog) {
+				// Click the dialog's OWN close button. Synthesising Escape on the dialog
+				// does not reach bits-ui's handler; its close button is the same code path
+				// the X takes, so notes still flush.
+				const close = dialog.querySelector<HTMLElement>('[data-slot="sheet-close"]');
+				if (close) close.click();
+				else document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+				return;
+			}
+			if (canGoBack) window.history.back();
+			else void CapApp.exitApp();
+		}).then((handle) => (backHandle = handle));
+
+		return () => {
+			stopStatus();
+			void backHandle?.remove();
+		};
 	});
 </script>
 
@@ -97,7 +152,18 @@
 	<meta name="color-scheme" content="light dark" />
 </svelte:head>
 
-<div class="flex h-dvh w-full flex-col overflow-hidden bg-background text-foreground">
+<!--
+	`fixed inset-0`, NOT `h-dvh`.
+
+	`dvh` follows the DYNAMIC viewport, and in an Android WebView that unit is
+	recomputed when another activity covers us — the system share sheet, notably.
+	The share sheet covers roughly two thirds of the screen, so `100dvh` became
+	~35% of the display, and Chrome never recomputed it when the sheet closed:
+	the shell collapsed to a third of the screen with the bottom nav floating in
+	the middle and dead black below it. `inset-0` is measured against the layout
+	viewport, which the sheet never changes.
+-->
+<div class="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground">
 	<PermissionBanner
 		{status}
 		onfixexact={() => openExactAlarmSettings()}
@@ -154,6 +220,10 @@ the whole app could be dragged sideways. Nothing here is meant to scroll
 	source of truth for light/dark).
 -->
 <Toaster theme={resolvedTheme()} position="top-center" closeButton />
+
+<!-- Above everything including the toast host: a ringing alarm outranks a
+     confirmation toast. -->
+<RingingOverlay />
 
 <Sheet.Root bind:open={sheetOpen}>
 	<!--

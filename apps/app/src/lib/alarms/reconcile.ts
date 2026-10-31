@@ -178,7 +178,11 @@ export async function reconcile({
 			taskId: task.id,
 			title: task.title,
 			at: alarmAt as string,
-			ringtone: ringtoneFor(task)
+			ringtone: ringtoneFor(task),
+			// The notes ride with the alarm so the ringing screen can say what this
+			// is about. Read at arm time, which is the last moment the row is known
+			// to be current.
+			description: task.notes ?? null
 		});
 
 		if (!outcome.ok) {

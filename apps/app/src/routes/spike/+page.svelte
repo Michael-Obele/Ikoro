@@ -83,7 +83,8 @@
 				taskId: TASK_ID,
 				title: 'Ikoro spike',
 				at: at.toISOString(),
-				ringtone: null
+				ringtone: null,
+				description: 'A description, so the ringing screen can be checked too.'
 			});
 			armedFor = at;
 		} catch (error) {

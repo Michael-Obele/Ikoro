@@ -81,6 +81,8 @@ export interface IkoroAlarmPlugin {
 		at: string;
 		/** The sound to ring with; omit for the device default alarm sound. */
 		ringtone?: string | null;
+		/** The task's notes, shown on the ringing screen. Omit when there are none. */
+		description?: string | null;
 	}): Promise<{ platformId: string }>;
 	cancel(options: { platformId: string }): Promise<void>;
 	cancelAll(): Promise<void>;
@@ -107,6 +109,14 @@ export interface IkoroAlarmPlugin {
 	 * rather than assuming its input was kept.
 	 */
 	setSnoozeMinutes(options: { minutes: number }): Promise<{ minutes: number }>;
+	/**
+	 * Answer a ringing alarm from the WEB UI — the same two intents the native
+	 * ringing screen sends. Needed because Android refuses the full-screen
+	 * takeover while the app is in the foreground, leaving the in-app overlay as
+	 * the only control the user can reach.
+	 */
+	snooze(options: { id: number; taskId: string; title?: string }): Promise<void>;
+	dismiss(options: { id: number; taskId: string; title?: string }): Promise<void>;
 	addListener(
 		eventName: IkoroAlarmEvent,
 		listener: (payload: IkoroAlarmEventPayload) => void

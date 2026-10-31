@@ -67,7 +67,8 @@ describe('schedule', () => {
 			taskId: 'task-1',
 			title: 'Call the dentist',
 			at: FUTURE,
-			ringtone: null
+			ringtone: null,
+			description: null
 		});
 		expect(outcome).toEqual({ ok: true, platformId: String(hashId('task-1')), exact: true });
 	});

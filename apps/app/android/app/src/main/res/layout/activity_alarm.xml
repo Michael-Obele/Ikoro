@@ -19,6 +19,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#FF0B0B0F"
+    android:fitsSystemWindows="true"
     android:gravity="center_horizontal"
     android:orientation="vertical"
     android:padding="32dp">
@@ -48,6 +49,36 @@
         android:textColor="#FFF2F2F7"
         android:textSize="32sp"
         android:textStyle="bold" />
+
+    <!-- The task's notes, when it has any. IkoroAlarmActivity hides this rather
+         than leaving it blank, so a task without notes leaves no gap that reads
+         as a missing field. Capped at four lines: this is context, not the task. -->
+    <TextView
+        android:id="@+id/alarm_description"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:ellipsize="end"
+        android:gravity="center"
+        android:maxLines="4"
+        android:textColor="#FFB4B4C2"
+        android:textSize="18sp" />
+
+    <!--
+      The task's notes, when it has any. At 6am "Call the dentist" often is not
+      enough to decide what to do; the reason belongs on this screen. GONE when
+      empty, so a task without notes leaves no gap.
+    -->
+    <TextView
+        android:id="@+id/alarm_description"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:gravity="center"
+        android:maxLines="6"
+        android:textColor="#FFB9B9C6"
+        android:textSize="16sp"
+        android:visibility="gone" />
 
     <Space
         android:layout_width="match_parent"

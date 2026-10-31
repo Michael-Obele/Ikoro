@@ -28,6 +28,7 @@ internal object IkoroAlarms {
     const val EXTRA_TITLE = "ikoro.title"
     const val EXTRA_TRIGGER = "ikoro.triggerAtMillis"
     const val EXTRA_RINGTONE = "ikoro.ringtone"
+    const val EXTRA_DESCRIPTION = "ikoro.description"
 
     /**
      * How far Snooze pushes an alarm out, in millis: the user's chosen length (see
@@ -61,10 +62,11 @@ internal object IkoroAlarms {
             taskId: String,
             title: String,
             triggerAtMillis: Long,
-            ringtone: String? = null
+            ringtone: String? = null,
+            description: String? = null
     ): Boolean {
         if (!canScheduleExact(context)) return false
-        val alarm = StoredAlarm(id, taskId, title, triggerAtMillis, ringtone)
+        val alarm = StoredAlarm(id, taskId, title, triggerAtMillis, ringtone, description)
         if (!arm(context, alarm)) return false
         AlarmStore.put(context, alarm)
         return true
@@ -126,7 +128,8 @@ internal object IkoroAlarms {
                     alarm.taskId,
                     alarm.title,
                     alarm.triggerAtMillis,
-                    alarm.ringtone
+                    alarm.ringtone,
+                    alarm.description
             )
         }
     }
@@ -234,6 +237,7 @@ internal object IkoroAlarms {
             // null read back the same, but omitting keeps the parcel small and
             // makes "this alarm wants the default sound" explicit in the payload.
             alarm.ringtone?.let { intent.putExtra(EXTRA_RINGTONE, it) }
+            alarm.description?.let { intent.putExtra(EXTRA_DESCRIPTION, it) }
         }
         return PendingIntent.getBroadcast(context.applicationContext, id, intent, flags)
     }

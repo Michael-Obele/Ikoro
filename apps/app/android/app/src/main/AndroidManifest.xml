@@ -44,6 +44,15 @@
                             match the `systemExempted` service type declared
                             below. Without it startForeground() throws
                             SecurityException.
+      FOREGROUND_SERVICE_MEDIA_PLAYBACK
+                            The ringing service PLAYS AUDIO (its whole job), and
+                            from Android 16 the platform's audio hardening mutes
+                            background playback from a service that does not
+                            declare `mediaPlayback`. Measured on a Pixel 10 Pro
+                            XL (Android 17): with only `systemExempted`, logcat
+                            said "AudioHardening background playback would be
+                            muted ... usage: USAGE_ALARM" and the alarm fired
+                            silently — an alarm that rings only on paper.
       VIBRATE               the alarm vibrates while it rings. Without the
                             permission the vibrate() calls are dropped in
                             silence, which is an alarm nobody hears over a pocket.
@@ -52,6 +61,7 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
     <!--
@@ -64,8 +74,16 @@
     -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <!--
+        `enableOnBackInvokedCallback` opts this app INTO Android 13+ predictive back:
+        without it the system plays the old non-animated back transition and never
+        peeks at the screen behind. The JS `backButton` listener still receives the
+        press (Capacitor routes it through the platform's back callback), which is
+        what closes an open sheet.
+    -->
     <application
         android:allowBackup="true"
+        android:enableOnBackInvokedCallback="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -132,12 +150,15 @@
              load-bearing, not decoration: declaring this type WITHOUT meeting a
              listed criterion makes the system throw
              ForegroundServiceTypeNotAllowedException. Equally, claiming
-             `mediaPlayback` would assert a media-playback session the app never
-             starts. The declared type must match the permission above. -->
+             `mediaPlayback` IS declared, contrary to the earlier note here: the
+             service plays the ringtone, so it genuinely holds a playback session.
+             `systemExempted` alone left the audio muted by Android's background
+             audio hardening. Both are declared so the service keeps the alarm
+             clock exemption AND the right to make sound. -->
         <service
             android:name=".alarm.IkoroAlarmService"
             android:exported="false"
-            android:foregroundServiceType="systemExempted" />
+            android:foregroundServiceType="systemExempted|mediaPlayback" />
 
         <!-- The ringing screen. showWhenLocked/turnScreenOn put it over the lock
              screen with the display already on; excludeFromRecents so dismissing

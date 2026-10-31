@@ -27,7 +27,14 @@ internal data class StoredAlarm(
          * system ringtone picker, or null for "the device default". Read back with `optString` and
          * mapped to null when absent, so blobs written before ringtones existed still parse.
          */
-        val ringtone: String? = null
+        val ringtone: String? = null,
+        /**
+         * The task's notes, shown on the ringing screen so the user can tell WHAT
+         * this is without unlocking and opening the app. Null when the task has no
+         * notes; parsed with `optString` so blobs written before it existed still
+         * load.
+         */
+        val description: String? = null
 )
 
 internal object AlarmStore {
@@ -54,6 +61,7 @@ internal object AlarmStore {
     private const val KEY_TITLE = "title"
     private const val KEY_TRIGGER = "triggerAtMillis"
     private const val KEY_RINGTONE = "ringtone"
+    private const val KEY_DESCRIPTION = "description"
 
     /** The snooze lengths the UI offers. Anything else is not a choice a human made. */
     val SNOOZE_CHOICES = setOf(2, 5, 10, 15)
@@ -205,7 +213,8 @@ internal object AlarmStore {
                                 taskId = taskId,
                                 title = entry.optString(KEY_TITLE, ""),
                                 triggerAtMillis = entry.optLong(KEY_TRIGGER, 0L),
-                                ringtone = entry.optString(KEY_RINGTONE, "").ifEmpty { null }
+                                ringtone = entry.optString(KEY_RINGTONE, "").ifEmpty { null },
+                                description = entry.optString(KEY_DESCRIPTION, "").ifEmpty { null }
                         )
                 )
             }
@@ -228,6 +237,7 @@ internal object AlarmStore {
                         // Omitted entirely when null: an older app reading this blob
                         // still parses it, and "no key" is the same fact as "null".
                         alarm.ringtone?.let { put(KEY_RINGTONE, it) }
+                        alarm.description?.let { put(KEY_DESCRIPTION, it) }
                     }
             )
         }

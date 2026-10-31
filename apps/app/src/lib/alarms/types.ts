@@ -25,6 +25,12 @@ export interface AlarmRequest {
 	 * the export file; the task row carries it for THIS device.
 	 */
 	ringtone?: string | null;
+	/**
+	 * The task's notes, shown on the ringing screen so the alarm can be placed
+	 * without unlocking the phone and opening the app. Android-only today; the
+	 * desktop notification already carries the title, and systemd has no screen.
+	 */
+	description?: string | null;
 }
 
 export interface AlarmPermissionStatus {

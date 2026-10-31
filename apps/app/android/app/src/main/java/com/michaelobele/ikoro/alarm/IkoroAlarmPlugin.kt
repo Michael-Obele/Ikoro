@@ -98,6 +98,8 @@ class IkoroAlarmPlugin : Plugin() {
         val title = call.getString("title").orEmpty()
         // Optional. Absent or blank means "the device default alarm sound".
         val ringtone = call.getString("ringtone")?.takeIf { it.isNotBlank() }
+        // Optional. The task's notes, shown on the ringing screen.
+        val description = call.getString("description")?.takeIf { it.isNotBlank() }
 
         if (id == null || taskId.isNullOrEmpty() || at.isNullOrEmpty()) {
             call.reject("schedule requires id, taskId and at")
@@ -127,7 +129,16 @@ class IkoroAlarmPlugin : Plugin() {
             return
         }
 
-        if (!IkoroAlarms.schedule(context, id, taskId, title, triggerAtMillis, ringtone)) {
+        if (!IkoroAlarms.schedule(
+                        context,
+                        id,
+                        taskId,
+                        title,
+                        triggerAtMillis,
+                        ringtone,
+                        description
+                )
+        ) {
             call.reject("could not arm the alarm: exact alarm permission was refused")
             return
         }
@@ -214,6 +225,49 @@ class IkoroAlarmPlugin : Plugin() {
         status.put("exact", IkoroAlarms.canScheduleExact(context))
         status.put("fullScreenIntent", canUseFullScreenIntent())
         call.resolve(status)
+    }
+
+    // ------------------------------------------------------- snooze / dismiss
+
+    /**
+     * Answer a ringing alarm from the WEB UI.
+     *
+     * The native ringing screen talks to the service directly, but it only appears when the system
+     * allowed the full-screen takeover. With the app in the foreground there is no such screen, so
+     * the in-app one needs a way to deliver the same two actions — and this is it: the same intents
+     * the native buttons send, started from the bridge.
+     */
+    @PluginMethod
+    fun snooze(call: PluginCall) = sendAlarmAction(call, IkoroAlarmService.ACTION_SNOOZE)
+
+    @PluginMethod
+    fun dismiss(call: PluginCall) = sendAlarmAction(call, IkoroAlarmService.ACTION_DISMISS)
+
+    private fun sendAlarmAction(call: PluginCall, action: String) {
+        val id = call.getInt("id")
+        val taskId = call.getString("taskId")
+
+        if (id == null || taskId.isNullOrEmpty()) {
+            call.reject("$action requires id and taskId")
+            return
+        }
+
+        val request =
+                Intent(context, IkoroAlarmService::class.java).apply {
+                    this.action = action
+                    putExtra(IkoroAlarms.EXTRA_ID, id)
+                    putExtra(IkoroAlarms.EXTRA_TASK_ID, taskId)
+                    putExtra(IkoroAlarms.EXTRA_TITLE, call.getString("title").orEmpty())
+                }
+
+        try {
+            context.startService(request)
+            call.resolve()
+        } catch (error: Exception) {
+            // A ringing alarm that cannot be answered is worth surfacing: the
+            // service is foreground, so reaching here means it is already gone.
+            call.reject("could not $action the alarm: ${error.message}")
+        }
     }
 
     // -------------------------------------------------------- requestNotifications

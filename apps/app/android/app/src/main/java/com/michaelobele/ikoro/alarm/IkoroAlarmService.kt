@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.media.RingtoneManager
@@ -14,6 +15,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.os.VibrationEffect
+import androidx.core.app.ServiceCompat
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
@@ -60,6 +62,7 @@ class IkoroAlarmService : Service() {
         val id = intent.getIntExtra(IkoroAlarms.EXTRA_ID, -1)
         val taskId = intent.getStringExtra(IkoroAlarms.EXTRA_TASK_ID).orEmpty()
         val title = intent.getStringExtra(IkoroAlarms.EXTRA_TITLE).orEmpty()
+        val description = intent.getStringExtra(IkoroAlarms.EXTRA_DESCRIPTION).orEmpty()
         ringtone = intent.getStringExtra(IkoroAlarms.EXTRA_RINGTONE)
 
         when (intent.action) {
@@ -79,7 +82,7 @@ class IkoroAlarmService : Service() {
             }
         }
 
-        startRinging(id, taskId, title)
+        startRinging(id, taskId, title, description)
         // START_STICKY: if the system kills us mid-ring it should bring the alarm
         // back. The null-intent branch above is what makes that safe.
         return START_STICKY
@@ -91,7 +94,7 @@ class IkoroAlarmService : Service() {
         super.onDestroy()
     }
 
-    private fun startRinging(id: Int, taskId: String, title: String) {
+    private fun startRinging(id: Int, taskId: String, title: String, description: String) {
         // A second alarm arriving while one is already ringing must not stack a
         // second ringtone on top of the first -- two players at once is louder,
         // and neither of them is independently stoppable.
@@ -103,6 +106,9 @@ class IkoroAlarmService : Service() {
                     putExtra(IkoroAlarms.EXTRA_ID, id)
                     putExtra(IkoroAlarms.EXTRA_TASK_ID, taskId)
                     putExtra(IkoroAlarms.EXTRA_TITLE, title)
+                    if (description.isNotEmpty()) {
+                        putExtra(IkoroAlarms.EXTRA_DESCRIPTION, description)
+                    }
                     flags =
                             Intent.FLAG_ACTIVITY_NEW_TASK or
                                     Intent.FLAG_ACTIVITY_CLEAR_TOP or
@@ -117,6 +123,10 @@ class IkoroAlarmService : Service() {
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
 
+        // The notes ride along under the title: at 6am "Call the dentist" is not
+        // enough context on its own.
+        val body = if (description.isBlank()) title else "$title\n$description"
+
         val notification =
                 NotificationCompat.Builder(this, CHANNEL_ID)
                         // A DEDICATED monochrome glyph, not the launcher icon. The platform
@@ -127,7 +137,8 @@ class IkoroAlarmService : Service() {
                         // the glyph in its alpha, which is what the platform wants here.
                         .setSmallIcon(R.drawable.ic_stat_alarm)
                         .setContentTitle(getString(R.string.app_name))
-                        .setContentText(title)
+                        .setContentText(body)
+                        .setStyle(NotificationCompat.BigTextStyle().bigText(body))
                         // CATEGORY_ALARM is what tells the system, and any smartwatch or car
                         // head unit in the loop, that this is an alarm and not a chat ping.
                         .setCategory(NotificationCompat.CATEGORY_ALARM)
@@ -136,7 +147,13 @@ class IkoroAlarmService : Service() {
                         .setAutoCancel(false)
                         // Silent: the channel is silent and we own the sound, so the system
                         // must not add a second copy of it.
-                        .setSilent(true)
+                        //
+                        // NOT `.setSilent(true)`. A silent notification is not an
+                        // ALERTING one, and Android never launches a full-screen intent
+                        // for a non-alerting notification — that single call was why the
+                        // ringing screen never appeared and the phone simply sat black
+                        // while it rang. The channel already carries no sound and no
+                        // vibration, so removing it adds none.
                         .setContentIntent(fullScreen)
                         // THE line that makes this an alarm rather than a banner. Without it the
                         // reminder waits in the shade until the user happens to look.
@@ -153,10 +170,35 @@ class IkoroAlarmService : Service() {
         // releases below API 34 a type bit that does not exist on them. Letting
         // the manifest supply the type is correct on every API level, which is why
         // it is the documented default rather than a shortcut.
-        startForeground(id, notification)
+        // EXPLICIT type, not the two-argument form.
+        //
+        // With two types in the manifest (`systemExempted|mediaPlayback`) the
+        // platform cannot tell which one this start is asserting, and it treated
+        // the service as non-media — so Android 16's audio hardening muted the
+        // ringtone: "AudioHardening background playback would be muted ... usage:
+        // USAGE_ALARM". Naming `mediaPlayback` here is what makes the alarm
+        // audible from a locked screen.
+        val types =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SYSTEM_EXEMPTED or
+                            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                } else {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                }
+
+        ServiceCompat.startForeground(this, id, notification, types)
 
         startPlayer()
         startVibration()
+
+        // Tell JS it is ringing.
+        //
+        // The full-screen activity emits this too, but it only exists when the
+        // system allowed the takeover. With the app in the FOREGROUND Android
+        // turns the full-screen intent into a heads-up notification and never
+        // starts that activity -- so without this line the app rang with no UI
+        // anywhere: sound, a shade notification, and nothing to dismiss.
+        IkoroAlarmPlugin.notifyAlarmEvent(taskId, IkoroAlarmPlugin.EVENT_RINGING)
     }
 
     /**

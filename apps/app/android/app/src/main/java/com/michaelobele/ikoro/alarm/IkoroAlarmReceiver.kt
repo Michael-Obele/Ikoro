@@ -50,6 +50,12 @@ class IkoroAlarmReceiver : BroadcastReceiver() {
                     intent.getStringExtra(IkoroAlarms.EXTRA_RINGTONE)?.let {
                         putExtra(IkoroAlarms.EXTRA_RINGTONE, it)
                     }
+                    // Forwarded like every other extra. Without this hop the
+                    // description dies here: the ringing screen reads it off the
+                    // service's intent, so a missing copy shows the title alone.
+                    intent.getStringExtra(IkoroAlarms.EXTRA_DESCRIPTION)?.let {
+                        putExtra(IkoroAlarms.EXTRA_DESCRIPTION, it)
+                    }
                 }
 
         try {

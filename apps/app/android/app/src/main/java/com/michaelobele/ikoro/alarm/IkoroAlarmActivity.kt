@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.view.View
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.TextView
@@ -96,11 +97,19 @@ class IkoroAlarmActivity : AppCompatActivity() {
         id = source.getIntExtra(IkoroAlarms.EXTRA_ID, -1)
         taskId = source.getStringExtra(IkoroAlarms.EXTRA_TASK_ID).orEmpty()
         title = source.getStringExtra(IkoroAlarms.EXTRA_TITLE).orEmpty()
+        val description = source.getStringExtra(IkoroAlarms.EXTRA_DESCRIPTION).orEmpty()
 
         // A ringing alarm with no title would be a noise the user cannot place, so
         // fall back to the app name rather than showing an empty screen.
         findViewById<TextView>(R.id.alarm_title).text =
                 title.ifEmpty { getString(R.string.app_name) }
+
+        // The notes, when the task has any. Hidden rather than blank so a task
+        // without notes does not leave a gap the user reads as a missing field.
+        findViewById<TextView>(R.id.alarm_description).apply {
+            text = description
+            visibility = if (description.isBlank()) View.GONE else View.VISIBLE
+        }
 
         // The button says how long it actually snoozes. Re-bound with everything else,
         // so a settings change made while this screen is up still cannot desync the
