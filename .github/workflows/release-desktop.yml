@@ -64,7 +64,22 @@ permissions:
 jobs:
   release:
     name: Build Linux desktop bundles
-    runs-on: ubuntu-latest
+    # PINNED ON PURPOSE, do not go back to ubuntu-latest.
+    #
+    # The AppImage bundle COPIES this runner's webkit2gtk and glib libraries into
+    # the payload, so the runner's glibc becomes the minimum glibc the product
+    # needs. ubuntu-latest moved past 24.04 while this file still said `latest`,
+    # and the v0.3.5 AppImage shipped libraries demanding GLIBC_2.42 and 2.43.
+    # It died in the loader on an Ubuntu 24.04 machine (glibc 2.39) with
+    # "version `GLIBC_2.43' not found", no window, and no terminal to say why —
+    # double-click looked like nothing happening. The .deb was unaffected because
+    # it links the system webkit instead of a bundled copy.
+    #
+    # 22.04 is the oldest LTS with webkit2gtk-4.1, which Tauri v2 requires:
+    # libwebkit2gtk-4.1-dev 2.50.4-0ubuntu0.22.04.1 is in jammy universe, and the
+    # runner image has universe enabled. Its glibc is 2.35, so the bundle runs
+    # from 22.04 forward.
+    runs-on: ubuntu-22.04
     timeout-minutes: 60
 
     steps:
@@ -86,8 +101,8 @@ jobs:
       # The union of the official Tauri v2 GitHub pipeline guide's dependency
       # list and what this machine actually needed (gdk-sys fails to build
       # without libgtk-3-dev, and the AppImage needs libfuse2). Explicit
-      # because ubuntu-latest images change under you — a bare `apt-get
-      # install` that worked last month can silently lose a package.
+      # because runner images change under you — a bare `apt-get install` that
+      # worked last month can silently lose a package.
       - name: Install Linux system dependencies
         shell: bash
         run: |
