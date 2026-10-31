@@ -4,59 +4,76 @@ import {
 	clearTokens,
 	hexToOklch,
 	hexToRgb,
+	hexToTone,
 	applyTokens,
 	type Palettes
 } from '#lib/theme/monet';
+import type { TonalPalette } from 'ikoro-dynamic-colors';
 
 /**
- * THE TONAL -> ROLE MAPPING, ASSERTED BY TONE.
- *
- * The native plugin reads five tonal palettes off the phone and stops there; the
- * mapping from tones to M3 roles is the part that can be wrong in a way nobody
- * notices until a screen looks broken. So the palettes below are SYNTHETIC and
- * deliberately unambiguous: every tone in a palette is a distinct, recognisable
- * hex, which means a role that lands on the wrong tone produces a different
- * string and fails here rather than looking "roughly right" on a device.
- *
- * What this file catches:
- *  - a role mapped to the wrong tone (light primary on 30 instead of 40)
- *  - a light/dark pair that was not inverted (dark primary on 40 instead of 80)
- *  - a role that silently disappeared because a palette key was renamed
- *  - an oklch() conversion that drifts, since the expected values are computed
- *    from the same hexes through an independent path
- *
- * What it does NOT catch, and cannot: whether Android actually returns these
- * palettes on a real device. That needs an Android 12+ phone and is untested.
+ * Guards the tone -> M3 role mapping from synthetic palettes whose every tone is a distinct hex, so a mis-mapped role fails instead of looking "roughly right". What it cannot catch: what a real Android device returns.
  */
 
+/** Linear-light -> gamma sRGB. The transfer function `hexToRgb` undoes. */
+function encode(c: number): number {
+	return c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+}
+
+/** `oklch(L C H)` -> `#rrggbb`, clamped into sRGB — used to build fixtures. */
+function oklchHex(L: number, C: number, h: number): string {
+	const rad = (h * Math.PI) / 180;
+	const a = C * Math.cos(rad);
+	const bb = C * Math.sin(rad);
+	const l = (L + 0.3963377774 * a + 0.2158037573 * bb) ** 3;
+	const m = (L - 0.1055613458 * a - 0.0638541728 * bb) ** 3;
+	const s = (L - 0.0894841775 * a - 1.291485548 * bb) ** 3;
+	const channels = [
+		4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+		-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+		-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s
+	].map((c) => Math.round(Math.min(1, Math.max(0, encode(c))) * 255));
+	return `#${channels.map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** Relative luminance of a linear-sRGB triple, straight out of WCAG 2.1. */
+function linearY(r: number, g: number, b: number): number {
+	return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+const toLinear = (c: number): number => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+
 /**
- * A palette where tone N is `#NNNNNN`-ish but distinct per palette, so a role
- * reading the wrong palette is as visible as one reading the wrong tone.
- *
- * `accent1` tones are `#a1NNNN`, `accent2` `#a2NNNN`, and so on. The tone number
- * is encoded in the last two hex digits where it fits, and the full tone is
- * recoverable from the map below rather than from the string.
+ * The colour whose CIE L* (Material's tone axis) is exactly `tone`, solved by bisecting OKLCH L — a tone is measured from the colour, never read from a key.
  */
-function palette(prefix: string, tones: number[]): Record<string, string> {
-	const out: Record<string, string> = {};
-	for (const tone of tones) {
-		// Two hex digits of tone, zero-padded; 1000 wraps to 00, which is fine
-		// because the prefix already distinguishes the palette and the tone map
-		// below is what the assertions read.
-		const byte = (tone % 256).toString(16).padStart(2, '0');
-		out[String(tone)] = `#${prefix}${byte}${byte}`;
+function toneHex(tone: number, chroma: number, hue: number): string {
+	// tone -> relative luminance, the CIE L* definition (linear branch below 8).
+	const targetY = tone >= 8 ? ((tone + 16) / 116) ** 3 : tone / 903.296296296;
+	let low = 0;
+	let high = 1;
+	for (let i = 0; i < 32; i++) {
+		const mid = (low + high) / 2;
+		const [r, g, b] = hexToRgb(oklchHex(mid, chroma, hue)).map(toLinear) as [number, number, number];
+		if (linearY(r, g, b) < targetY) low = mid;
+		else high = mid;
 	}
+	return oklchHex((low + high) / 2, chroma, hue);
+}
+
+/** One hue per palette, so a role reading the wrong palette is as visible as a wrong tone. */
+function palette(hue: number, tones: number[]): Record<string, string> {
+	const out: Record<string, string> = {};
+	for (const tone of tones) out[String(tone)] = toneHex(tone, 0.03, hue);
 	return out;
 }
 
 const TONES = [0, 4, 10, 12, 17, 20, 22, 30, 40, 50, 60, 80, 90, 92, 94, 95, 96, 99, 100];
 
 const PALETTES: Palettes = {
-	accent1: palette('a1', TONES),
-	accent2: palette('a2', TONES),
-	accent3: palette('a3', TONES),
-	neutral1: palette('b1', TONES),
-	neutral2: palette('b2', TONES)
+	accent1: palette(20, TONES),
+	accent2: palette(140, TONES),
+	accent3: palette(260, TONES),
+	neutral1: palette(80, TONES),
+	neutral2: palette(320, TONES)
 };
 
 /** The hex a role should have landed on, read straight out of the fixture. */
@@ -157,9 +174,7 @@ describe('buildMonetSchemes — dark', () => {
 
 describe('buildMonetSchemes — the shadcn aliases', () => {
 	it('points every alias at the same value as its M3 role', () => {
-		// The alias table is transcribed from layout.css, so this is the guard
-		// against the two drifting: an alias that stops matching its role means
-		// the stylesheet's mapping table and this module disagree.
+		// Guards the alias table against drifting from layout.css's mapping.
 		const pairs: [string, string][] = [
 			['--background', '--md-sys-color-surface'],
 			['--foreground', '--md-sys-color-on-surface'],
@@ -182,12 +197,10 @@ describe('buildMonetSchemes — the shadcn aliases', () => {
 	});
 
 	it('keeps error fixed rather than wallpaper-derived', () => {
-		// M3 keeps error red in every scheme, so the same palettes must not move
-		// it. If this ever starts tracking accent1, "destructive" stops meaning
-		// destructive on a green wallpaper.
+		// M3 keeps error red in every scheme, so no wallpaper may move it.
 		const other = buildMonetSchemes({
 			...PALETTES,
-			accent1: palette('ff', TONES)
+			accent1: palette(0, TONES)
 		});
 		expect(other.light['--md-sys-color-error']).toBe(schemes.light['--md-sys-color-error']);
 		expect(other.dark['--md-sys-color-error']).toBe(schemes.dark['--md-sys-color-error']);
@@ -198,8 +211,7 @@ describe('buildMonetSchemes — degradation', () => {
 	it('omits roles whose palette is missing instead of inventing a colour', () => {
 		const partial = buildMonetSchemes({ accent1: PALETTES.accent1 });
 		expect(partial.light['--md-sys-color-primary']).toBeDefined();
-		// No neutral1, so no surface. The caller keeps the static stylesheet's
-		// value for it, which is a real contrast-checked colour.
+		// The caller keeps the static stylesheet's contrast-checked surface instead.
 		expect(partial.light['--md-sys-color-surface']).toBeUndefined();
 		expect(partial.light['--background']).toBeUndefined();
 	});
@@ -209,8 +221,7 @@ describe('buildMonetSchemes — degradation', () => {
 			...PALETTES,
 			accent1: { '40': '#123456' }
 		});
-		// Tone 80 is missing; 40 is the only tone, so dark primary lands there
-		// rather than disappearing.
+		// Tone 80 is missing, so dark primary falls back to the only tone there is.
 		expect(sparse.dark['--md-sys-color-primary']).toBe(hexToOklch('#123456'));
 	});
 
@@ -224,8 +235,7 @@ describe('buildMonetSchemes — degradation', () => {
 
 describe('hexToOklch', () => {
 	it('converts the sRGB primaries to the known OKLCH values', () => {
-		// Reference values from CSS Color 4. Asserted to 2 decimals because the
-		// output is rounded to 3 and the matrices are not exact to more.
+		// Reference values from CSS Color 4, asserted to 2 decimals — the output is rounded to 3.
 		expect(hexToOklch('#ff0000')).toMatch(/^oklch\(0\.628 0\.258 29\.2\d*\)$/);
 		expect(hexToOklch('#00ff00')).toMatch(/^oklch\(0\.866 0\.295 142\.\d+\)$/);
 		expect(hexToOklch('#0000ff')).toMatch(/^oklch\(0\.452 0\.313 264\.\d+\)$/);
@@ -248,25 +258,15 @@ describe('hexToOklch', () => {
 
 describe('buildMonetSchemes — the REAL Android tone grid', () => {
 	/**
-	 * THE GRID ANDROID ACTUALLY PUBLISHES — 0, 10, 50, 100..1000, verified against
-	 * the `R.color.system_accent1_*` reference. None of the M3 role table's fine
-	 * tones (4, 12, 17, 22, 30, 40, 92..99) exist on it.
-	 *
-	 * The synthetic fixture above deliberately carries every wanted tone so the
-	 * mapping itself can be asserted exactly; this one deliberately does NOT, so
-	 * the fallback path is exercised the way a real device exercises it. The bug
-	 * this guards: the old nearest-tone snap put dark surface, every dark
-	 * container (4/12/17/22) and outline-variant (30, which draws every input
-	 * border) on the SAME tone 10 — the scheme went flat and its boundaries
-	 * vanished, which is what "dark mode is unreadable with material colour" was.
+	 * Android's real grid is 0, 10, 50, 100..1000 — none of M3's fine tones exist, so this fixture exercises the fallback path a device does.
 	 */
 	const REAL_TONES = [0, 10, 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
 	const REAL: Palettes = {
-		accent1: palette('a1', REAL_TONES),
-		accent2: palette('a2', REAL_TONES),
-		accent3: palette('a3', REAL_TONES),
-		neutral1: palette('b1', REAL_TONES),
-		neutral2: palette('b2', REAL_TONES)
+		accent1: palette(20, REAL_TONES),
+		accent2: palette(140, REAL_TONES),
+		accent3: palette(260, REAL_TONES),
+		neutral1: palette(80, REAL_TONES),
+		neutral2: palette(320, REAL_TONES)
 	};
 	const real = buildMonetSchemes(REAL);
 
@@ -283,16 +283,14 @@ describe('buildMonetSchemes — the REAL Android tone grid', () => {
 		for (let i = 1; i < ladder.length; i++) {
 			expect(ladder[i] as number, `ladder step ${i}`).toBeGreaterThan(ladder[i - 1] as number);
 		}
-		// …and the page surface itself is no longer painted over by its containers:
-		// card (tone 12) must be a different colour from surface (tone 10).
+		// Guarded bug: snapping everything to tone 10 made dark cards equal the surface.
 		expect(real.dark['--card']).not.toBe(real.dark['--background']);
 		expect(real.dark['--muted']).not.toBe(real.dark['--background']);
 		expect(real.light['--card']).not.toBe(real.light['--background']);
 	});
 
 	it('keeps dark outline-variant (every input border) off the surface tone', () => {
-		// Tone 30 used to snap to 10: borders matched the page and controls lost
-		// their boundaries. It must now sit strictly between tone 10 and tone 50.
+		// Tone 30 used to snap to 10, so borders matched the page; it must sit between 10 and 50.
 		const border = L(real.dark['--border']);
 		expect(border).toBeGreaterThan(L(hexToOklch(REAL.neutral1!['10']!)));
 		expect(border).toBeLessThan(L(hexToOklch(REAL.neutral2!['50']!)));
@@ -301,16 +299,17 @@ describe('buildMonetSchemes — the REAL Android tone grid', () => {
 	});
 
 	it('returns available tones verbatim — interpolation never touches an exact hit', () => {
-		// On the real grid the exact tones a role can land on are 0, 10, 50 and 100;
-		// everything else (80, 90, 99, …) is interpolated and asserted below.
+		// Only 0, 10, 50 and 100 are exact hits here; the rest is interpolated.
 		expect(real.dark['--md-sys-color-surface']).toBe(hexToOklch(REAL.neutral1!['10']!));
 		expect(real.light['--md-sys-color-on-surface']).toBe(hexToOklch(REAL.neutral1!['10']!));
 		expect(real.light['--md-sys-color-scrim']).toBe(hexToOklch(REAL.neutral1!['0']!));
-		// Light surface is tone 99, which the real grid does NOT carry: it must
-		// interpolate between 50 and 100 rather than snap to either end.
-		const surface = L(real.light['--md-sys-color-surface']);
-		expect(surface).toBeGreaterThan(L(hexToOklch(REAL.neutral1!['50']!)));
-		expect(surface).toBeLessThan(L(hexToOklch(REAL.neutral1!['100']!)));
+		// Light surface is tone 99, which this grid lacks, so it must be a colour the grid does not contain.
+		expect(real.light['--md-sys-color-surface']).not.toBe(
+			hexToOklch(REAL.neutral1!['50']!)
+		);
+		expect(L(real.light['--md-sys-color-surface'])).toBeGreaterThan(
+			L(hexToOklch(REAL.neutral1!['50']!))
+		);
 	});
 
 	it('still emits every alias its role has, so no token goes half-populated', () => {
@@ -319,6 +318,189 @@ describe('buildMonetSchemes — the REAL Android tone grid', () => {
 			expect(real[scheme]['--foreground']).toBeDefined();
 			expect(real[scheme]['--border']).toBeDefined();
 			expect(real[scheme]['--input']).toBeDefined();
+		}
+	});
+});
+
+/**
+ * Verbatim from `IkoroDynamicColors.getPalettes()` on a Pixel 10 Pro XL, Android 17 (2026-10-31). The suffixes are shade indices, not tones: `_0` is #ffffff, `_1000` is #000000.
+ */
+const DEVICE: Palettes = {
+	accent1: {
+		'0': '#ffffff',
+		'10': '#fffbff',
+		'50': '#ffedec',
+		'100': '#ffdad9',
+		'200': '#ffb3b3',
+		'300': '#ff888c',
+		'400': '#f85965',
+		'500': '#d6404e',
+		'600': '#b32538',
+		'700': '#910423',
+		'800': '#680015',
+		'900': '#40000a',
+		'1000': '#000000'
+	},
+	accent2: {
+		'0': '#ffffff',
+		'10': '#fffbff',
+		'50': '#ffecef',
+		'100': '#ffd9e0',
+		'200': '#ffb1c4',
+		'300': '#ff85a8',
+		'400': '#e06a8d',
+		'500': '#c15174',
+		'600': '#a1385b',
+		'700': '#832044',
+		'800': '#64042e',
+		'900': '#3f001a',
+		'1000': '#000000'
+	},
+	accent3: {
+		'0': '#ffffff',
+		'10': '#fffbff',
+		'50': '#f8edff',
+		'100': '#ecdcff',
+		'200': '#d6baff',
+		'300': '#c197ff',
+		'400': '#a67be6',
+		'500': '#8b61ca',
+		'600': '#7148af',
+		'700': '#592e95',
+		'800': '#41107e',
+		'900': '#280056',
+		'1000': '#000000'
+	},
+	neutral1: {
+		'0': '#ffffff',
+		'10': '#fffbff',
+		'50': '#ffecef',
+		'100': '#ffd9e0',
+		'200': '#f7b5c4',
+		'300': '#d99aa9',
+		'400': '#bc808f',
+		'500': '#9f6775',
+		'600': '#834f5d',
+		'700': '#683845',
+		'800': '#4e222f',
+		'900': '#350e1a',
+		'1000': '#000000'
+	},
+	neutral2: {
+		'0': '#ffffff',
+		'10': '#fffbff',
+		'50': '#ffecef',
+		'100': '#ffd9e0',
+		'200': '#ffb1c4',
+		'300': '#e594a9',
+		'400': '#c77a8e',
+		'500': '#aa6175',
+		'600': '#8d495c',
+		'700': '#713345',
+		'800': '#551c2f',
+		'900': '#3a071a',
+		'1000': '#000000'
+	}
+};
+
+describe('buildMonetSchemes — what a real Android device returns', () => {
+	const device = buildMonetSchemes(DEVICE);
+
+	/** OKLCH lightness out of a token string, for ordering assertions. */
+	const L = (token: string | undefined): number => Number(token?.split(' ')[0]?.slice(6));
+
+	/** Relative luminance of a token, measured through the same maths the browser uses. */
+	function luminance(token: string | undefined): number {
+		const match = /oklch\(([\d.]+) ([\d.]+) ([\d.]+)\)/.exec(token ?? '');
+		if (!match) throw new Error(`not a colour token: ${token}`);
+		const [r, g, b] = hexToRgb(
+			oklchHex(Number(match[1]), Number(match[2]), Number(match[3]))
+		).map(toLinear) as [number, number, number];
+		return linearY(r, g, b);
+	}
+
+	function contrast(a: string | undefined, b: string | undefined): number {
+		const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [
+			number,
+			number
+		];
+		return (light + 0.05) / (dark + 0.05);
+	}
+
+	it('ignores the tone keys entirely — relabelling the palette changes nothing', () => {
+		// The tone is measured from the colour, so renaming or reversing the keys must not move a byte.
+		const scrambled: Palettes = {};
+		for (const [name, tones] of Object.entries(DEVICE) as [keyof Palettes, TonalPalette][]) {
+			const relabelled: TonalPalette = {};
+			let index = 0;
+			for (const hex of Object.values(tones)) relabelled[`colour${index++}`] = hex;
+			scrambled[name] = relabelled;
+		}
+		expect(buildMonetSchemes(scrambled)).toEqual(device);
+	});
+
+	it('puts body text above 7:1 in both schemes', () => {
+		// The shipped bug: suffixes read as tones gave near-white ink on a near-white page (1.04:1 on device).
+		expect(contrast(device.light['--foreground'], device.light['--background'])).toBeGreaterThan(7);
+		expect(contrast(device.dark['--foreground'], device.dark['--background'])).toBeGreaterThan(7);
+	});
+
+	it('keeps secondary text readable and control boundaries visible', () => {
+		for (const scheme of ['light', 'dark'] as const) {
+			expect(
+				contrast(device[scheme]['--muted-foreground'], device[scheme]['--background']),
+				`${scheme} muted-foreground`
+			).toBeGreaterThan(4.5);
+			// `--border`/`--input` is the hairline on every input, separator and row.
+			expect(
+				contrast(device[scheme]['--border'], device[scheme]['--background']),
+				`${scheme} border`
+			).toBeGreaterThan(1.3);
+			expect(device[scheme]['--card']).not.toBe(device[scheme]['--background']);
+		}
+	});
+
+	it('inverts the page and the primary role between schemes', () => {
+		expect(luminance(device.light['--background'])).toBeGreaterThan(0.8);
+		expect(luminance(device.dark['--background'])).toBeLessThan(0.05);
+		// Primary must be dark ink on a light page and light ink on a dark one.
+		expect(luminance(device.light['--primary'])).toBeLessThan(0.2);
+		expect(luminance(device.dark['--primary'])).toBeGreaterThan(0.4);
+	});
+
+	it('keeps both container ladders ordered', () => {
+		const light = [
+			device.light['--md-sys-color-surface-container-highest'],
+			device.light['--md-sys-color-surface-container-high'],
+			device.light['--md-sys-color-surface-container'],
+			device.light['--md-sys-color-surface-container-low'],
+			device.light['--md-sys-color-surface-container-lowest']
+		].map(L);
+		const dark = [
+			device.dark['--md-sys-color-surface-container-lowest'],
+			device.dark['--md-sys-color-surface-container-low'],
+			device.dark['--md-sys-color-surface-container'],
+			device.dark['--md-sys-color-surface-container-high'],
+			device.dark['--md-sys-color-surface-container-highest']
+		].map(L);
+		for (const ladder of [light, dark]) {
+			for (let i = 1; i < ladder.length; i++) {
+				expect(ladder[i], `step ${i} of ${ladder.join(' ')}`).toBeGreaterThan(
+					ladder[i - 1] as number
+				);
+			}
+		}
+	});
+
+	it('never emits a hue outside 0–360', () => {
+		// Interpolating across 350° once produced a 367° hue, which the CSS parser rejects silently.
+		for (const scheme of ['light', 'dark'] as const) {
+			for (const [name, value] of Object.entries(device[scheme])) {
+				const match = /oklch\(([\d.]+) ([\d.]+) ([\d.]+)\)/.exec(value);
+				expect(match, `${scheme} ${name} is not an oklch triple: ${value}`).not.toBeNull();
+				const hue = Number(match![3]);
+				expect(hue >= 0 && hue <= 360, `${scheme} ${name} hue ${hue}`).toBe(true);
+			}
 		}
 	});
 });
