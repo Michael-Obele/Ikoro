@@ -35,73 +35,45 @@
 
 	let { children } = $props();
 
-	// runed, not a hand-rolled localStorage read: it hydrates safely, stays
-	// reactive, and syncs the collapsed state across tabs for free.
+	// runed, not a hand-rolled localStorage read: it hydrates safely and syncs across tabs.
 	const sidebarCollapsed = new PersistedState('ikoro:sidebar-collapsed', false);
 	let sheetOpen = $state(false);
 	let status = $state<AlarmPermissionStatus | null>(null);
 
-	// A navigation must close the phone's nav drawer. Without this you tap a list
-	// and the page underneath changes while the drawer sits on top of the screen
-	// you just asked for. `onNavigate` is the right hook rather than a click
-	// handler: it is one rule for every source of navigation — a sidebar tap, a
-	// link inside a page, and the Android back button, which arrives as a
-	// popstate and never touches the sidebar at all. On desktop the drawer is
-	// never open, so this writes false over false and costs nothing.
+	// Any navigation closes the phone's drawer. `onNavigate` covers the sidebar, in-page
+	// links and the Android back button, which never touches the sidebar.
 	onNavigate(() => {
 		sheetOpen = false;
 	});
 
-	// The theme. `document.documentElement` is a node Svelte does not own, so
-	// writing the `dark` class and `color-scheme` onto it is a genuine external
-	// side effect — the case `$effect` is actually for. It re-runs whenever
-	// `resolvedTheme` changes, which covers both an explicit choice and the OS
-	// flipping at dusk while the app is open, and it hands back the listener's
-	// teardown.
-	//
-	// This runs FIRST because it is idempotent and cheap, and because everything
-	// else here touches storage. The inline script in app.html has already put the
-	// class on <html> before first paint; this is the reactive half that keeps it
-	// correct after mount.
-	//
-	// `applyResolvedTheme` rather than `applyTheme`: on Android the wallpaper
-	// palette arrives asynchronously and is per-theme, so the class flip and the
-	// dynamic custom properties have to be written together or they race on the
-	// same tokens.
+	// Writes the `dark` class onto a node Svelte does not own — a real external side effect.
+	// `applyResolvedTheme` (not `applyTheme`) so the class and the async wallpaper palette
+	// land together instead of racing on the same tokens.
 	$effect(() => {
 		applyResolvedTheme();
 		return watchSystemTheme();
 	});
 
-	// Material You. A no-op on web and below Android 12 — the plugin answers
-	// `available: false` there and nothing is written. It re-reads on every
-	// resume, because the user can change their wallpaper while the app is in the
-	// background and Android recomputes the palette when they do.
+	// Material You. A no-op on web and below Android 12; re-reads on resume because the
+	// wallpaper can change while the app is backgrounded.
 	$effect(() => {
 		if (!browser) return;
 		return watchDynamicColors();
 	});
 
-	// A fresh install needs a list before any screen can render one. This is a
-	// static SPA with no server load, so seeding happens here — once, and only
-	// when the database is empty.
+	// A fresh install needs a list before any screen renders one; seeds once, when empty.
 	$effect(() => {
 		if (!browser) return;
 
 		/*
-		 * Android 15+ forces edge-to-edge for targetSdk 35+, so the WebView draws
-		 * UNDER the status bar and the first banner sat behind the clock. CSS cannot
-		 * fix it: on Android `env(safe-area-inset-top)` reports 0 for the status bar
-		 * (it only describes display cutouts). The platform plugin is the only thing
-		 * that knows the real inset, so on Android it owns the layout.
+		 * Android 15+ draws under the status bar and `env(safe-area-inset-top)` reports 0
+		 * there, so the platform plugin has to own the layout.
 		 */
 		if (detectPlatform() === 'android') {
 			void StatusBar.setOverlaysWebView({ overlay: false });
 
-			// Android only hands out a full-screen takeover while the phone is
-			// locked; in the foreground the alarm becomes a heads-up notification and
-			// nothing else happens. These three events are what let the app show its
-			// own ringing screen instead of just ringing.
+			// Android only takes over the screen while locked; these events let the app show
+			// its own ringing screen in the foreground.
 			void IkoroAlarm.addListener('alarmRinging', ({ taskId }) => startRinging(taskId));
 			void IkoroAlarm.addListener('alarmSnoozed', () => stopRinging());
 			void IkoroAlarm.addListener('alarmDismissed', () => stopRinging());
@@ -109,28 +81,21 @@
 
 		void ensureSeeded();
 
-		// The alarm lifecycle owns its own subscriptions; this component only
-		// needs the permission status to render the banner.
+		// Only the permission status is needed here; the lifecycle owns its own subscriptions.
 		const stopStatus = onStatus((next) => (status = next));
 		void wireAlarmLifecycle();
 
 		/*
-		 * Android's hardware Back must close the sheet it is looking at.
-		 *
-		 * Nothing registered `backButton`, so Back fell through to the platform: it
-		 * navigated the route underneath (or left the app) while the dialog stayed
-		 * mounted on top. That is the sheet that looked stuck — tapping Remind me
-		 * raises the system notification prompt, and dismissing it with Back left
-		 * the app behind it with no way out. Closing is delegated to the dialog's
-		 * own close button, so the sheet's teardown (note flushing) still runs.
+		 * Android's Back must close the open sheet, or it navigates the route underneath and
+		 * leaves the dialog stuck on top. Closing goes through the dialog's own close button
+		 * so its teardown (note flushing) still runs.
 		 */
 		let backHandle: { remove: () => Promise<void> } | null = null;
 		void CapApp.addListener('backButton', ({ canGoBack }) => {
 			const dialog = document.querySelector('[role="dialog"]');
 			if (dialog) {
-				// Click the dialog's OWN close button. Synthesising Escape on the dialog
-				// does not reach bits-ui's handler; its close button is the same code path
-				// the X takes, so notes still flush.
+				// Click the dialog's OWN close button — a synthesised Escape does not reach
+				// bits-ui's handler.
 				const close = dialog.querySelector<HTMLElement>('[data-slot="sheet-close"]');
 				if (close) close.click();
 				else document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -153,17 +118,11 @@
 </svelte:head>
 
 <!--
-	`fixed inset-0`, NOT `h-dvh`.
-
-	`dvh` follows the DYNAMIC viewport, and in an Android WebView that unit is
-	recomputed when another activity covers us — the system share sheet, notably.
-	The share sheet covers roughly two thirds of the screen, so `100dvh` became
-	~35% of the display, and Chrome never recomputed it when the sheet closed:
-	the shell collapsed to a third of the screen with the bottom nav floating in
-	the middle and dead black below it. `inset-0` is measured against the layout
-	viewport, which the sheet never changes.
+	`fixed inset-0`, not `h-dvh`: in an Android WebView `dvh` is recomputed when the share
+	sheet covers us and never resets, collapsing the shell. `overflow-clip`, not `hidden`:
+	`hidden` still makes a scroll container the browser can scroll to reveal a focused element.
 -->
-<div class="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground">
+<div class="fixed inset-0 flex flex-col overflow-clip bg-background text-foreground">
 	<PermissionBanner
 		{status}
 		onfixexact={() => openExactAlarmSettings()}
@@ -173,9 +132,7 @@
 	<UpdateBanner />
 
 	<div class="flex min-h-0 flex-1">
-		<!-- Desktop gets a real sidebar. On a phone the same component renders inside
-		     the sheet, which the bottom bar's "Lists" slot opens — two columns on a
-		     phone would waste the one thing a phone has plenty of. -->
+		<!-- Desktop only; on a phone the same component renders inside the drawer. -->
 		<aside
 			class="hidden shrink-0 overflow-hidden border-r md:block"
 			data-collapsed={sidebarCollapsed.current}
@@ -186,69 +143,39 @@
 
 		<div class="flex min-w-0 flex-1 flex-col">
 			<!--
-				`overflow-x-hidden` is explicit, not decorative. A single-axis
-				`overflow-y-auto` makes the OTHER axis compute to `auto` as well (CSS:
-				visible + non-visible ⇒ auto), so one unbreakable string — a sync URL, a
-				backup filename — quietly turned this scroller into a horizontal one and
-			
-the whole app could be dragged sideways. Nothing here is meant to scroll
-				horizontally, so it is clamped.
+				`overflow-x-hidden` is explicit: `overflow-y-auto` makes the other axis `auto` too,
+				so one long filename let the whole app be dragged sideways.
+
+				`relative` is load-bearing: it is what keeps EVERY `sr-only` / absolute
+				descendant inside this scroller. Without a positioned ancestor they are
+				contained by the fixed shell, which cannot scroll — and their overflow makes
+				it scrollable. See AGENTS.md § LAYOUT.
 			-->
-			<main class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+			<main class="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
 				{@render children()}
 			</main>
 		</div>
 	</div>
 
-	<!--
-		The phone's navigation, as a sibling of the content row so it spans the full
-		width, and outside the scroll container so it never scrolls away. It hides
-		itself above `md`, where the sidebar takes over. There is no phone header any
-		more: the bar carries the navigation, and each screen already has an h1 naming
-		itself, so a header holding only the wordmark was 44px of nothing.
-	-->
+	<!-- Sibling of the content row and outside the scroll container, so it never scrolls away. -->
 	<BottomNav onopenlists={() => (sheetOpen = true)} />
 </div>
 
-<!--
-	One toast host for the whole app.
-
-	`top-center`, not the default bottom: the phone's navigation bar owns the
-	bottom edge, and a toast that covers the control you were reaching for is
-	worse than no toast at all. The theme comes from this app's own theme module
-	(the shadcn wrapper would have pulled in `mode-watcher` — a second, competing
-	source of truth for light/dark).
--->
+<!-- One toast host. `top-center`, not the default bottom: the bottom nav owns that edge. -->
 <Toaster theme={resolvedTheme()} position="top-center" closeButton />
 
-<!-- Above everything including the toast host: a ringing alarm outranks a
-     confirmation toast. -->
+<!-- Above the toast host: a ringing alarm outranks a confirmation toast. -->
 <RingingOverlay />
 
 <Sheet.Root bind:open={sheetOpen}>
 	<!--
-		`w-72!` carries the important modifier for the same reason TaskSheet's does:
-		the generated sheet-content hard-codes `data-[side=left]:w-3/4`, a
-		data-variant selector that out-specifies a plain `w-72`, so the width asked
-		for here was being ignored and the drawer rendered at 75% of the screen.
-		`max-w-[85vw]` keeps a sliver of the page visible on the narrowest phones
-		instead of letting an 18rem panel run edge to edge.
+		`w-72!` for the same reason TaskSheet's does: the generated `data-[side=left]:w-3/4`
+		out-specifies a plain utility.
 	-->
 	<Sheet.Content side="left" class="w-72! max-w-[85vw] overflow-y-auto p-0">
 		<!--
-			The drawer needs a real header, for two reasons.
-
-			One: a sheet with no `Sheet.Title` is an UNNAMED dialog to a screen
-			reader, so this is where its accessible name comes from. TaskSheet sets
-			the same pair, and an sr-only Description keeps the name from being read
-			out as the first thing in the panel.
-
-			Two: the close button is `absolute top-3 right-3` in the generated
-			sheet-content, so whatever renders first slides underneath it. The drawer
-			now leads with the lists — the whole point of dropping the views — which
-			put the Lists row's "New list" button in exactly that corner and stacked
-			two icon buttons on top of each other. The header occupies that band,
-			which pushes the lists clear of the close button.
+			A real header, for two reasons: it names the dialog for a screen reader, and it keeps
+			the lists clear of the generated close button in the top-right corner.
 		-->
 		<Sheet.Header>
 			<Sheet.Title>Ikoro</Sheet.Title>
