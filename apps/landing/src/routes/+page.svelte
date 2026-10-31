@@ -25,7 +25,6 @@
 		privacy,
 		promise,
 		releaseNotice,
-		releases,
 		site,
 		taskShape,
 		views
@@ -168,8 +167,9 @@
 >
 	<Alert>
 		<CircleAlert aria-hidden="true" />
-		<!-- Curated, not live: the limits list is hand-written for the newest curated release. -->
-		<AlertTitle>In v{releases[0].version}</AlertTitle>
+		<!-- The version is the release GitHub returned at build time — the list below
+		     is standing copy, because no API knows what a version does not do. -->
+		<AlertTitle>In v{page.data.release.version}</AlertTitle>
 		<AlertDescription>
 			<ul class="mt-1 flex flex-col gap-1.5">
 				{#each limits as limit (limit)}

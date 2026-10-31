@@ -14,7 +14,6 @@ import { describe, expect, it } from 'vitest';
 
 const SRC = resolve(import.meta.dirname, '../src');
 const RELEASE_TS = join(SRC, 'lib/release.ts');
-const CONTENT_TS = join(SRC, 'lib/content.ts');
 
 /** Every `.svelte` / `.ts` / `.html` file under src, except release.ts. */
 function sourceFiles(dir: string): Array<[string, string]> {
@@ -35,19 +34,11 @@ function sourceFiles(dir: string): Array<[string, string]> {
 const sources = sourceFiles(SRC);
 
 /**
- * The curated `releases: Release[]` history in content.ts is past fact, not a
- * live claim: changelog entries stay pinned to the version they describe.
- * Strip that array before scanning so its `version: '0.3.2'` lines do not trip
- * the guard. Anything version-shaped outside it is a live claim and must fail.
+ * The curated `releases: Release[]` history used to be exempt, because its
+ * `version: '0.3.2'` lines were past fact rather than a live claim. It is gone:
+ * /changelog prints GitHub's own releases, so every version-shaped string left
+ * in src is a live claim and must fail this guard.
  */
-function withoutCuratedHistory(path: string, text: string): string {
-	if (path !== CONTENT_TS) return text;
-	const start = text.indexOf('export const releases: Release[]');
-	if (start === -1) return text;
-	const end = text.indexOf('\n];', start);
-	if (end === -1) return text;
-	return text.slice(0, start) + text.slice(end + 3);
-}
 
 /** Block comments never ship a claim; the isNewer doc comment names 0.3.10. */
 function withoutBlockComments(text: string): string {
@@ -55,10 +46,10 @@ function withoutBlockComments(text: string): string {
 }
 
 describe('no hardcoded release facts', () => {
-	it('contains no version literal outside the curated releases history', () => {
+	it('contains no version literal anywhere in src', () => {
 		const versionLiteral = /\d+\.\d+\.\d+/;
 		for (const [path, text] of sources) {
-			const scanned = withoutBlockComments(withoutCuratedHistory(path, text));
+			const scanned = withoutBlockComments(text);
 			expect(scanned, `${path} must not contain a version literal`).not.toMatch(versionLiteral);
 		}
 	});

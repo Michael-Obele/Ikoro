@@ -18,13 +18,14 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { ReleaseInfo } from '#lib/release';
-import { formatBytes, formatReleaseDate, isNewer, releaseNotice } from '#lib/content';
+import { formatBytes, formatReleaseDate, releaseNotice } from '#lib/content';
 import {
 	deriveRelease,
-	fetchLatestRelease,
+	fetchReleases,
 	isDownloadable,
 	missingAssets,
-	parseLatestRelease
+	parseLatestRelease,
+	parseReleases
 } from '#lib/release';
 
 const DOWNLOAD = 'https://github.com/Michael-Obele/Ikoro/releases/download';
@@ -214,23 +215,30 @@ describe('deriveRelease', () => {
 	});
 });
 
-describe('fetchLatestRelease', () => {
-	it('parses an ok response through the same parser', async () => {
+describe('fetchReleases', () => {
+	it('parses an ok response through the same per-entry parser', async () => {
 		const ok = (async () => ({
 			ok: true,
-			json: async () => LATEST_FIXTURE
+			json: async () => [LATEST_FIXTURE, COMPLETE_FIXTURE]
 		})) as unknown as typeof fetch;
-		expect(await fetchLatestRelease(ok)).toEqual(parseLatestRelease(LATEST_FIXTURE));
+		expect(await fetchReleases(ok)).toEqual([
+			parseLatestRelease(LATEST_FIXTURE),
+			parseLatestRelease(COMPLETE_FIXTURE)
+		]);
 	});
 
-	it('returns null on non-ok responses, network errors, and unparseable bodies', async () => {
+	/**
+	 * An empty list, not null: the layout has one shape to reason about, and
+	 * /changelog says "could not reach GitHub" rather than printing nothing.
+	 */
+	it('returns an empty list on non-ok responses, network errors, and unparseable bodies', async () => {
 		const notOk = (async () => ({ ok: false, json: async () => ({}) })) as unknown as typeof fetch;
-		expect(await fetchLatestRelease(notOk)).toBeNull();
+		expect(await fetchReleases(notOk)).toEqual([]);
 
 		const throwing = (async () => {
 			throw new Error('network down');
 		}) as unknown as typeof fetch;
-		expect(await fetchLatestRelease(throwing)).toBeNull();
+		expect(await fetchReleases(throwing)).toEqual([]);
 
 		const badJson = (async () => ({
 			ok: true,
@@ -238,16 +246,16 @@ describe('fetchLatestRelease', () => {
 				throw new Error('not json');
 			}
 		})) as unknown as typeof fetch;
-		expect(await fetchLatestRelease(badJson)).toBeNull();
+		expect(await fetchReleases(badJson)).toEqual([]);
 
 		const wrongShape = (async () => ({
 			ok: true,
 			json: async () => ({ hello: 'world' })
 		})) as unknown as typeof fetch;
-		expect(await fetchLatestRelease(wrongShape)).toBeNull();
+		expect(await fetchReleases(wrongShape)).toEqual([]);
 	});
 
-	it('hits releases/latest with a JSON accept header and an 8s timeout', async () => {
+	it('hits the releases list with a JSON accept header and an 8s timeout', async () => {
 		let seenUrl: unknown;
 		let seenInit: RequestInit | undefined;
 		const spy = (async (url: unknown, init?: RequestInit) => {
@@ -255,12 +263,38 @@ describe('fetchLatestRelease', () => {
 			seenInit = init;
 			return { ok: false, json: async () => ({}) };
 		}) as unknown as typeof fetch;
-		expect(await fetchLatestRelease(spy)).toBeNull();
-		expect(seenUrl).toBe('https://api.github.com/repos/Michael-Obele/Ikoro/releases/latest');
+		expect(await fetchReleases(spy)).toEqual([]);
+		expect(seenUrl).toBe('https://api.github.com/repos/Michael-Obele/Ikoro/releases?per_page=100');
 		expect((seenInit?.headers as Record<string, string>)['Accept']).toBe(
 			'application/vnd.github+json'
 		);
 		expect(seenInit?.signal).toBeInstanceOf(AbortSignal);
+	});
+});
+
+describe('parseReleases', () => {
+	it('drops one unreadable entry instead of the whole history', () => {
+		expect(parseReleases([LATEST_FIXTURE, { nope: true }, COMPLETE_FIXTURE])).toEqual([
+			parseLatestRelease(LATEST_FIXTURE),
+			parseLatestRelease(COMPLETE_FIXTURE)
+		]);
+	});
+
+	it('returns an empty list for anything that is not an array', () => {
+		expect(parseReleases(null)).toEqual([]);
+		expect(parseReleases({})).toEqual([]);
+		expect(parseReleases(LATEST_FIXTURE)).toEqual([]);
+		expect(parseReleases([])).toEqual([]);
+	});
+
+	/**
+	 * The changelog's notes ARE the release body. Carrying it through the parser
+	 * is what lets /changelog stop holding a copy that goes stale.
+	 */
+	it('carries the release body through, and omits it when the release has none', () => {
+		const withBody = parseLatestRelease({ ...LATEST_FIXTURE, body: '### Features\n\n* x' });
+		expect(withBody?.body).toBe('### Features\n\n* x');
+		expect(parseLatestRelease(LATEST_FIXTURE)?.body).toBeUndefined();
 	});
 });
 
@@ -273,14 +307,6 @@ describe('release display helpers', () => {
 
 	it('formats an ISO timestamp as an en-GB date regardless of host locale', () => {
 		expect(formatReleaseDate('2026-10-28T11:13:48Z')).toBe('28 Oct 2026');
-	});
-
-	it('compares semver triples numerically, not lexicographically', () => {
-		expect(isNewer('0.3.3', '0.3.2')).toBe(true);
-		expect(isNewer('0.4.0', '0.3.9')).toBe(true);
-		expect(isNewer('0.3.2', '0.3.2')).toBe(false);
-		expect(isNewer('0.3.1', '0.3.2')).toBe(false);
-		expect(isNewer('0.3.10', '0.3.9')).toBe(true);
 	});
 
 	it('names the live version, size, date and the Play Store gap when every file is there', () => {

@@ -1,8 +1,10 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import Section from '$lib/components/Section.svelte';
-	import { privacy, releases, site, sitePrivacy } from '$lib/content';
+	import { privacy, site, sitePrivacy } from '$lib/content';
 
-	const latest = releases[0];
+	/** The version the release feed returned at build time — never a hand-kept one. */
+	const latest = $derived(page.data.release);
 </script>
 
 <svelte:head>

@@ -64,7 +64,7 @@
 
 <Section
 	title="What is on this release"
-	lede="Four files, published by two builds that finish minutes apart. This is where each one is."
+	lede="Two builds publish this release minutes apart. This is where each file is."
 >
 	<div class="max-w-3xl">
 		<!-- `role="note"`: a standing statement about the release, not a live
@@ -175,7 +175,7 @@
 <Section
 	id="platforms"
 	title="What runs where"
-	lede="Four platforms, and a plain statement of what each one does with a reminder."
+	lede="Every platform, and a plain statement of what each one does with a reminder."
 >
 	<PlatformTable rows={rows} />
 </Section>

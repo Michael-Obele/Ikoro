@@ -9,13 +9,12 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-	changelogLimit,
-	isNewer,
 	limits,
 	platformRows,
 	privacy,
+	releaseEntries,
+	releaseNotes,
 	releaseNotice,
-	releases,
 	routes,
 	views
 } from '#lib/content';
@@ -234,15 +233,16 @@ describe('the content itself', () => {
 		expect(limits.length).toBeGreaterThanOrEqual(4);
 	});
 
-	it('does not mention a feature that no release contains', () => {
-		const shipped = releases
-			.flatMap((release) => [...release.included])
-			.join(' ')
-			.toLowerCase();
-		// If a feature is named in the marketing copy, some release entry has to
-		// account for it. Repeating tasks are the recurring trap: the schema reserves
-		// the field, and that is not the same as shipping it.
-		expect(shipped).not.toMatch(/repeating tasks/);
+	/**
+	 * The curated `releases` array is gone on purpose: an entry is GitHub's
+	 * release, so a version cannot be listed here and missing there. A re-added
+	 * array — or a re-added "latest was 0.3.4" helper — puts a second source of
+	 * truth back on the page.
+	 */
+	it('holds no changelog of its own', () => {
+		const text = readFileSync(join(SRC, 'lib/content.ts'), 'utf8');
+		expect(text).not.toMatch(/export const releases\b/);
+		expect(text).not.toMatch(/changelogLimit|lagNotice|isNewer/);
 	});
 
 	it('derives the release from the app version, structurally in step', () => {
@@ -256,30 +256,45 @@ describe('the content itself', () => {
 		expect(releaseNotice(derived).title).toContain(`v${appPkg.version}`);
 	});
 
-	it('keeps releases newest-first: the changelog lag-row logic reads releases[0]', () => {
-		for (let i = 0; i < releases.length - 1; i++) {
-			expect(isNewer(releases[i].version, releases[i + 1].version)).toBe(true);
-		}
+	it('prints the releases in the order GitHub returned them', () => {
+		const entries = releaseEntries([COMPLETE_RELEASE, deriveRelease('0.0.1')]);
+		expect(entries.map((entry) => entry.version)).toEqual([COMPLETE_RELEASE.version, '0.0.1']);
+		expect(entries[0].tagUrl).toBe(COMPLETE_RELEASE.tagUrl);
 	});
 
-	/**
-	 * The changelog prints `releases.slice(0, changelogLimit)`, so a history
-	 * longer than the limit silently stops being reachable — and the last entry
-	 * would lose its "Before that" tail. Cap the curated history instead of the
-	 * render, and the two cannot drift apart.
-	 */
-	it('has a curated history no longer than the page will print', () => {
-		expect(releases.length).toBeLessThanOrEqual(changelogLimit);
-		expect(releases.length, 'a changelog with one entry is not a changelog').toBeGreaterThan(3);
+	it("takes each entry's date from the release, never from a hand-kept string", () => {
+		expect(releaseEntries([COMPLETE_RELEASE])[0].date).toBe('2026-10-29');
+		// A derived release knows no date, and the page prints no badge for it.
+		expect(releaseEntries([deriveRelease('0.0.1')])[0].date).toBe('');
 	});
 
-	it('gives every changelog entry a date, a summary and both lists', () => {
-		for (const release of releases) {
-			expect(release.date, release.version).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-			expect(release.summary.length, release.version).toBeGreaterThan(20);
-			// The page's own rule: a changelog that only lists the good parts is marketing.
-			expect(release.included.length, release.version).toBeGreaterThan(0);
-			expect(release.notIncluded.length, release.version).toBeGreaterThan(0);
-		}
+	it('reads the notes out of the release body, dropping links, bold and bot noise', () => {
+		const body = [
+			'## [0.3.8](https://example.test/compare) (2026-10-31)',
+			'',
+			'### Features',
+			'',
+			'* **alarms:** ring audibly ([abc1234](https://example.test/commit/abc1234))',
+			'',
+			'## New Contributors',
+			'* github-actions[bot] made their first contribution in https://example.test/pull/1',
+			''
+		].join('\n');
+		expect(releaseNotes(body)).toEqual(['alarms: ring audibly']);
+	});
+
+	it('says a release has no notes rather than inventing them', () => {
+		expect(releaseNotes('**Full Changelog**: https://example.test/c')).toEqual([]);
+		expect(releaseEntries([deriveRelease('0.0.1')])[0].included).toEqual([]);
+	});
+
+	it('names the files a release did not carry, and only those', () => {
+		expect(releaseEntries([COMPLETE_RELEASE])[0].missing).toEqual([]);
+		expect(releaseEntries([deriveRelease('0.0.1')])[0].missing).toEqual([
+			'No APK on this release',
+			'No DEB on this release',
+			'No AppImage on this release',
+			'No RPM on this release'
+		]);
 	});
 });

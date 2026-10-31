@@ -194,14 +194,6 @@ export function releaseNotice(r: ReleaseInfo): ReleaseNotice {
 	};
 }
 
-/**
- * Shown on /changelog when the live release is newer than the newest curated
- * entry. States the lag instead of pretending the entry covers the release.
- */
-export function lagNotice(version: string): string {
-	return `v${version} is out — the notes below lag until the changelog entry is curated.`;
-}
-
 /** Bytes to megabytes with one decimal, e.g. `3.4 MB`. */
 export function formatBytes(n: number): string {
 	return `${(n / (1024 * 1024)).toFixed(1)} MB`;
@@ -218,21 +210,6 @@ export function formatReleaseDate(iso: string): string {
 		month: 'short',
 		year: 'numeric'
 	}).format(new Date(iso));
-}
-
-/**
- * Numeric semver-triple compare: is `a` strictly newer than `b`?
- * Lexicographic compare would call 0.3.10 older than 0.3.9; this does not.
- */
-export function isNewer(a: string, b: string): boolean {
-	const pa = a.split('.').map(Number);
-	const pb = b.split('.').map(Number);
-	for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-		const x = pa[i] ?? 0;
-		const y = pb[i] ?? 0;
-		if (x !== y) return x > y;
-	}
-	return false;
 }
 
 /**
@@ -391,158 +368,71 @@ export const sitePrivacy: PrivacyPoint[] = [
 	}
 ];
 
+/**
+ * One changelog entry, in the shape /changelog prints.
+ *
+ * There is no hand-written field here on purpose. Version, date and the notes
+ * all come from the release GitHub published, and `missing` comes from the files
+ * it did not attach — so a version cannot be current in one place and stale in
+ * another, because there is only one place.
+ */
 export interface Release {
+	/** Version without the `v`, from the tag GitHub published. */
 	version: string;
+	/** The day GitHub published it, `YYYY-MM-DD`. Empty when the date is unknown. */
 	date: string;
-	summary: string;
+	/** The release page, so a reader can check the entry against its source. */
+	tagUrl: string;
+	/** What the release says it changed, one line each. */
 	included: string[];
-	notIncluded: string[];
+	/** Files this particular release did not carry — a fact about its assets. */
+	missing: string[];
 }
 
 /**
- * How many versions /changelog prints. Ten is the whole tagged history today,
- * and it stays a ceiling rather than a promise: an entry is curated copy, so a
- * version with no entry cannot be invented into one.
+ * GitHub's release body as the lines a reader can scan.
+ *
+ * Two shapes arrive: release-please's `### Features` / `### Bug Fixes` sections
+ * with one `* ` line per commit, and GitHub's older "What's Changed" blocks.
+ * Both reduce to their `* ` lines once the heading, the commit link and the bold
+ * markers are gone. Bot lines are dropped because "chore(master): release 0.3.2
+ * by github-actions" is the release announcing itself, not a change in it.
+ *
+ * A body that is only a "Full Changelog" link yields nothing — the page says it
+ * has no notes rather than inventing one the release does not have.
  */
-export const changelogLimit = 10;
+export function releaseNotes(body: string): string[] {
+	return body
+		.split('\n')
+		.filter((line) => line.startsWith('* '))
+		.map((line) =>
+			line
+				.slice(2)
+				.replace(/\s*\(\[[0-9a-f]{7,40}\]\([^)]*\)\)/g, '')
+				.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+				.replace(/\*\*/g, '')
+				.replace(/\s+/g, ' ')
+				.trim()
+		)
+		.filter((line) => line.length > 0 && !line.includes('github-actions[bot]'));
+}
 
 /**
- * The curated history, newest first — `releases[0]` is what the lag notice on
- * /changelog compares the live release against, so this order is load-bearing.
- *
- * Every entry lists what is missing as well as what is in it. That is the rule
- * the page exists to keep: a changelog that only lists the good parts is
- * marketing. Each `included` line is drawn from the commits that version
- * shipped, and each `notIncluded` line is something a reader could reasonably
- * assume and would be wrong to.
+ * GitHub's release list as changelog entries, in the order GitHub returned them
+ * (newest first). Nothing here names a version: publish a release and the page
+ * is current at the next build.
  */
-export const releases: Release[] = [
-	{
-		version: '0.3.4',
-		date: '2026-10-29',
-		summary:
-			'A short release of fixes after the desktop bundles landed: the task sheet ' +
-			'scrolls, and how long snooze lasts is yours to choose.',
-		included: [
-			'Task sheet: the generated width is overridden and the body scrolls, so a long task is fully reachable',
-			'Snooze length is configurable — 2, 5, 10 or 15 minutes',
-			'Landing deploy pins its base and Bun version, so a Netlify rebuild stops guessing',
-			'Kotlin alarm sources formatted; the dynamic-colors Android build output is ignored'
-		],
-		notIncluded: [
-			'No Play Store listing — sideload the APK',
-			'No iOS build',
-			'No repeating tasks — the schema reserves the field, and reserving is not shipping',
-			'No closed-app reminders on Windows and macOS; they fire while the app runs'
-		]
-	},
-	{
-		version: '0.3.3',
-		date: '2026-10-29',
-		summary:
-			'The first release with a Linux desktop download, alongside a per-task ringtone ' +
-			'and a landing site that reads the live release instead of a hand-kept number.',
-		included: [
-			'Linux desktop bundles: .deb, .AppImage and, when the runner can build one, .rpm',
-			'One tag now starts the Android and desktop builds side by side and attaches both to the same release',
-			'Per-task ringtone',
-			'Banners, and a dark-theme colour fix',
-			'The landing site reads the live release from GitHub at build time'
-		],
-		notIncluded: [
-			'No Windows or macOS bundle — Linux is the only desktop OS whose alarms survive a closed app',
-			'The desktop bundles are unsigned; there is no desktop keystore and no signing step',
-			'No Play Store listing — sideload the APK',
-			'No repeating tasks'
-		]
-	},
-	{
-		version: '0.3.2',
-		date: '2026-10-28',
-		summary:
-			'The release that handed the version number to release-please, and gave the theme ' +
-			'picker miniature previews.',
-		included: [
-			'release-please owns the version: one release PR, one tag, no hand-edited number',
-			'Theme picker redesigned with miniature previews',
-			'Release assets renamed to Ikoro-v<version>, so a download says which release it came from',
-			'Artifacts attached with gh instead of action-gh-release, which 403s on a release that already exists'
-		],
-		notIncluded: [
-			'No desktop download in this release — the Linux pipeline lands in the next one',
-			'No Play Store listing — sideload the APK',
-			'No repeating tasks'
-		]
-	},
-	{
-		version: '0.3.1',
-		date: '2026-10-28',
-		summary:
-			'A correctness pass: subtask rows render, the empty state renders, and the version ' +
-			'policy gets teeth.',
-		included: [
-			'Subtask rows render through self-import recursion instead of vanishing',
-			'EmptyState renders its icon through the capitalised local name',
-			'One version tool, plus a guard that refuses a tag smaller than the commits claim',
-			'Release assets carry the version in their name',
-			'The commit-to-version policy is written down in RELEASE.md'
-		],
-		notIncluded: [
-			'No desktop download in this version',
-			'No Play Store listing — sideload the APK'
-		]
-	},
-	{
-		version: '0.3.0',
-		date: '2026-10-28',
-		summary: 'Subtasks, one level deep, and a backup that survives them.',
-		included: [
-			'Subtasks, one level deep',
-			'Export and import round-trip task colour and parentId, so a restored backup keeps its shape'
-		],
-		notIncluded: [
-			'No desktop download in this version',
-			'No subtasks deeper than one level',
-			'No Play Store listing — sideload the APK'
-		]
-	},
-	{
-		version: '0.2.1',
-		date: '2026-10-28',
-		summary: 'Six colour schemes, a picker for them, and a contrast test to keep them honest.',
-		included: [
-			'Six seed colour schemes',
-			'A picker for them',
-			'A contrast test, so a scheme that fails AAA fails the build instead of shipping',
-			'A per-task colour bar and a priority label in the editor'
-		],
-		notIncluded: [
-			'No subtasks yet',
-			'No desktop download in this version',
-			'No Play Store listing — sideload the APK'
-		]
-	},
-	{
-		version: '0.2.0',
-		date: '2026-10-28',
-		summary: 'The first tagged build: a task list whose alarm is the product.',
-		included: [
-			'Lists and tasks, with a date and a time of their own',
-			'A real Android alarm scheduled through the system, not a timer inside an app you leave open',
-			'Today, Upcoming and Lists screens, and a phone bottom navigation',
-			'Material 3 colour roles behind an AAA contrast gate, plus a dark theme',
-			'JSON backup export and import',
-			'A Linux desktop shell, with alarms through systemd user timers',
-			'Their own icons, an alarm channel, and a signed release APK'
-		],
-		notIncluded: [
-			'No Play Store listing — sideload the APK',
-			'No iOS build',
-			'No repeating tasks',
-			'No Windows or macOS bundle'
-		]
-	}
-];
+export function releaseEntries(releases: ReleaseInfo[]): Release[] {
+	return releases.map((release) => ({
+		version: release.version,
+		date: release.publishedAt?.slice(0, 10) ?? '',
+		tagUrl: release.tagUrl,
+		included: releaseNotes(release.body ?? ''),
+		missing: ASSET_ORDER.filter((kind) => release.assets[kind] === undefined).map(
+			(kind) => `No ${assetLabels[kind].label} on this release`
+		)
+	}));
+}
 
 /**
  * Internal links. A route that appears in the navigation must appear here, or the

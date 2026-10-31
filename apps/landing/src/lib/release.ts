@@ -3,8 +3,13 @@
  *
  * The one caller is the root layout `load`, which runs during prerender — so
  * nothing here throws. A throw would fail the whole static build; the fetch
- * degrades to the app version instead. No secrets, no env vars: the repo is
- * public and one call per build is nowhere near the unauthenticated rate limit.
+ * degrades to an empty list and the app version instead. No secrets, no env
+ * vars: the repo is public and one call per build is nowhere near the
+ * unauthenticated rate limit.
+ *
+ * One call returns the whole history, so nothing on the site has to be told a
+ * version: the changelog is the releases endpoint, and `[0]` is the current
+ * release.
  *
  * WHY AN ASSET IS OPTIONAL, AND WHY THAT IS THE POINT
  * ---------------------------------------------------
@@ -64,6 +69,11 @@ export interface ReleaseInfo {
 	/** Present on the live path; unknowable when derived offline. */
 	publishedAt?: string;
 	/**
+	 * The release notes exactly as GitHub holds them. Absent when the release has
+	 * no body at all — which is a real case, not an error.
+	 */
+	body?: string;
+	/**
 	 * `live` — read from GitHub during the build, so `assets` is evidence.
 	 * `derived` — GitHub was unreachable; the version is known and nothing else
 	 * is, which is why a derived release offers no download at all.
@@ -95,7 +105,12 @@ export function deriveRelease(version: string): ReleaseInfo {
 	};
 }
 
-const LATEST_RELEASE_URL = 'https://api.github.com/repos/Michael-Obele/Ikoro/releases/latest';
+/**
+ * The whole history, newest first, which is how GitHub returns it. 100 is the
+ * most the endpoint will give; this project is nowhere near that, and a fixed
+ * page size keeps the response shape the same every build.
+ */
+const RELEASES_URL = 'https://api.github.com/repos/Michael-Obele/Ikoro/releases?per_page=100';
 
 /**
  * The asset kind a published filename belongs to, or null for a file this site
@@ -149,18 +164,20 @@ function readAssets(assets: unknown[]): Partial<Record<AssetKind, ReleaseAsset>>
 }
 
 /**
- * Reads a `GET /repos/.../releases/latest` body into a ReleaseInfo.
+ * Reads one release payload into a ReleaseInfo. Both endpoints carry entries of
+ * this shape, so `parseReleases` uses it once per entry; the name is historical
+ * — its first caller was `releases/latest`.
  *
  * Anything that is not a usable release payload — not an object, missing or
- * wrong-typed tag/url/date — is `null`, and the layout derives instead. A
- * release WITH NO ASSETS IS NOT NULL: that is the "tagged, still building"
- * state, and describing it honestly is the reason this module exists.
+ * wrong-typed tag/url/date — is `null`, and the caller drops it. A release WITH
+ * NO ASSETS IS NOT NULL: that is the "tagged, still building" state, and
+ * describing it honestly is the reason this module exists.
  */
 export function parseLatestRelease(json: unknown): ReleaseInfo | null {
 	try {
 		if (typeof json !== 'object' || json === null) return null;
 		const record = json as Record<string, unknown>;
-		const { tag_name, html_url, published_at, assets } = record;
+		const { tag_name, html_url, published_at, assets, body } = record;
 		if (typeof tag_name !== 'string') return null;
 		if (typeof html_url !== 'string') return null;
 		if (typeof published_at !== 'string') return null;
@@ -168,35 +185,53 @@ export function parseLatestRelease(json: unknown): ReleaseInfo | null {
 		if (!Array.isArray(assets)) return null;
 		const version = tag_name.replace(/^v/, '');
 		if (version.length === 0) return null;
-		return {
+		const release: ReleaseInfo = {
 			version,
 			tagUrl: html_url,
 			assets: readAssets(assets),
 			publishedAt: published_at,
 			source: 'live'
 		};
+		if (typeof body === 'string' && body.length > 0) release.body = body;
+		return release;
 	} catch {
 		return null;
 	}
 }
 
 /**
- * Fetches the latest release. Non-ok responses, network errors, timeouts and
- * unparseable bodies are all `null` — the layout derives the version instead.
- * Never throws. `fetchImpl` is injectable so tests never touch the network.
+ * Reads a `GET /repos/.../releases` body into the release list.
+ *
+ * One unusable entry is dropped, not the list: a release this parser cannot
+ * read is missing from the changelog, while a release that fails the whole page
+ * would take every good entry with it. An empty array is the honest answer when
+ * GitHub was unreachable, and the copy layer says so instead of inventing
+ * history.
  */
-export async function fetchLatestRelease(
-	fetchImpl: typeof fetch = fetch
-): Promise<ReleaseInfo | null> {
+export function parseReleases(json: unknown): ReleaseInfo[] {
+	if (!Array.isArray(json)) return [];
+	return json.flatMap((entry) => {
+		const release = parseLatestRelease(entry);
+		return release === null ? [] : [release];
+	});
+}
+
+/**
+ * Fetches every release. Non-ok responses, network errors, timeouts and
+ * unparseable bodies are all an empty array — the layout derives the version
+ * instead, and /changelog says it could not check. Never throws. `fetchImpl` is
+ * injectable so tests never touch the network.
+ */
+export async function fetchReleases(fetchImpl: typeof fetch = fetch): Promise<ReleaseInfo[]> {
 	try {
-		const response = await fetchImpl(LATEST_RELEASE_URL, {
+		const response = await fetchImpl(RELEASES_URL, {
 			headers: { Accept: 'application/vnd.github+json' },
 			signal: AbortSignal.timeout(8000)
 		});
-		if (!response.ok) return null;
-		return parseLatestRelease(await response.json());
+		if (!response.ok) return [];
+		return parseReleases(await response.json());
 	} catch {
-		return null;
+		return [];
 	}
 }
 
