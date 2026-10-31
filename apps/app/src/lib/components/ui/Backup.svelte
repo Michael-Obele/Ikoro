@@ -12,8 +12,7 @@
 	import { Download, Upload, TriangleAlert } from 'lucide-svelte/icons';
 	import Button from '$lib/components/ui/button/button.svelte';
 	import { exportAll, importAll, markExported, lastExportAt, ImportError } from '$lib/db/backup';
-	import { downloadJson, fileNameFor, readJsonFile, FileReadError } from '$lib/utils/download';
-
+	import { exportJson, fileNameFor, readJsonFile, FileReadError } from '$lib/utils/download';
 	let pending = $state<File | null>(null);
 	let result = $state<{ lists: number; tasks: number; skipped: number } | null>(null);
 	let problems = $state<string[]>([]);
@@ -31,9 +30,16 @@
 		error = null;
 		try {
 			const dump = await exportAll();
-			downloadJson(fileNameFor(new Date()), dump);
+			// Awaited: on Android this hands the file to the share sheet, and a
+			// cancelled share must not be recorded as a completed backup.
+			await exportJson(fileNameFor(new Date()), dump);
 			await markExported();
 			await refreshLastExport();
+		} catch (caught) {
+			// The share sheet rejecting is deliberate user action when they cancel,
+			// so it is not an error worth a red banner.
+			const message = caught instanceof Error ? caught.message : String(caught);
+			if (!/cancel/i.test(message)) error = message;
 		} finally {
 			busy = false;
 		}
@@ -79,7 +85,7 @@
 	});
 </script>
 
-<div class="grid gap-4">
+<div class="grid grid-cols-1 gap-4">
 	<div class="flex flex-wrap gap-2">
 		<Button variant="outline" size="sm" class="h-10 px-3" onclick={exportNow} disabled={busy}>
 			<Download class="size-4" /> Export

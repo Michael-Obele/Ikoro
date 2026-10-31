@@ -7,6 +7,7 @@
  * what to do next, and a stack trace rendered on screen is a bug regardless of
  * how small the file was.
  */
+import { Capacitor } from '@capacitor/core';
 
 /** `ikoro-backup-2026-10-03.json` — sorts chronologically in a file picker. */
 export function fileNameFor(date: Date = new Date()): string {
@@ -17,14 +18,39 @@ export function fileNameFor(date: Date = new Date()): string {
 }
 
 /**
- * Offer `data` as a download.
+ * Offer `data` as a file the user can actually keep.
  *
- * The object URL is revoked on the next tick — but only after the click has been
- * dispatched. Revoking synchronously is a classic race: some browsers have not
- * started the download yet, and the revocation cancels it.
+ * WHY THIS IS NOT ONE PATH: an Android WebView has no download manager. The
+ * `<a download>` click below works in a browser and in the desktop shell, but on
+ * the phone the click is swallowed — no error, no file, and the backup screen
+ * cheerfully says it exported. So Android writes the JSON to the app cache and
+ * hands it to the SYSTEM SHARE SHEET instead, which is where "Save to Drive",
+ * "Files" and "email it to myself" live.
+ *
+ * The plugins are imported dynamically so the browser and the desktop build
+ * never load them, and so the static SPA keeps a single bundle.
  */
-export function downloadJson(filename: string, data: unknown): void {
-	const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+export async function exportJson(filename: string, data: unknown): Promise<void> {
+	const json = JSON.stringify(data, null, 2);
+
+	if (Capacitor.getPlatform() === 'android') {
+		const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem');
+		const { Share } = await import('@capacitor/share');
+
+		// Cache, not Documents: this is a hand-off copy. Documents would need a
+		// storage permission and would leave a duplicate behind on every export.
+		const { uri } = await Filesystem.writeFile({
+			path: filename,
+			data: json,
+			directory: Directory.Cache,
+			encoding: Encoding.UTF8
+		});
+
+		await Share.share({ title: filename, url: uri, dialogTitle: 'Save your Ikoro backup' });
+		return;
+	}
+
+	const blob = new Blob([json], { type: 'application/json' });
 	const url = URL.createObjectURL(blob);
 
 	const anchor = document.createElement('a');
@@ -35,6 +61,8 @@ export function downloadJson(filename: string, data: unknown): void {
 	anchor.click();
 	anchor.remove();
 
+	// Revoked on the next tick, after the click has been dispatched: revoking
+	// synchronously cancels a download some browsers have not started yet.
 	setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
