@@ -15,8 +15,7 @@ export default defineConfig(
 			globals: { ...globals.browser, ...globals.node }
 		},
 		rules: {
-			// typescript-eslint strongly recommend that you do not use the no-undef
-			// lint rule on TypeScript projects.
+			// typescript-eslint recommends disabling no-undef on TS projects.
 			'no-undef': 'off'
 		}
 	}

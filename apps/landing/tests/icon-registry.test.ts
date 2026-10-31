@@ -1,13 +1,6 @@
 /**
- * Guards the icon-placeholder REGISTRY against silent fallback.
- *
- * Class of bug caught: the shim falls back to XIcon for any unknown
- * `lucide="..."` name, so a future component fetched via
- * scripts/fetch-shadcn.ts referencing a new icon would render the WRONG
- * icon while `check` stays green. The shim itself is untouched (parity
- * with apps/app); it does not export REGISTRY, so this test reads
- * icon-placeholder.svelte as text and asserts each used name appears as
- * a registry key. If zero `lucide=` names exist, the scan passes vacuously.
+ * Guards the icon-placeholder REGISTRY against silent fallback: an unknown
+ * `lucide="..."` name renders XIcon while `check` stays green.
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';

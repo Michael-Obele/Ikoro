@@ -1,15 +1,5 @@
 <script lang="ts">
-	/**
-	 * "Add a task" — a ghost row that becomes a one-field form.
-	 *
-	 * ONE component for every screen that can create a task, because the field, the
-	 * submit-on-Enter behaviour and the "a blur on an empty form puts it away" rule
-	 * are one decision. The list page used to carry its own copy of all three.
-	 *
-	 * `listId` is optional. A screen with a list in context (the list page) passes
-	 * one; a screen without (Today, Upcoming) gets the user's first list, because
-	 * the alternative for those screens was having no way to create anything at all.
-	 */
+	/** "Add a task" — a ghost row that becomes a one-field form, shared by every screen. */
 	import PlusIcon from 'lucide-svelte/icons/plus';
 	import Input from '$lib/components/ui/input/input.svelte';
 	import * as repo from '$lib/db/repo';
@@ -28,8 +18,7 @@
 
 	let adding = $state(false);
 
-	// `liveLists()` is already the user's own order, so "first" is the list they put
-	// at the top — the closest thing this app has to a default list.
+	// Already in the user's own order, so "first" is the list they put at the top.
 	const targetListId = $derived(listId ?? liveLists()[0]?.id ?? null);
 
 	// A form because it has an input. `command` is only for input-less actions.
@@ -45,14 +34,8 @@
 	}
 
 	/**
-	 * Clicking away from an empty field means "never mind", not "keep this open".
-	 *
-	 * Read the field's own value. Do NOT reach for `new FormData(event.currentTarget)`
-	 * here: this handler is bound to the INPUT, not the form, and FormData only
-	 * accepts a <form> — it throws `parameter 1 is not of type 'HTMLFormElement'`
-	 * and the field never closes. That is exactly what the list page this component
-	 * was extracted from did, so the bug is fixed here and inherited by every
-	 * caller instead of being copied into three more screens.
+	 * Read the field's own value: this handler is bound to the INPUT, not the form, and
+	 * `new FormData(input)` throws `parameter 1 is not of type 'HTMLFormElement'`.
 	 */
 	function clearAdd(event: FocusEvent) {
 		if ((event.currentTarget as HTMLInputElement).value.trim()) return;
@@ -70,18 +53,11 @@
 				onblur={clearAdd}
 				onkeydown={(e) => e.key === 'Escape' && (adding = false)}
 			/>
-			<!-- A hidden submit button: Enter in a single-input form submits it in
-			     every browser, and autofocus must land here rather than nowhere. -->
+			<!-- Hidden submit: Enter must submit, and autofocus must land here. -->
 			<button type="submit" class="sr-only" tabindex="-1" aria-hidden="true">Add</button>
 		</form>
 	{:else}
-		<!--
-			A dashed ghost row, not a plain text button. The dashed border is the
-			conventional "there is a slot here, and it is empty" affordance — it reads
-			as a placeholder for a row rather than as a link, which is what the old
-			borderless version looked like. It is square-cornered and 44px tall so it
-			matches the rows it will produce and clears the touch minimum.
-		-->
+		<!-- Dashed ghost row: 44px tall, so it matches the rows it produces. -->
 		<button
 			type="button"
 			class="mb-2 flex h-11 w-full items-center gap-2 border border-dashed border-outline-variant px-3 text-sm text-muted-foreground transition-colors hover:border-primary hover:bg-accent/50 hover:text-foreground"

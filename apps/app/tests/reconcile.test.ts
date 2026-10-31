@@ -11,13 +11,7 @@ import type {
 } from '#lib/alarms/types';
 
 /**
- * No Capacitor here, and no device. The tests drive a hand-written fake
- * implementing `AlarmScheduler`, which is the whole reason that interface exists:
- * the reconciliation logic — "the store says this is armed but the platform does
- * not have it" — is the part that actually breaks, and it can be tested anywhere.
- *
- * A real device test (M4-S1) still gates the promise that this logic serves.
- * These tests prove the bookkeeping, not Android's alarm manager.
+ * Guards reconciliation bookkeeping with a hand-written `AlarmScheduler` fake — no Capacitor, no device. A real device run (M4-S1) still gates the promise itself.
  */
 
 const NOW = new Date('2026-10-03T12:00:00.000Z');
@@ -161,14 +155,7 @@ describe('reconcile — missed alarms', () => {
 	});
 });
 
-/**
- * The desktop scheduler leaves a stamp file when the OS actually fires the unit.
- * These cases cover the difference between "the time passed and nothing rang" and
- * "the time passed and it rang while the app was closed".
- *
- * The ids here are systemd-shaped even though the fake reports `android`; the
- * mapping is by id shape, not by platform, so one fake covers both.
- */
+/** Desktop stamps a file when the OS fires; these cases separate "nothing rang" from "it rang while closed". */
 describe('reconcile — delivered while the app was closed', () => {
 	it('does NOT report a stamped alarm as missed', async () => {
 		await putTask({ alarmAt: PAST, alarmId: 'systemd:4242' });
@@ -198,9 +185,7 @@ describe('reconcile — delivered while the app was closed', () => {
 		const report = await reconcile({ scheduler, now: NOW });
 
 		expect(report.cancelled).toEqual(['systemd:4242']);
-		// The app opened while the unit was still listed: cancelling deletes the
-		// stamp, so the delivery has to be read BEFORE the cancel — otherwise this
-		// exact case comes back as a miss.
+		// Stamp must be read BEFORE the cancel — cancelling deletes it.
 		expect(report.missed).toEqual([]);
 	});
 
@@ -266,8 +251,7 @@ describe('reconcile — degraded outcomes', () => {
 		expect(report.degraded).toHaveLength(1);
 		expect(report.degraded[0].taskId).toBe('t1');
 		expect(report.degraded[0].warning).toMatch(/exact/i);
-		// It is still armed — the notification WILL fire, just not exactly — but
-		// it must not be reported the same way as an exact one.
+		// Still armed — it will fire, just not exactly — but reported differently.
 		expect(report.armed).toEqual(['t1']);
 	});
 
@@ -302,13 +286,7 @@ describe('reconcile — orphans', () => {
 	});
 });
 
-/**
- * A fired alarm must be RETIRED, not merely stamped.
- *
- * Leaving `alarmAt` set kept `wantsAlarm` true forever, so every resume re-reported
- * a reminder that had actually fired — and the row kept its bell for good. The
- * alarm that DID fire is the one case where silence is the correct outcome.
- */
+/** A fired alarm must be retired, not just stamped, or every resume re-reports it. */
 describe('reconcile — a fired alarm is retired', () => {
 	it('clears alarmAt once the instant has passed, so the next resume does not report it again', async () => {
 		await putTask({ alarmAt: PAST, alarmId: '42' });

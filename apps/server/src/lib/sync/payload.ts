@@ -1,19 +1,6 @@
 /**
- * Per-kind payload validation.
- *
- * `@ikoro/sync` types `ChangeOp.payload` as `unknown` on purpose: the wire
- * protocol must not need to know every field of every record, or adding a field
- * to a task would be a breaking change to the protocol package. But `unknown`
- * means the SERVER is the last line of defence, and "unknown" is exactly what a
- * corrupted or hostile push looks like.
- *
- * So the kind-specific shape lives here, on the server, in the same spirit as
- * `apps/app/src/lib/valibot` — validated on the way in, and never trusted.
- *
- * FIELD NAMES ARE NOT INVENTED. Every one of these is copied from
- * `docs/build/00-conventions.md` §3.1, which is the canonical record contract
- * that M1 built `apps/app`'s `svelte-idb` schema from. If that document and this
- * file disagree, the document wins and this file is the bug.
+ * Per-kind payload validation. `@ikoro/sync` types `payload` as `unknown`, so the server is the
+ * last line of defence. Field names come from `docs/build/00-conventions.md` §3.1.
  */
 
 import * as v from 'valibot';
@@ -26,14 +13,7 @@ const isoTimestamp = v.pipe(v.string(), v.isoTimestamp());
 const nullableText = v.nullable(v.string());
 const nullableTimestamp = v.nullable(isoTimestamp);
 
-/**
- * A list payload.
- *
- * `rev` and `dirty` are intentionally absent. `rev` is server-assigned — a
- * client that could set it would let any device rewind the whole feed. `dirty`
- * is transport bookkeeping that means nothing to the server. Both are stripped
- * by `apps/app`'s export and neither belongs on the wire.
- */
+/** A list payload. `rev` (server-owned) and `dirty` (transport-only) never reach the wire. */
 export const listPayloadSchema = v.object({
 	id: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
 	name: v.pipe(v.string(), v.maxLength(512)),
@@ -45,12 +25,8 @@ export const listPayloadSchema = v.object({
 });
 
 /**
- * A task payload.
- *
- * `alarmId` and `alarmFiredAt` are absent for the same class of reason as `rev`:
- * they are device-scoped. A platform notification id from one phone is
- * meaningless — and actively wrong — on another. `alarmAt` IS synced, because
- * that is the instant, and the product promise is that the alarm fires then.
+ * A task payload. `alarmId` and `alarmFiredAt` are device-scoped and never synced; `alarmAt` is,
+ * because that is the instant the alarm fires.
  */
 export const taskPayloadSchema = v.object({
 	id: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
@@ -86,15 +62,7 @@ export type ListPayload = v.InferOutput<typeof listPayloadSchema>;
 export type TaskPayload = v.InferOutput<typeof taskPayloadSchema>;
 export type AnyPayload = ListPayload | TaskPayload;
 
-/**
- * A payload that failed validation, with enough detail to fix it.
- *
- * `issues` is valibot's own, which means every message already carries a FIELD
- * PATH (`listPayload.name: Invalid type`). The AGENTS.md rule about asserting on
- * error MESSAGES rather than types is why this is surfaced at all: "Invalid
- * type: Expected string but received 3" tells a user what is wrong; `code === 400`
- * does not.
- */
+/** A payload that failed validation, carrying Valibot's field paths so the caller can fix it. */
 export type PayloadError = {
 	readonly ok: false;
 	readonly kind: EntityKind;
@@ -105,13 +73,7 @@ export type PayloadError = {
 export type PayloadOk<T> = { readonly ok: true; readonly value: T };
 export type PayloadResult<T> = PayloadOk<T> | PayloadError;
 
-/**
- * Validate a payload against its kind's schema.
- *
- * `v.safeParse` rather than `v.parse` because the message is the product here.
- * `mergeRow` is imported from `@ikoro/sync` and used untouched — the server does
- * not get a second, subtly different copy of the conflict rules.
- */
+/** Validate a payload against its kind's schema. `safeParse` because the message is the product. */
 export function validatePayload(kind: EntityKind, payload: unknown): PayloadResult<AnyPayload> {
 	const schema = PAYLOAD_SCHEMAS[kind] as v.GenericSchema;
 	const result = v.safeParse(schema, payload);
@@ -135,15 +97,8 @@ export function validatePayload(kind: EntityKind, payload: unknown): PayloadResu
 }
 
 /**
- * Reject device-scoped and transport fields on the way in.
- *
- * A schema that silently ignores unknown keys would accept
- * `{ alarmId: '9999' }` and drop it, and the client would then believe its alarm
- * is registered on the server. It is not, and nothing here can arm an alarm.
- *
- * Strict object parsing (`v.strictObject`) is not available on the shared
- * `changeRowSchema`, so this runs as a separate pass and reports which field was
- * refused, by name.
+ * Reject device-scoped and transport fields on the way in. Reported by name rather than silently
+ * stripped, so a client that sends one learns its alarm is NOT registered.
  */
 export const FORBIDDEN_PAYLOAD_FIELDS = [
 	'rev',

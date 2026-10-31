@@ -1,19 +1,4 @@
-/**
- * The typed bridge to the native `IkoroAlarm` plugin, and the ONLY place in the
- * web layer that names it.
- *
- * Everything else reaches an alarm through `AlarmScheduler` (`./types.ts`), so a
- * Kotlin method rename, a payload reshuffle, or a decision to build the alarm a
- * different way is a one-file edit here — which is exactly the point of the
- * seam. Keeping the wire shapes in one file also means the contract the Kotlin
- * side implements sits next to the only code that can get it wrong.
- *
- * The shapes below are transcribed from `IkoroAlarmPlugin.kt`, which is the
- * source of truth. They are deliberately not "tidied": `getPending` answers with
- * `{ pending }` rather than a bare array, and `schedule` answers with
- * `{ platformId }` rather than echoing the id it was given, because those are
- * the real wire shapes and renaming one here only moves the mismatch to runtime.
- */
+/** Typed bridge to the native `IkoroAlarm` plugin. Shapes are transcribed from `IkoroAlarmPlugin.kt`, untidied, so a mismatch stays a compile error. */
 import { registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 
 /** The notification permission, as the native side reports it. */
@@ -30,18 +15,9 @@ export interface IkoroAlarmEventPayload {
 /** What `checkStatus()` answers — the whole "can this device promise an alarm?" picture. */
 export interface IkoroAlarmStatus {
 	notifications: IkoroNotifications;
-	/**
-	 * Whether the OS will let us arm an EXACT alarm. A boolean rather than a
-	 * permission string on purpose: below API 31 there is no such permission to
-	 * hold, and the native side answers `true` there because those alarms are
-	 * exact by default.
-	 */
+	/** Boolean, not a permission string: below API 31 no such permission exists and the native side answers `true`. */
 	exact: boolean;
-	/**
-	 * Whether a ringing alarm may take over the screen (Android 14+ makes this a
-	 * user-revocable permission). Reported but not required: an alarm that rings
-	 * as a heads-up banner still rings.
-	 */
+	/** Android 14+ makes this user-revocable. Reported, not required: a heads-up banner still rings. */
 	fullScreenIntent: boolean;
 }
 
@@ -61,18 +37,7 @@ export interface IkoroBatteryStatus {
 	ignoringBatteryOptimizations: boolean;
 }
 
-/**
- * The plugin's methods, exactly as the Kotlin side declares them.
- *
- * `addListener` is part of this interface rather than inherited magic:
- * Capacitor's `registerPlugin<T>` returns exactly `T`, so an event name that is
- * not listed here does not type-check at the call site.
- *
- * NOTE: Capacitor also puts its own inherited `checkPermissions()` /
- * `requestPermissions()` on the plugin object. They are NOT this contract's API
- * and must not be used — `checkStatus()` is, because it answers the exact-alarm
- * and full-screen-intent questions too, which the inherited pair cannot.
- */
+/** The plugin's methods as Kotlin declares them. Capacitor's inherited `checkPermissions()`/`requestPermissions()` must not be used. */
 export interface IkoroAlarmPlugin {
 	schedule(options: {
 		id: number;
@@ -81,7 +46,7 @@ export interface IkoroAlarmPlugin {
 		at: string;
 		/** The sound to ring with; omit for the device default alarm sound. */
 		ringtone?: string | null;
-		/** The task's notes, shown on the ringing screen. Omit when there are none. */
+		/** The task's notes, shown on the ringing screen. */
 		description?: string | null;
 	}): Promise<{ platformId: string }>;
 	cancel(options: { platformId: string }): Promise<void>;
@@ -103,18 +68,9 @@ export interface IkoroAlarmPlugin {
 	openBatterySaverSettings(): Promise<void>;
 	/** The user's chosen snooze length, in minutes. */
 	getSnoozeMinutes(): Promise<{ minutes: number }>;
-	/**
-	 * Set the snooze length. Resolves with the value the device ACTUALLY stored —
-	 * anything outside 2/5/10/15 falls back to 5, so the UI reads the echo back
-	 * rather than assuming its input was kept.
-	 */
+	/** Resolves with the stored value -- anything outside 2/5/10/15 falls back to 5, so read the echo, not the input. */
 	setSnoozeMinutes(options: { minutes: number }): Promise<{ minutes: number }>;
-	/**
-	 * Answer a ringing alarm from the WEB UI — the same two intents the native
-	 * ringing screen sends. Needed because Android refuses the full-screen
-	 * takeover while the app is in the foreground, leaving the in-app overlay as
-	 * the only control the user can reach.
-	 */
+	/** Answer a ringing alarm from the web UI: in the foreground Android refuses the full-screen takeover, leaving the overlay as the only control. */
 	snooze(options: { id: number; taskId: string; title?: string }): Promise<void>;
 	dismiss(options: { id: number; taskId: string; title?: string }): Promise<void>;
 	addListener(
@@ -123,11 +79,5 @@ export interface IkoroAlarmPlugin {
 	): Promise<PluginListenerHandle>;
 }
 
-/**
- * The one instance, resolved by Capacitor from the name the Kotlin plugin
- * registers itself under (`@CapacitorPlugin(name = "IkoroAlarm")`). On a
- * non-native shell — the browser, a test with no Android behind it — calling a
- * method rejects instead of doing nothing, which is why every caller treats a
- * rejection as a real outcome rather than assuming success.
- */
+/** Resolved by name from the Kotlin `@CapacitorPlugin(name = "IkoroAlarm")`. Off-device every call rejects. */
 export const IkoroAlarm = registerPlugin<IkoroAlarmPlugin>('IkoroAlarm');

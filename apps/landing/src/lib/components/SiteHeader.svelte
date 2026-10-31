@@ -6,13 +6,7 @@
 	import { site } from '$lib/content';
 	import Logo from './Logo.svelte';
 
-	/**
-	 * The navigation.
-	 *
-	 * A plain list of links, no hamburger and no JavaScript: the whole bar is five
-	 * items, and a menu that hides four of them behind a button is a worse thing on
-	 * a phone than a wrapped row of small links. On a narrow screen it wraps instead.
-	 */
+	/** The navigation: a plain wrapped link list, no hamburger -- five items do not need a menu. */
 	const links = [
 		{ href: '/#what-it-does', label: 'What it does' },
 		{ href: '/download', label: 'Download' },
@@ -25,8 +19,7 @@
 	<div
 		class="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 sm:px-6 lg:px-8"
 	>
-		<!-- The wordmark is the home link, so it carries the current-page state on
-		     `/` — otherwise the home page has no nav item marked current. -->
+		<!-- The wordmark is the home link, so it carries the current-page state on `/`. -->
 		<a
 			href="/"
 			aria-current={page.url.pathname === '/' ? 'page' : undefined}

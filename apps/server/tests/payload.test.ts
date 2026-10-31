@@ -7,17 +7,7 @@ import {
 	FORBIDDEN_PAYLOAD_FIELDS
 } from '#lib/sync/payload';
 
-/**
- * Payload validation.
- *
- * The bug class: the server accepts a payload the client cannot read back, or
- * silently drops a field the client believes was stored. The second is worse —
- * `alarmId` in particular, where a client that thinks its alarm is registered
- * and is not means the product's central promise is quietly broken.
- *
- * So the error MESSAGE is asserted, not just the failure. AGENTS.md's rule: the
- * message is what gets read when something fails.
- */
+/** Payload validation: the server must not accept a payload the client cannot read back. */
 
 const validTask = {
 	id: 'task-1',
@@ -85,8 +75,7 @@ describe('failures name the offending FIELD', () => {
 
 describe('the calendar contract is enforced', () => {
 	it('dueDate is YYYY-MM-DD, never a timestamp', () => {
-		// The split of date and time is deliberate — Google's API discards the time
-		// part — so a combined value here is a client bug worth failing loudly on.
+		// The date/time split is deliberate — Google's API discards the time.
 		expect(validatePayload('task', { ...validTask, dueDate: '2026-10-05T09:30:00Z' }).ok).toBe(
 			false
 		);
@@ -118,8 +107,7 @@ describe('device-scoped and transport fields are refused', () => {
 	});
 
 	it('flags a userId, which is the other way an IDOR gets in', () => {
-		// Silently stripping it would hide the attempt. Rejecting the op makes the
-		// attempt visible in the client's `rejected` list.
+		// Silently stripping it would hide the attempt; rejecting makes it visible.
 		expect(findForbiddenFields({ ...validTask, userId: 'someone-else' })).toEqual(['userId']);
 	});
 

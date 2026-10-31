@@ -1,11 +1,4 @@
-/**
- * Sync settings, in the `meta` store rather than localStorage.
- *
- * M1 declared `meta` for app-level scalars precisely so this needs no second
- * persistence mechanism and no schema change. `syncEnabled`, `syncBaseUrl` and
- * `syncCursor` all live there, and the sync cursor can then be written in the
- * same place it is read.
- */
+/** Sync settings live in the `meta` store, not localStorage -- one persistence layer, no schema change. */
 import * as repo from '$lib/db/repo';
 
 export interface SyncSettings {

@@ -1,20 +1,7 @@
 /**
- * Every read and write the app performs.
+ * Every read and write the app performs -- the only module that imports `svelte-idb`.
  *
- * This is the ONLY module that imports `svelte-idb`. That is not tidiness — it is
- * the seam that makes the storage layer replaceable. Two facts about the library
- * force the shape of everything below:
- *
- *   1. **There is no transaction API.** So every mutation writes exactly one
- *      record, cascading deletes run sequentially and idempotently, and deletes
- *      are SOFT. Two writes are two operations; designing as if they were one is
- *      how a local-first app loses data.
- *   2. **`dirty` IS the sync queue.** Setting it in the same `put()` that changes
- *      a row costs no second write and no atomicity — see `docs/design/decisions.md`.
- *
- * Nothing here decides what a screen should show, and nothing here touches a
- * notification API: `toggleTask` deliberately leaves `alarmAt` alone, because
- * cancelling the platform alarm belongs to M4's scheduler, not to storage.
+ * No transactions: one record per write, cascades sequential and idempotent, deletes soft, `dirty` is the queue.
  */
 import {
 	db,
@@ -26,24 +13,12 @@ import {
 } from './schema';
 import { newId, nowIso } from '$lib/utils/id';
 
-/**
- * How far back `todayOpenTasks` will reach.
- *
- * A year is long enough that "I wrote this down last year and it is still open"
- * never silently vanishes from the only screen meant to catch you up, and short
- * enough that the list stays readable. Named because M3's overdue group needs to
- * reference the exact same number.
- */
+/** How far back `todayOpenTasks` reaches; the overdue group uses the same number. */
 export const PAST_WINDOW_DAYS = 365;
 
 // ── internals ────────────────────────────────────────────────────────────────
 
-/**
- * The single place tombstones are filtered.
- *
- * A forgotten `deletedAt === null` at one call site means a deleted task
- * reappears, so reads funnel through here instead of repeating the predicate.
- */
+/** The one place tombstones are filtered -- a forgotten check resurrects deleted tasks. */
 function alive<T extends { deletedAt: string | null }>(rows: T[]): T[] {
 	return rows.filter((r) => r.deletedAt === null);
 }
@@ -69,8 +44,7 @@ function shiftDays(d: Date, days: number): Date {
 function byUrgency(a: Task, b: Task): number {
 	const byDate = (a.dueDate ?? '').localeCompare(b.dueDate ?? '');
 	if (byDate !== 0) return byDate;
-	// A dated task with no time sorts after one that has a time on the same
-	// day — "sometime on the 4th" is less urgent than "at 09:00 on the 4th".
+	// No time sorts after a set time on the same day.
 	if (a.dueTime === b.dueTime) return a.sortOrder - b.sortOrder;
 	if (a.dueTime === null) return 1;
 	if (b.dueTime === null) return -1;
@@ -79,10 +53,7 @@ function byUrgency(a: Task, b: Task): number {
 
 // ── lists ────────────────────────────────────────────────────────────────────
 
-/**
- * `add()`, not `put()`: a colliding id becomes a loud constraint error instead of
- * silently overwriting a list the user already has.
- */
+/** `add()` not `put()`: a colliding id must throw, not overwrite an existing list. */
 export async function createList(name: string): Promise<TaskList> {
 	const ts = nowIso();
 	const list: TaskList = {
@@ -109,12 +80,7 @@ export async function renameList(id: string, name: string): Promise<void> {
 }
 
 /**
- * Soft-delete the list, then each of its tasks — sequentially and idempotently,
- * NOT transactionally, because svelte-idb has no transaction API.
- *
- * If this is interrupted the worst case is a list whose tasks are already gone:
- * visible, and re-running finishes it. The alternative — pretending two writes
- * are atomic — is a half-applied delete that looks like data loss.
+ * Soft-delete the list, then its tasks -- sequential and idempotent, so re-running finishes an interrupted delete.
  */
 export async function deleteList(id: string): Promise<void> {
 	await db.lists.put({
@@ -127,7 +93,7 @@ export async function deleteList(id: string): Promise<void> {
 	const tasks = await db.tasks.where('byList').equals(id).toArray();
 	for (const row of tasks) {
 		const task = asTask(row);
-		if (task.deletedAt) continue; // already tombstoned — keep it idempotent
+		if (task.deletedAt) continue; // keep idempotent
 		await db.tasks.put({
 			...task,
 			deletedAt: nowIso(),
@@ -149,12 +115,7 @@ export async function getTaskListById(id: string): Promise<TaskList | undefined>
 	return list.deletedAt === null ? list : undefined;
 }
 
-/**
- * The array index becomes the new `sortOrder`.
- *
- * One `put()` per record, in order — not atomic, but idempotent: re-running
- * writes the same orders, so a drag that lands twice costs nothing.
- */
+/** Array index becomes the new `sortOrder` -- one put per record, idempotent. */
 export async function reorderLists(ids: string[]): Promise<void> {
 	const ts = nowIso();
 	for (const [index, id] of ids.entries()) {
@@ -172,16 +133,9 @@ export async function reorderLists(ids: string[]): Promise<void> {
 // ── tasks ────────────────────────────────────────────────────────────────────
 
 /**
- * `add()`, not `put()` — see `createList`. A duplicate id must throw.
+ * `add()` not `put()` -- a duplicate id must throw.
  *
- * SUBTASKS. A task with a `parentId` is a subtask, and subtasks are exactly
- * one level deep: the parent must exist, be alive, and itself be a top-level
- * task. That is enforced HERE, not only in the UI, so an import or a future
- * sync writer cannot nest deeper by accident. A subtask also always lives in
- * its parent's list — the caller's `listId` is overridden, because a child
- * sitting in a different list than its parent would make every nested view
- * a lie. (`updateTask` does not police `parentId`: nothing in the UI ever
- * writes one through it, and reparenting is a v1.2 question.)
+ * Subtasks are one level deep and live in the parent's list, enforced here and not only in the UI.
  */
 export async function createTask(input: TaskInput): Promise<Task> {
 	let listId = input.listId;
@@ -215,9 +169,7 @@ export async function createTask(input: TaskInput): Promise<Task> {
 		sortOrder:
 			input.sortOrder ??
 			(input.parentId
-				? // Siblings compete only with each other, so a subtask's slot comes
-					// from its parent's child count — dense 0,1,2… instead of a position
-					// inherited from the whole list.
+				? // Siblings compete only with each other: dense 0,1,2… from the parent's child count.
 					await db.tasks.where('byParent').equals(input.parentId).count()
 				: await db.tasks.where('byList').equals(listId).count()),
 		createdAt: ts,
@@ -236,14 +188,7 @@ export async function getTask(id: string): Promise<Task | undefined> {
 }
 
 /**
- * EVERY `updateTask` runs through one queue.
- *
- * svelte-idb has no transactions, so this is a read → merge → write. Two calls
- * that overlap interleave (read A, read B, write A, write B) and the second
- * write reinstates the fields the first had just set — which is how an alarm
- * armed from one control could be wiped by a title autosave that started a few
- * milliseconds earlier. Serialising costs nothing at human speed and removes
- * the whole class of lost updates.
+ * Every `updateTask` runs through one queue -- with no transactions, overlapping read→merge→write pairs reinstate stale fields.
  */
 let writeQueue: Promise<unknown> = Promise.resolve();
 
@@ -252,7 +197,7 @@ export function updateTask(id: string, patch: Partial<Task>): Promise<void> {
 		() => writeTask(id, patch),
 		() => writeTask(id, patch)
 	);
-	// The chain must not break on a failed write, so the stored tail swallows it.
+	// Keep the chain alive after a failed write.
 	writeQueue = run.catch(() => {});
 	return run;
 }
@@ -270,16 +215,9 @@ async function writeTask(id: string, patch: Partial<Task>): Promise<void> {
 }
 
 /**
- * Flip completion.
+ * Flip completion -- never touches `alarmAt`; disarming is the scheduler's job.
  *
- * Deliberately does NOT touch `alarmAt`: cancelling the platform notification is
- * M4's scheduler's job. Keeping the two apart means a storage-level toggle in a
- * test never silently disarms an alarm on a real device, and vice versa.
- *
- * A parent with open subtasks cannot be completed — the message is the contract
- * the UI surfaces verbatim. Completing a parent while its children are open
- * would strand them: they would keep appearing under a done parent with no way
- * to see they were still owed. Ticking a DONE parent back open is always legal.
+ * A parent with open subtasks cannot be completed; the message is the UI contract.
  */
 export async function toggleTask(id: string): Promise<void> {
 	const current = await db.tasks.get(id);
@@ -307,15 +245,11 @@ export async function deleteTask(id: string): Promise<void> {
 		dirty: 1
 	} as unknown as Record<string, unknown>);
 
-	// Cascade to subtasks — sequentially and idempotently, exactly like
-	// `deleteList`: svelte-idb has no transaction, so the worst case of an
-	// interruption is a parent tombstoned while its children are not, and
-	// re-running finishes it. Children of a subtask cannot exist (one level),
-	// so one pass is the whole cascade.
+	// Cascade like `deleteList`: sequential and idempotent; one level, so one pass is the whole cascade.
 	const children = await db.tasks.where('byParent').equals(id).toArray();
 	for (const row of children) {
 		const child = asTask(row);
-		if (child.deletedAt) continue; // already tombstoned — keep it idempotent
+		if (child.deletedAt) continue; // keep idempotent
 		await db.tasks.put({
 			...child,
 			deletedAt: nowIso(),
@@ -327,25 +261,13 @@ export async function deleteTask(id: string): Promise<void> {
 
 // ── subtasks ─────────────────────────────────────────────────────────────────
 
-/**
- * A parent's living subtasks, oldest first (`sortOrder` is a dense 0,1,2…
- * assigned at creation — see `createTask`).
- *
- * Read through the `byParent` index rather than filtering `getAll()`: the index
- * exists for exactly this, and unlike the reactive layer this path has no
- * `liveAll()` subscription to piggyback on. Tombstones are filtered by the one
- * `alive()` funnel every read shares.
- */
+/** A parent's living subtasks, oldest first -- read via the `byParent` index. */
 export async function subtasksOf(parentId: string): Promise<Task[]> {
 	const rows = await db.tasks.where('byParent').equals(parentId).toArray();
 	return alive(rows.map(asTask)).sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
-/**
- * Whether any subtask of `id` is still open. The gate behind `toggleTask`'s
- * parent rule, kept separate so the UI can cheaply ask the same question
- * (e.g. to explain WHY a checkbox refused) without duplicating the predicate.
- */
+/** Whether any subtask of `id` is still open -- the gate behind `toggleTask`'s parent rule. */
 export async function hasOpenSubtasks(id: string): Promise<boolean> {
 	const children = await db.tasks.where('byParent').equals(id).toArray();
 	return alive(children.map(asTask)).some((t) => t.completedAt === null);
@@ -359,10 +281,7 @@ export async function tasksByList(listId: string): Promise<Task[]> {
 /**
  * Open work dated today or earlier, most overdue first.
  *
- * The `byDue` index only contains rows whose `dueDate` is non-null — IndexedDB
- * omits records from an index when the key path resolves to `null`. That is why
- * undated tasks can never leak in here: they are not in the index to begin with,
- * which is cheaper and more correct than filtering for them afterwards.
+ * `byDue` omits null keys, so undated tasks are never in this index to begin with.
  */
 export async function todayOpenTasks(now: Date = new Date()): Promise<Task[]> {
 	const today = localDay(now);
@@ -392,7 +311,7 @@ export async function getAllTasks(): Promise<Task[]> {
 	return alive((await db.tasks.getAll()).map(asTask));
 }
 
-// ── sync plumbing (consumed from M11; defined now so nothing migrates later) ──
+// ── sync plumbing (M11 consumes these) ──
 
 /** The whole database is about to become "needs pushing". Called when sync is first enabled. */
 export async function markAllDirty(): Promise<void> {
@@ -408,12 +327,7 @@ export async function markAllDirty(): Promise<void> {
 }
 
 /**
- * The ONLY hard delete in the app.
- *
- * Tombstones cannot be discarded casually: an M11 peer that has not yet pulled the
- * delete would resurrect the row on the next sync. So purging is an explicit
- * maintenance action — M7's "forget deleted tasks" and M11's post-ack cleanup.
- * Returns how many rows went away.
+ * The ONLY hard delete in the app -- drop a tombstone too early and an unsynced peer resurrects the row.
  */
 export async function purgeDeleted(): Promise<number> {
 	let removed = 0;

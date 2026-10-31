@@ -3,18 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 /**
- * THE ANTI-FLASH CONTRACT.
- *
- * Resolving the theme before first paint requires the storage key, the JSON
- * shape and the media query to be written down twice: once in an inline script
- * in `src/app.html`, and once in `src/lib/theme/theme.svelte.ts`. The script
- * cannot import the module — an imported module arrives after the stylesheet has
- * already painted, which is the flash.
- *
- * So the duplication is permanent, and the only thing keeping it honest is this
- * file. It reads both sources and fails if they disagree. Rename the key on one
- * side only and this goes red, instead of the app quietly reverting to System
- * on every launch for every user — a failure with no error message anywhere.
+ * Guards the anti-flash contract: the storage key, dark class and media query are written twice (app.html's inline script and theme.svelte.ts) because an imported module paints too late. This file fails if the two sides disagree.
  */
 
 const read = (relative: string): string =>
@@ -35,27 +24,13 @@ function inlineScript(): string {
 const script = inlineScript();
 
 /**
- * The REAL SvelteKit placeholder, as a standalone line.
- *
- * A plain `indexOf('%sveltekit.head%')` is a trap: the explanatory comment inside
- * the inline script names the placeholder, so a substring search finds the
- * comment's copy first and concludes the script is in the wrong place. The real
- * one is the token alone on its own line.
+ * The REAL placeholder, alone on its own line: a bare `indexOf` would find the copy named in the script's own comment.
  */
 const headPlaceholder = appHtml.search(/^\s*%sveltekit\.head%\s*$/m);
 expect(headPlaceholder, 'app.html must contain %sveltekit.head%').toBeGreaterThan(-1);
 
 /**
- * EXACTLY ONCE — the trap that caught this repo for real.
- *
- * SvelteKit substitutes the FIRST occurrence of the placeholder in the file, not
- * every one. A second mention anywhere earlier — a comment explaining what the
- * placeholder is, which is the natural thing to write — is therefore the one
- * that gets replaced, and the real placeholder survives into the served HTML,
- * where the HTML parser hoists a bare text node out of <head> and paints it as
- * literal "%sveltekit.head%" across the top of every screen. That is what the
- * served page looked like: the whole head injection silently gone, plus the
- * token on screen.
+ * SvelteKit substitutes only the FIRST occurrence, so a second mention earlier (e.g. in a comment) absorbs it and the literal "%sveltekit.head%" paints across every screen.
  */
 it('names the head placeholder exactly once, so nothing earlier can absorb it', () => {
 	expect(appHtml.match(/%sveltekit\.head%/g) ?? []).toHaveLength(1);
@@ -89,9 +64,7 @@ describe('pre-paint theme script', () => {
 	});
 
 	it('accepts exactly the three choices the store accepts', () => {
-		// PersistedState serialises with JSON.stringify, so storage holds '"dark"'
-		// with quotes. Reading the bare string is a bug that only shows up as "the
-		// toggle does not stick", so the JSON.parse is asserted explicitly.
+		// PersistedState JSON-serialises, so storage holds '"dark"' with quotes.
 		expect(script).toContain('JSON.parse');
 		for (const choice of ['system', 'light', 'dark']) {
 			expect(script).toContain(`'${choice}'`);
@@ -107,8 +80,7 @@ describe('pre-paint theme script', () => {
 	});
 
 	it('sets colorScheme as well as the class', () => {
-		// Without it the UA stylesheet keeps the scrollbar, form controls and the
-		// caret light, which is its own small flash on a dark page.
+		// Otherwise the UA keeps scrollbar, form controls and caret light — a flash of its own.
 		expect(script).toContain('colorScheme');
 	});
 });

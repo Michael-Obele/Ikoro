@@ -1,22 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * The native plugin is replaced wholesale: these tests are about how
- * `AndroidScheduler` TRANSLATES the plugin's answers into `ScheduleOutcome` and
- * `AlarmPermissionStatus`, and
- * that translation is where "a failure was reported as a success" would come
- * from. The plugin itself is Kotlin and is covered by the device gate (M4-S1),
- * not by a unit test.
- *
- * Runs in the default `node` environment — no DOM, no IndexedDB, so no
- * `@vitest-environment jsdom` docblock. The mock replaces `./plugin` before
- * `registerPlugin` (or `@capacitor/core`) is ever touched, so nothing native is
- * required to run these.
- *
- * The permission branch is asserted on the rejection MESSAGE, because the
- * message is the contract: 'permission' vs 'unsupported' turns on whether the
- * native text contains "exact alarm permission", and getting that wrong sends
- * the user to a settings screen that cannot help them.
+ * Guards how `AndroidScheduler` translates the plugin's answers — the seam where a failure could be reported as a success. Permission branches assert on the MESSAGE.
  */
 const plugin = {
 	schedule: vi.fn(),
@@ -167,11 +152,6 @@ describe('ensureReady', () => {
 	});
 
 	it('reports a REVOKED full-screen intent as denied, never as unsupported', async () => {
-		// Android 14 lets the user revoke this, and the alarm then degrades to a
-		// heads-up banner instead of taking over the screen. 'denied' is the honest
-		// answer and the only one that makes the UI offer the Settings screen that
-		// can fix it; 'unsupported' would wrongly imply there is nothing to fix,
-		// which is exactly how the degradation stayed invisible before.
 		plugin.checkStatus.mockResolvedValue({
 			notifications: 'granted',
 			exact: true,
@@ -182,8 +162,6 @@ describe('ensureReady', () => {
 	});
 
 	it('keeps the exact and full-screen answers independent of each other', async () => {
-		// They are two different permissions with two different fixes. Deriving one
-		// from the other would silently drop whichever the user actually revoked.
 		plugin.checkStatus.mockResolvedValue({
 			notifications: 'granted',
 			exact: false,
@@ -270,9 +248,6 @@ describe('full-screen intent settings', () => {
 	});
 
 	it('propagates a failed hand-off, leaving the decision to the caller', async () => {
-		// Deliberately NOT swallowed here: the native method is the only thing that
-		// knows why the screen would not open. The UI is the layer that has to keep
-		// the banner up and carry on, and it catches exactly here.
 		plugin.requestFullScreenIntentPermission.mockRejectedValue(new Error('no such activity'));
 		await expect(new AndroidScheduler().openFullScreenIntentSettings()).rejects.toThrow(
 			'no such activity'

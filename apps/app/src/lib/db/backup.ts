@@ -1,19 +1,7 @@
 /**
- * Backup export and import.
+ * Backup export and import -- device-scoped fields never ship, and nothing is dropped silently.
  *
- * Two rules decide everything here:
- *
- *  1. **Nothing device-scoped ever ships.** `alarmId` is a number this phone
- *     handed out; on another device it means nothing, and leaving it behind
- *     makes a later cancel target the wrong notification. Same for
- *     `alarmFiredAt` (a fact about one device's wake-ups) and `rev` (a server
- *     cursor that is meaningless offline).
- *  2. **Nothing is ever dropped silently.** A task whose list is missing is
- *     skipped AND counted. A silent skip in a backup tool is indistinguishable
- *     from data loss, which is the one thing this feature exists to prevent.
- *
- * Merge is by `id`, keeping the newer `updatedAt` — so importing an old backup
- * onto a device with newer edits cannot roll the user back.
+ * Merge is by `id`, newer `updatedAt` wins, so an old backup cannot roll the user back.
  */
 import * as v from 'valibot';
 import { db, type Task, type TaskList } from './schema';
@@ -24,7 +12,7 @@ import { reconcile } from '$lib/alarms/reconcile';
 
 /** A validation failure the UI can render field by field. */
 export class ImportError extends Error {
-	/** Every failing `path.issue`, not just the first — a partial list of errors is its own kind of unhelpful. */
+	/** Every failing path, not just the first. */
 	readonly paths: string[];
 
 	constructor(message: string, paths: string[] = []) {
@@ -37,7 +25,7 @@ export class ImportError extends Error {
 export interface ImportResult {
 	lists: number;
 	tasks: number;
-	/** Tasks dropped because their list was not in the merged set. Surfaced, never silent. */
+	/** Tasks dropped because their list was not in the merged set. */
 	skipped: number;
 }
 
@@ -68,9 +56,7 @@ export async function exportAll(): Promise<ExportFile> {
 			dueTime: t.dueTime,
 			priority: t.priority,
 			alarmAt: t.alarmAt,
-			// User data, not device state: a restore that drops the subtask tree or
-			// the colours has thrown away work the user can see is gone. `?? null`
-			// normalises the absent-key `undefined` an old row may carry.
+			// User data, not device state -- export it or a restore loses it.
 			parentId: t.parentId ?? null,
 			color: t.color ?? null,
 			updatedAt: t.updatedAt
@@ -79,12 +65,7 @@ export async function exportAll(): Promise<ExportFile> {
 }
 
 /**
- * Validate, then merge.
- *
- * The order matters: parse → validate → merge → normalise → reschedule.
- * Re-arming before the rows land would schedule alarms for tasks that do not
- * exist yet, and skipping validation would import a file that silently
- * corrupts the store.
+ * Validate, then merge -- parse → validate → merge → normalise → reschedule; re-arming early schedules alarms for rows that do not exist yet.
  */
 export async function importAll(input: unknown): Promise<ImportResult> {
 	const parsed = parseEnvelope(input);
@@ -99,8 +80,7 @@ export async function importAll(input: unknown): Promise<ImportResult> {
 	let listWrites = 0;
 	for (const incoming of parsed.lists) {
 		const existing = mergedLists.get(incoming.id);
-		// Newer wins. Ties keep the local copy, so re-importing the file you just
-		// exported changes nothing.
+		// Newer wins; ties keep the local copy.
 		if (existing && existing.updatedAt >= incoming.updatedAt) continue;
 		const list: TaskList = {
 			id: incoming.id,
@@ -120,8 +100,7 @@ export async function importAll(input: unknown): Promise<ImportResult> {
 	let taskWrites = 0;
 	let skipped = 0;
 	for (const incoming of parsed.tasks) {
-		// A task whose list is not in the merged set has nowhere to live. Drop
-		// it, count it, and let the caller tell the user — never silently.
+		// No list to live in: drop and count, never silently.
 		if (!mergedLists.has(incoming.listId)) {
 			skipped++;
 			continue;
@@ -137,16 +116,13 @@ export async function importAll(input: unknown): Promise<ImportResult> {
 			dueDate: incoming.dueDate,
 			dueTime: incoming.dueTime,
 			priority: incoming.priority,
-			// Newer-wins like every other user field. The old `existing?.parentId
-			// ?? null` never updated the pointer, so a subtask restored from a
-			// backup stayed detached from its parent forever.
+			// Newer-wins like every other user field.
 			parentId: incoming.parentId ?? null,
 			color: incoming.color ?? null,
 			repeat: existing?.repeat ?? null,
 			completedAt: existing?.completedAt ?? null,
 			alarmAt: incoming.alarmAt,
-			// Always cleared on the way in: an alarm armed here has to be armed
-			// by THIS device, which means going through THIS device's scheduler.
+			// Cleared on the way in: this device's scheduler does the arming.
 			alarmId: null,
 			alarmFiredAt: null,
 			sortOrder: existing?.sortOrder ?? taskWrites,
@@ -161,20 +137,7 @@ export async function importAll(input: unknown): Promise<ImportResult> {
 		taskWrites++;
 	}
 
-	// Normalise subtask structure over the MERGED set — the file's pointers are
-	// only trustworthy once every row (imported and local alike) is in the map:
-	//
-	//  - an `parentId` naming a task that is not in the merged set is a dangling
-	//    reference (a partial backup, or a parent the receiving device deleted);
-	//    the child is demoted to a top-level task rather than vanish;
-	//  - a child pointing at itself, or at a task that is itself a child, is a
-	//    malformed chain — subtasks are exactly one level deep, so the child is
-	//    demoted too;
-	//  - a child inherits its parent's list, mirroring `repo.createTask`, so a
-	//    nested view never shows a child in a list its parent is not in.
-	//
-	// Demotion is a repair, not a rejection: the task itself is user data and
-	// must survive even when the structure around it cannot.
+	// Normalise subtask structure over the MERGED set: a dangling, self- or two-level parent demotes the child to top-level (a repair, never a rejection), and a child inherits its parent's list.
 	for (const task of mergedTasks.values()) {
 		if (task.parentId === null) continue;
 		const parent = mergedTasks.get(task.parentId);
@@ -189,9 +152,7 @@ export async function importAll(input: unknown): Promise<ImportResult> {
 		mergedTasks.set(task.id, { ...task, parentId: null });
 	}
 
-	// Imported alarms are not armed yet — the user was promised a reminder, so
-	// arm it now. A scheduler failure must not fail the import: the data is
-	// already safely in the store, and Settings → Notifications can re-arm.
+	// Arm imported alarms now; a scheduler failure must not fail an import whose data already landed.
 	try {
 		await reconcile({ scheduler: getScheduler() });
 	} catch (error) {
@@ -217,8 +178,7 @@ function parseEnvelope(input: unknown): ExportFile {
 	const result = v.safeParse(exportSchema, input);
 	if (result.success) return result.output;
 
-	// Report every failing path. `issue.path` is the path to the offending field,
-	// which is exactly what a user needs to see to fix their file.
+	// Report every failing path, not just the first.
 	const paths = result.issues.map((issue) => {
 		const path = issue.path?.map((segment) => String(segment.key)).join('.') ?? '(root)';
 		return `${path}: ${issue.message}`;

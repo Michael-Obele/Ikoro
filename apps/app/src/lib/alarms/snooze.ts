@@ -1,16 +1,4 @@
-/**
- * The snooze-length setting, in one tiny module.
- *
- * SharedPreferences on the device is the SINGLE source of truth — the ringing
- * screen and the alarm service read it with no Bridge, and this module is a thin
- * client of it. There is deliberately no localStorage or IndexedDB mirror: two
- * copies of a device setting is two chances to disagree, and the value means
- * nothing on a platform that has no ring screen to snooze.
- *
- * Android is the only such platform: desktop fires notifications, not ringing
- * alarms, so every function answers the honest default off-device rather than
- * throwing at a plugin that is not there.
- */
+/** The snooze-length setting. Device SharedPreferences is the single source of truth; deliberately no localStorage mirror to disagree with it. */
 import { Capacitor } from '@capacitor/core';
 import { IkoroAlarm } from './plugin';
 
@@ -45,12 +33,7 @@ export async function snoozeMinutes(): Promise<SnoozeMinutes> {
 	}
 }
 
-/**
- * Write a length and return what the device actually stored.
- *
- * The echo is the point: the caller sets its state from the answer, never from
- * its input, so the UI cannot show a length the alarm will not honour.
- */
+/** Write a length and return what the device actually stored -- the UI reads the echo, never its own input. */
 export async function setSnoozeMinutes(minutes: number): Promise<SnoozeMinutes> {
 	if (!snoozeSupported()) return DEFAULT_SNOOZE_MINUTES;
 	try {

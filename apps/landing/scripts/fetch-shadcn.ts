@@ -1,16 +1,6 @@
 /**
- * Fetches shadcn-svelte components straight from the public registry, and writes
- * them into this app's own `src/lib/components/ui/`.
- *
- * Why not `bunx shadcn-svelte add`? The CLI hangs in this environment (verified
- * 2026-10-03: it never prints, it never writes). The registry is the same source
- * the CLI reads, so fetching it directly is deterministic, reviewable, and keeps
- * the Bun-only rule. This is the same technique as
- * `apps/app/scripts/fetch-shadcn.ts`, with one difference: every `$lib/...`
- * specifier is rewritten to a path relative to the file that imports it, so
- * what lands here matches the components already in `src/lib/components/ui/`.
- *
- *   bun scripts/fetch-shadcn.ts button badge card separator alert
+ * Fetches shadcn-svelte components from the public registry into this app's own `src/lib/components/ui/`,
+ * rewriting every `$lib/...` specifier to a path relative to its importer. Usage: `bun scripts/fetch-shadcn.ts <component...>`
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
@@ -29,12 +19,8 @@ const ALIASES: Record<string, string> = {
 	utils: 'utils'
 };
 
-/**
- * The CLI rewrites these placeholders to the user's aliases before writing. The
- * raw registry JSON still carries them verbatim, and a literal `$UTILS$.js` in a
- * component is a broken import rather than a placeholder — so they are rewritten
- * here, to relative paths, in one pass.
- */
+// The raw registry JSON ships `$UTILS$`-style placeholders verbatim; left alone
+// they are broken imports, so they are rewritten to relative paths here.
 const PLACEHOLDERS: Record<string, string> = {
 	$UTILS$: 'utils',
 	$UI$: 'components/ui',

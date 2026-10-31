@@ -1,20 +1,4 @@
-/**
- * The desktop scheduler: two modes, chosen by a runtime probe, both honest.
- *
- * **Mode A — `systemd`.** The OS owns the alarm. A transient pair of user units
- * is written per alarm, so it fires whether or not Ikoro is running. This is the
- * only mode that keeps the product's promise on Linux.
- *
- * **Mode B — `timer`.** An in-process `setTimeout`. It works exactly as long as
- * the window is open, so `schedule()` returns `exact: false` with a warning that
- * says so. There is no third, silent mode: the UI always states which one is
- * active, because a desktop alarm that quietly depends on the app being open is
- * the failure this whole milestone exists to avoid.
- *
- * Note what this file does NOT do: it does not build the unit files. That is
- * `systemd.ts`, in pure functions, so the escaping rules are testable without a
- * Rust toolchain.
- */
+/** Desktop alarms: `systemd` (the OS owns it) or an in-process `timer` (`exact: false`, warned). No third silent mode; units are built in `systemd.ts`. */
 import { invoke } from '@tauri-apps/api/core';
 import {
 	isPermissionGranted,
@@ -31,21 +15,14 @@ import {
 	type DesktopProbe
 } from './systemd';
 
-/**
- * `setTimeout` overflows past 2^31-1 ms (~24.8 days) and fires IMMEDIATELY.
- * Anything further out is armed in stages, re-armed on each fire, so a reminder
- * set for next month does not ring the instant it is created.
- */
+/** `setTimeout` overflows past 2^31-1 ms and fires IMMEDIATELY, so far-off alarms are armed in stages. */
 const MAX_TIMEOUT_MS = 2_147_483_647;
 const STAGE_MS = MAX_TIMEOUT_MS - 60_000;
 
 /** Resolved by the first probe; `null` until then. */
 let cachedProbe: DesktopProbe | null = null;
 
-/**
- * Ask Rust what this machine can do. Cached: the answer cannot change while the
- * app is running, and `systemctl` is a subprocess spawn.
- */
+/** Ask Rust what this machine can do. Cached -- the answer cannot change while running. */
 export async function probeDesktop(): Promise<DesktopProbe> {
 	if (cachedProbe) return cachedProbe;
 	try {
@@ -53,9 +30,7 @@ export async function probeDesktop(): Promise<DesktopProbe> {
 		cachedProbe = probe;
 		return probe;
 	} catch (error) {
-		// A failed probe must not crash the app. Falling back to the in-process
-		// timer is the safe answer: it degrades visibly rather than losing alarms
-		// without saying so.
+		// A failed probe must not crash the app; the in-process timer degrades visibly.
 		console.warn('[ikoro] alarm_probe failed, falling back to the in-process timer', error);
 		cachedProbe = {
 			mode: 'timer',
@@ -99,23 +74,15 @@ export class DesktopScheduler implements AlarmScheduler {
 	async ensureReady(): Promise<AlarmPermissionStatus> {
 		await this.ready();
 
-		// `notification:default` in capabilities covers POSTING. Whether the
-		// desktop will SHOW it is the OS's business, so we ask.
+		// Posting is covered by capabilities; whether the desktop SHOWS it is the OS's call, so ask.
 		let granted = await isPermissionGranted();
 		if (!granted) {
 			const asked = await requestPermission();
 			granted = asked === 'granted';
 		}
 
-		// There is no "exact" concept on desktop — either the OS scheduled it
-		// (systemd) or it is in-process. That distinction is carried by
-		// `ScheduleOutcome.exact`, not by this status.
-		// `fullScreenIntent: 'unsupported'` for the same reason there is no
-		// exact permission here: a desktop reminder is a notification popup,
-		// and no desktop mechanism lets it seize the screen. So there is no
-		// permission to grant, no settings screen to open, and no degradation
-		// to warn about. 'denied' would be a lie that makes the UI offer a fix
-		// which cannot exist.
+		// No "exact" concept here -- that is carried by `ScheduleOutcome.exact`. `fullScreenIntent` is
+		// 'unsupported' for the same reason: nothing on desktop can seize the screen, so nothing to fix.
 		return {
 			notifications: granted ? 'granted' : 'denied',
 			exact: 'unsupported',
@@ -139,10 +106,7 @@ export class DesktopScheduler implements AlarmScheduler {
 		return this.#scheduleInProcess(alarm, platformId);
 	}
 
-	/**
-	 * Mode A. The units are built here and written by Rust, which never inspects
-	 * a task title.
-	 */
+	/** Mode A. Units built here, written by Rust, which never inspects a task title. */
 	async #scheduleSystemd(alarm: AlarmRequest, platformId: string): Promise<ScheduleOutcome> {
 		try {
 			await invoke('alarm_arm', {
@@ -154,16 +118,12 @@ export class DesktopScheduler implements AlarmScheduler {
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			console.error('[ikoro] alarm_arm failed', message);
-			// Never fall back silently to an in-process timer: the user would then
-			// believe they have an alarm that dies with the window.
+			// Never fall back silently: the user would believe they had an alarm that dies with the window.
 			return { ok: false, reason: 'unsupported' };
 		}
 	}
 
-	/**
-	 * Mode B. Immediate delivery via the notification plugin — which is exactly
-	 * what that plugin is good at, and the only thing it can do.
-	 */
+	/** Mode B. Immediate delivery via the notification plugin -- the only thing it can do. */
 	async #scheduleInProcess(alarm: AlarmRequest, platformId: string): Promise<ScheduleOutcome> {
 		this.#clearTimer(platformId);
 
@@ -198,8 +158,7 @@ export class DesktopScheduler implements AlarmScheduler {
 		try {
 			await invoke('alarm_cancel', { hash: platformId.replace(/^systemd:/, '') });
 		} catch (error) {
-			// Cancelling something already gone is not an error worth surfacing;
-			// reconcile treats absence as "not armed" either way.
+			// Absence is not worth surfacing -- reconcile treats it as "not armed" either way.
 			console.warn('[ikoro] alarm_cancel failed', error);
 		}
 	}
@@ -226,13 +185,7 @@ export class DesktopScheduler implements AlarmScheduler {
 		return new Set([...this.#timers.keys()]);
 	}
 
-	/**
-	 * Hashes whose stamp exists — alarms the OS actually delivered.
-	 *
-	 * Only meaningful in systemd mode: in-process delivery is observed directly.
-	 * This is what lets reconcile tell "the OS delivered it and we were asleep"
-	 * apart from "the alarm never happened".
-	 */
+	/** Hashes with a stamp on disk -- alarms the OS actually delivered. Tells "fired while we slept" from "never happened". */
 	async firedStamps(): Promise<Set<string>> {
 		try {
 			return new Set(await invoke<string[]>('alarm_stamps'));

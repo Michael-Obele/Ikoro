@@ -1,16 +1,7 @@
 <script lang="ts">
 	/**
-	 * The battery reliability banner.
-	 *
-	 * Battery saver and battery optimisation are the two ways a phone quietly
-	 * makes an alarm late. Neither can be switched off from inside an app — what
-	 * an app can do is notice, say so, and hand the user the exact system screen
-	 * that fixes it. That is all this banner does, and only on Android, where
-	 * `batteryStatus()` answers with something; elsewhere it renders nothing.
-	 *
-	 * DISMISSAL IS PER STATE, not forever. Saying "don't show this" while battery
-	 * saver is on must not hide the allowlist problem that appears next week — a
-	 * changed state re-asks, because it is a different problem.
+	 * Warns that battery saver / optimisation can make an alarm late. Dismissal is per
+	 * state, so a new problem re-asks.
 	 */
 	import { PersistedState } from 'runed';
 	import { App as CapApp } from '@capacitor/app';
@@ -34,8 +25,7 @@
 
 	$effect(() => {
 		void refresh();
-		// Re-checked on every resume, like the alarm lifecycle: the user can come
-		// back from Settings having fixed (or broken) either switch.
+		// Re-checked on every resume: the user can come back from Settings having changed either switch.
 		let disposed = false;
 		let handle: { remove: () => Promise<void> } | null = null;
 		void CapApp.addListener('appStateChange', ({ isActive }) => {

@@ -1,12 +1,7 @@
 import { db } from './schema';
 
 /**
- * A brand-new install has no lists, and the UI is written in terms of "the
- * current list". Seeding one removes the empty-state-with-nowhere-to-go problem.
- *
- * Guarded on `count() === 0` rather than on "is there a list named Tasks", so a
- * user who deletes every list deliberately is not fought by a seed that puts one
- * back on the next launch. Idempotent: the second call is a no-op.
+ * Seeds one list so a fresh install has somewhere to start -- guarded on `count() === 0`, so a user who deletes every list is not fought.
  */
 export async function ensureSeeded(): Promise<void> {
 	if ((await db.lists.count()) > 0) return;

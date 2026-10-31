@@ -1,13 +1,6 @@
 /**
- * `GET /api/v1/stream` — server-sent events.
- *
- * This is the canonical path. `docs/design/architecture.md` §6 and M11 Step 5 both
- * name it, and M11's `stream.ts` will connect to exactly this URL.
- *
- * The stream is in-process and there is no Redis (D13). That is why the deploy
- * pins one always-on machine: a second instance would hold subscribers the first
- * one cannot reach, so live updates would work for some devices and silently not
- * for others.
+ * `GET /api/v1/stream` — server-sent events. The canonical path; M11's client connects here.
+ * In-process, no Redis, which is why the deploy pins one always-on machine.
  */
 
 import type { RequestHandler } from './$types';

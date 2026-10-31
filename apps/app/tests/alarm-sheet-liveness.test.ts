@@ -4,19 +4,7 @@ import { cleanup, render, screen } from '@testing-library/svelte';
 import AlarmSheet from '#lib/components/task/AlarmSheet.svelte';
 import type { Task } from '#lib/db/schema';
 
-/**
- * The "Remind me" control must read the LIVE row, not the copy it was opened
- * with.
- *
- * This is the regression guard for the reported bug: a sheet opened on a task
- * whose date had since changed kept computing its instant from the stale row,
- * so it answered "Pick a time in the future" for a date that was plainly in the
- * future, and it kept showing the old clock after the due time moved.
- *
- * The store is mocked out because the question here is not persistence — it is
- * whether a new prop value reaches the controls. A real IndexedDB round trip
- * would only add timing noise to that.
- */
+/** Guards that the "Remind me" control reads the live row, not the copy it was opened with. */
 vi.mock('#lib/db/repo', () => ({ updateTask: vi.fn(async () => {}) }));
 vi.mock('#lib/platform', () => ({ detectPlatform: () => 'android' }));
 vi.mock('#lib/alarms/scheduler', () => ({
@@ -78,8 +66,6 @@ describe('AlarmSheet — the row is the truth', () => {
 		const { rerender } = render(AlarmSheet, { task: armedTask });
 		expect(timeInput()?.value).toBe('09:00');
 
-		// The due time moved elsewhere in the sheet (DuePicker writes straight to
-		// the store). The alarm control must show the new clock, not the old one.
 		await rerender({ task: fixture({ ...armedTask, dueTime: '14:30' }) });
 
 		expect(timeInput()?.value).toBe('14:30');

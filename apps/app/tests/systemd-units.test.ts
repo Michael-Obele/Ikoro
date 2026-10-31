@@ -8,23 +8,7 @@ import {
 	firedDir
 } from '$lib/alarms/systemd';
 
-/**
- * Pure string generation — no systemd, no Rust, no Tauri. This is the layer
- * where the product's desktop promise is either kept or quietly broken, and it
- * is testable anywhere.
- *
- * Systemd unit files are NOT shell. Three characters bite, and each one fails
- * silently in a way that is painful to debug on a machine that is not in front
- * of you:
- *
- *   %   systemd expands %h, %t, %n… and any OTHER %X is an error. The unit
- *       simply will not load. A task titled "50% done" breaks the timer.
- *   "   inside a quoted argument, must be escaped.
- *   \   must be escaped before the quote is.
- *
- * A task title is arbitrary user text. If it can contain a percent sign, the
- * alarm for it simply does not exist, and nothing says so.
- */
+/** Guards the generated systemd units: `%`, `"` and `\` in a user title otherwise yield a unit that silently never loads. */
 
 describe('escapeUnitArg', () => {
 	it('doubles a percent sign — otherwise systemd refuses to load the unit', () => {
@@ -92,9 +76,7 @@ describe('buildServiceUnit', () => {
 		});
 		const execLines = unit.split('\n').filter((line) => line.startsWith('ExecStart='));
 
-		// Three, and the ORDER is the specification. The stamp is the record that
-		// this alarm reached the OS, so it must exist before a 30 second ring can be
-		// interrupted by a suspend or by the user cancelling.
+		// Order is the spec: the stamp must land before a 30 s ring can be cut short.
 		expect(execLines).toHaveLength(3);
 		expect(execLines[0]).toContain(firedDir('/home/tester'));
 		expect(execLines[0]).toContain('abc123');
@@ -118,9 +100,7 @@ describe('buildServiceUnit', () => {
 		const unit = buildServiceUnit({ hash: 'abc123', title: 'x', home: '/home/tester' });
 		const ring = unit.split('\n').find((line) => line.includes('/usr/bin/timeout')) ?? '';
 
-		// `%` is a systemd specifier and `"` inside a single-quoted argument stays
-		// literal, so a backslash-escaped quote would reach the shell as a literal
-		// backslash. Neither may appear in the generated ring.
+		// `%` is a specifier and `"` stays literal inside a single-quoted arg.
 		expect(ring).not.toContain('%');
 		expect(ring).not.toContain('"');
 	});
@@ -128,8 +108,7 @@ describe('buildServiceUnit', () => {
 	it('treats the end of the ring as success, not as a failed unit', () => {
 		const unit = buildServiceUnit({ hash: 'abc123', title: 'x', home: '/home/tester' });
 
-		// `timeout` reports 124 when it stops the loop, and a cancel arrives as
-		// SIGTERM; neither is a failure. Stopping the ring is the intended ending.
+		// 124 = `timeout` stopped the loop; SIGTERM = a cancel. Neither is a failure.
 		expect(unit).toContain('SuccessExitStatus=124 143 SIGTERM SIGKILL');
 	});
 
@@ -158,7 +137,6 @@ describe('buildServiceUnit', () => {
 			home: '/home/tester'
 		});
 		expect(unit).toContain('50%% done \\"urgent\\"');
-		// The raw, unescaped form must NOT survive into the unit file.
 		expect(unit).not.toContain('"Ikoro" "50% done "urgent""');
 	});
 
@@ -173,9 +151,6 @@ describe('buildServiceUnit', () => {
 	});
 
 	it('escapes the home directory placeholder rather than expanding it', () => {
-		// %h is systemd's home specifier. The stamp path is written by JS, which
-		// does not know the home directory, so it must be given an absolute one
-		// rather than smuggling a specifier through the escaping.
 		expect(buildServiceUnit({ hash: 'abc123', title: 'x', home: '/home/tester' })).not.toContain(
 			'%h'
 		);

@@ -1,20 +1,6 @@
 /**
- * The wire protocol, shared verbatim by the app and the server.
- *
- * This file is the contract. Both sides import it, so a field cannot mean two
- * things and a merge rule cannot be implemented twice — and two implementations
- * of conflict resolution IS two behaviours, which is the failure mode that makes
- * sync bugs unreproducible ("it worked on my phone").
- *
- * The model is last-writer-wins on `updatedAt`, with two deliberate refinements:
- *
- *  - **Tombstones win.** A delete is a record with `deletedAt` set, not a
- *    missing row. If it were a missing row, a peer that had not yet seen the
- *    delete would push the task straight back, and the user would watch their
- *    deleted task reappear on its own.
- *  - **The server is the clock.** Client clocks are used only to ORDER changes,
- *    never to decide who is right about a field. A phone whose clock is a week
- *    off must not permanently win every conflict.
+ * The sync wire protocol, shared by app and server so conflict resolution exists once.
+ * Last-writer-wins on `updatedAt`; tombstones win; the server is the clock.
  */
 
 import * as v from 'valibot';
@@ -24,14 +10,7 @@ export type EntityKind = 'list' | 'task';
 /** Bumped only for a wire-incompatible change; the server refuses older clients loudly. */
 export const WIRE_VERSION = 1;
 
-/**
- * The client-generated operation id.
- *
- * Idempotency, not identity: a retried `upsert` with the same op id must be a
- * no-op. Without that, a request that timed out *after* the server committed
- * would be applied twice — and on a flaky mobile connection that is the normal
- * case, not the exception.
- */
+/** Client-generated op id: a retried upsert with the same op id must be a no-op. */
 export const changeOpSchema = v.object({
 	id: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
 	kind: v.picklist(['list', 'task']),
@@ -94,21 +73,7 @@ export interface Mergeable {
 	deletedAt?: string | null;
 }
 
-/**
- * Last-writer-wins, **server wins ties**, and a tombstone is never resurrected.
- *
- * Three rules, in this order, and the order matters:
- *
- *  1. If exactly one side is deleted, the deleted side wins. This is checked
- *     BEFORE the timestamps on purpose: a user deleting a task on a phone with a
- *     skewed clock must still see it stay deleted.
- *  2. Otherwise the newer `updatedAt` wins.
- *  3. On an exact tie the incoming (server) row wins, so both devices converge
- *     on the same answer rather than each keeping its own.
- *
- * The outcome is symmetric — `mergeRow(a, b)` and `mergeRow(b, a)` return the
- * same value — which is the property that makes concurrent edits converge at all.
- */
+/** Last-writer-wins, server wins ties, tombstones never resurrect. Symmetric, so edits converge. */
 export function mergeRow<T extends Mergeable>(local: T | undefined, remote: T): T;
 export function mergeRow<T extends Mergeable>(local: T, remote: T | undefined): T;
 export function mergeRow<T extends Mergeable>(local: T | undefined, remote: T | undefined): T;
@@ -128,21 +93,11 @@ export function mergeRow<T extends Mergeable>(local: T | undefined, remote: T | 
 	if (remote.updatedAt > local.updatedAt) return remote;
 	if (local.updatedAt > remote.updatedAt) return local;
 
-	// 3. Tie: the server's copy, so every device lands on the same row.
+	// 3. Tie: the server's copy.
 	return remote;
 }
 
-/**
- * Do these two rows carry the same data?
- *
- * Compared by VALUE, not identity, and that distinction is load-bearing. On a
- * tie `mergeRow` returns the REMOTE object (server wins ties, so every device
- * converges on the same row) — but the two objects can be deeply identical. An
- * identity check would call that a change, and the caller would write the row
- * back, bump its `updatedAt`, re-dirty it, and push it again on the next pull.
- * That echo never terminates: a device that pulls would immediately have
- * something to push, forever.
- */
+/** Compared by VALUE: an identity check would call identical rows a change and re-dirty them forever. */
 function shallowEqual(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
 	const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
 	for (const key of keys) {
@@ -151,13 +106,7 @@ function shallowEqual(a: Record<string, unknown>, b: Record<string, unknown>): b
 	return true;
 }
 
-/**
- * Merge a whole change set into what the client already has.
- *
- * Returns only the rows that actually changed, so the caller can skip writes
- * that would bump `updatedAt` and dirty the row again — which, on a device that
- * just pulled, would push the change straight back to the server forever.
- */
+/** Rows that actually changed; writing unchanged rows would re-dirty them forever. */
 export function mergeChanges<T extends Mergeable>(
 	local: readonly T[],
 	remote: readonly T[],
@@ -180,13 +129,7 @@ export function mergeChanges<T extends Mergeable>(
 	return changed;
 }
 
-/**
- * Is this local row ahead of the server's?
- *
- * The push queue is `dirty` flags, not a separate outbox — one `put()` marks a
- * row changed AND needing a push, so there is no second store to keep in step
- * and no atomicity to lose. This function is the query behind it.
- */
+/** The push queue is the `dirty` flag, not a separate outbox. */
 export function needsPush<T extends { dirty: number }>(row: T): boolean {
 	return row.dirty === 1;
 }

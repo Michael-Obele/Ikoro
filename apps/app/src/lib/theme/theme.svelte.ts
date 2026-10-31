@@ -1,25 +1,5 @@
-/**
- * The theme store: System / Light / Dark.
- *
- * Three states, not two, on purpose. "Dark" plus an auto-switch is the usual
- * two-state design and it has a failure mode: the user cannot express "always
- * light", so the app overrides them every time the OS flips at dusk. An explicit
- * choice has to win permanently, and that needs a state that means "I have not
- * chosen yet".
- *
- * THE ORDER OF OPERATIONS IS THE WHOLE PROBLEM.
- *
- * A theme switch that flashes white on every load is worse than no switch: it is
- * a full-screen strobe for anyone loading the app in a dark room. So the class has
- * to be on `<html>` before the first paint, which is before any module runs. That
- * work is done by an inline script in `src/app.html` — it has to be inline,
- * because an imported module arrives after the CSS has already painted.
- *
- * The consequence is that the storage key, the JSON shape and the resolution rule
- * are written down TWICE: once there, once here. That duplication is deliberate
- * and `tests/theme-store.test.ts` guards the two against drifting apart. Do not
- * "de-duplicate" it by moving the script into a module.
- */
+/** Theme store: System / Light / Dark — an explicit choice must beat the OS, which needs that third state.
+ *  The storage key and resolution rule are also written in `app.html`'s inline pre-paint script; do not de-duplicate. */
 import { PersistedState } from 'runed';
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
@@ -47,45 +27,16 @@ export function isThemeChoice(value: unknown): value is ThemeChoice {
 	return typeof value === 'string' && (THEME_CHOICES as readonly string[]).includes(value);
 }
 
-/**
- * The persisted choice, defaulting to `system` so a first run follows the OS.
- *
- * runed rather than a hand-rolled `localStorage.getItem`: it reads storage
- * synchronously at construction (which is what makes the class land before the
- * app hydrates), stays reactive through `createSubscriber`, and syncs across
- * tabs for free. The repo rule is to use runed rather than roll our own.
- */
+/** runed rather than hand-rolled: reads storage synchronously and syncs across tabs. */
 export const themeChoice = new PersistedState<ThemeChoice>(THEME_STORAGE_KEY, 'system');
 
-/**
- * The persisted colour scheme, defaulting to crimson.
- *
- * Crimson is the default because it is the palette `layout.css` ships and the one
- * `tests/theme-contrast.test.ts` audits — a first run gets the hand-tuned scheme,
- * not a rotation of it. `dynamic` is a valid stored value even on a device that
- * cannot supply a wallpaper palette; the store falls back to crimson in that case
- * rather than rewriting the user's choice, so the setting survives a move to a
- * device that can.
- */
+/** Defaults to crimson, the audited palette. A stored `dynamic` is kept even where it cannot be honoured. */
 export const schemeChoice = new PersistedState<SchemeId>(SCHEME_STORAGE_KEY, 'crimson');
 
-/**
- * What the OS currently wants. Starts `false` so the very first render is
- * deterministic; `watchSystemTheme()` corrects it before the first paint that
- * anyone can see, because `applyTheme()` reads this synchronously in the same tick.
- */
+/** Starts false so the first render is deterministic; `watchSystemTheme()` fixes it before anyone sees it. */
 let systemPrefersDark = $state(false);
 
-/**
- * The single source of truth for what the user actually sees.
- *
- * A FUNCTION, not an exported `$derived`. Svelte 5 refuses to export derived
- * state from a module — a module-level `$derived` belongs to no component, so
- * `vite build` fails with `derived_invalid_export` while `vitest` and
- * `svelte-check` both stay green. Exporting the READ as a function is
- * equivalent for callers: calling it from a template or from a `$derived` still
- * subscribes to the runes it touches.
- */
+/** A function, not an exported `$derived`: Svelte 5 only rejects derived exports at build time. */
 export function resolvedTheme(): ResolvedTheme {
 	return themeChoice.current === 'system'
 		? systemPrefersDark
@@ -94,14 +45,7 @@ export function resolvedTheme(): ResolvedTheme {
 		: themeChoice.current;
 }
 
-/**
- * Write the resolved theme onto `<html>`.
- *
- * A DOM side effect on a node Svelte does not own — the reason this lives in a
- * plain function rather than a `$derived`. `colorScheme` matters as much as the
- * class: without it the UA stylesheet keeps painting scrollbars, form controls
- * and the caret in light, which is its own small flash on a dark page.
- */
+/** DOM side effect on a node Svelte does not own. `colorScheme` keeps UA scrollbars and the caret dark too. */
 export function applyTheme(): void {
 	if (typeof document === 'undefined') return;
 	const root = document.documentElement;
@@ -110,19 +54,13 @@ export function applyTheme(): void {
 	root.style.colorScheme = dark ? 'dark' : 'light';
 }
 
-/**
- * Track the OS preference. Returns its own teardown so it can be handed straight
- * back out of an `$effect`.
- */
+/** Returns its own teardown so it can be handed straight out of an `$effect`. */
 export function watchSystemTheme(): () => void {
 	if (typeof window === 'undefined') return () => {};
 	const media = window.matchMedia(DARK_MEDIA_QUERY);
 	const sync = (): void => {
 		systemPrefersDark = media.matches;
-		// `applyResolvedTheme`, not `applyTheme`: on Android the wallpaper palette
-		// is per-theme, so an OS flip at dusk has to swap the dynamic custom
-		// properties too. Calling the plain version here would leave the light
-		// palette's inline tokens overriding the dark stylesheet.
+		// `applyResolvedTheme`, not `applyTheme`: the wallpaper palette is per-theme, so an OS flip must swap it too.
 		applyResolvedTheme();
 	};
 	sync();
@@ -130,10 +68,7 @@ export function watchSystemTheme(): () => void {
 	return () => media.removeEventListener('change', sync);
 }
 
-/**
- * The only mutation. An explicit choice is written to storage and takes effect
- * immediately; choosing `system` hands control back to the OS from that moment.
- */
+/** The only mutation: store the choice, then apply it. */
 export function setTheme(choice: ThemeChoice): void {
 	themeChoice.current = choice;
 	if (typeof window !== 'undefined') {
@@ -146,31 +81,14 @@ export function setTheme(choice: ThemeChoice): void {
  * Colour scheme (seed themes)
  * ------------------------------------------------------------------ */
 
-/**
- * The scheme actually in force, which is not always the one stored.
- *
- * `dynamic` is only honoured when the device can supply a wallpaper palette AND
- * one has actually arrived. Until then — and forever, on web and on Android
- * below 12 — the answer is crimson, the audited static scheme. Falling back to
- * crimson rather than to "whatever was last applied" matters: the fallback has to
- * be a colour that is always correct, not a leftover.
- *
- * A FUNCTION, not an exported `$derived`, for the same reason `resolvedTheme()`
- * is one: Svelte 5 refuses to export derived state from a module, and the failure
- * only shows up in `vite build`.
- */
+/** `dynamic` only once a palette has arrived; otherwise crimson, so the fallback is never a leftover. A function, not `$derived`, for the build reason above. */
 export function resolvedScheme(): SeedSchemeId | 'dynamic' {
 	const stored = schemeChoice.current;
 	if (stored === 'dynamic') return dynamicSchemes ? 'dynamic' : 'crimson';
 	return stored;
 }
 
-/**
- * The only scheme mutation.
- *
- * Writes storage and re-applies in one step, so the picker never has to know
- * whether the scheme it just chose needs a wallpaper read first.
- */
+/** The only scheme mutation: write storage and re-apply in one step. */
 export function setScheme(id: SchemeId): void {
 	if (!isSchemeId(id)) return;
 	schemeChoice.current = id;
@@ -181,40 +99,16 @@ export function setScheme(id: SchemeId): void {
  * Dynamic colour (Material You)
  * ------------------------------------------------------------------ */
 
-/**
- * The scheme computed from the phone's wallpaper, or `null` when there is none.
- *
- * A rune, so `applyTheme()` can re-run when it arrives: the palette is read
- * asynchronously (a bridge call), which means the first paint always uses the
- * static scheme and the dynamic one lands a frame or two later. That is the
- * correct order — the static scheme is contrast-checked and always present, so
- * the app is never unstyled while it waits.
- */
+/** A rune so `applyResolvedTheme()` re-runs when the async read lands; the static scheme paints first. */
 let dynamicSchemes = $state<{ light: TokenMap; dark: TokenMap } | null>(null);
 
 /** What is currently written onto `<html>`, so a re-read can remove the old set. */
 let appliedTokens: TokenMap | null = null;
 
-/**
- * Whether the user's device can supply a wallpaper palette.
- *
- * Read once and cached: the answer cannot change while the app is running (it is
- * an API level), and `isAvailable()` is a bridge round trip.
- */
+/** Cached: an API level cannot change, and `isAvailable()` is a bridge round trip. */
 let dynamicAvailable: boolean | null = null;
 
-/**
- * Read the wallpaper palette and compute both schemes.
- *
- * Called on mount and on every resume. The resume re-read is not optional: the
- * user can change their wallpaper while the app is backgrounded, and Android
- * recomputes the palette when they do. Without it the app keeps the colours of a
- * wallpaper that no longer exists until the next cold start.
- *
- * Every failure path leaves `dynamicSchemes` as it was. A wallpaper read that
- * fails must never blank the theme — the static scheme is still on screen and
- * still correct.
- */
+/** On mount and on every resume — the wallpaper can change while backgrounded. Every failure path leaves the current scheme in place. */
 export async function refreshDynamicScheme(): Promise<void> {
 	if (typeof window === 'undefined') return;
 	if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return;
@@ -227,41 +121,18 @@ export async function refreshDynamicScheme(): Promise<void> {
 		}
 		dynamicAvailable = true;
 		dynamicSchemes = buildMonetSchemes(result.palettes);
-		// `applyResolvedTheme`, not `applyTheme`: the palette that just arrived is
-		// only half the story — the scheme in force decides whether it is used at
-		// all, and a user on a seed scheme must not be repainted by a wallpaper.
+		// `applyResolvedTheme`, not `applyTheme`: the scheme in force decides whether the palette is used at all.
 		applyResolvedTheme();
 	} catch (error) {
 		console.warn('[ikoro] dynamic colour read failed', error);
 	}
 }
 
-/** Whether the dynamic option should be offered at all. */
 export function isDynamicAvailable(): boolean {
 	return dynamicAvailable === true;
 }
 
-/**
- * Write the scheme for the resolved theme, or restore the static one.
- *
- * Inline custom properties on `<html>` beat the stylesheet's `:root` and `.dark`
- * blocks by specificity, so this is a genuine override rather than a second
- * palette competing with the first. Clearing them is the whole of "go back to the
- * static scheme" — nothing else has to be undone.
- *
- * PRECEDENCE, in one place:
- *
- *   1. scheme === 'dynamic' AND a wallpaper palette has arrived -> that palette
- *   2. scheme === 'dynamic' but no palette (web, Android < 12, read failed)
- *      -> crimson, the audited static scheme
- *   3. any seed scheme -> its rotated token map
- *
- * Crimson is applied as an explicit override rather than by clearing the inline
- * tokens, because the user may have arrived at crimson FROM another seed: the
- * inline properties from that seed are still on `<html>` and would otherwise win
- * over the stylesheet. Clearing first and then writing crimson is the only order
- * that leaves exactly one palette in force.
- */
+/** Inline custom properties on `<html>` beat `:root`/`.dark`, so this overrides rather than competes. Clearing before writing is the only order that leaves exactly one palette in force. */
 function applyScheme(): void {
 	if (typeof document === 'undefined') return;
 	const root = document.documentElement;
@@ -286,13 +157,7 @@ function applyScheme(): void {
 	appliedTokens = tokens;
 }
 
-/**
- * Wire the dynamic-colour lifecycle. Called once from the layout; safe to call
- * again.
- *
- * Returns its own teardown so it can be handed straight back out of an
- * `$effect`, the same shape as `watchSystemTheme()`.
- */
+/** Wire the dynamic-colour lifecycle. Called once from the layout; returns its own teardown. */
 export function watchDynamicColors(): () => void {
 	if (typeof window === 'undefined') return () => {};
 
@@ -304,9 +169,7 @@ export function watchDynamicColors(): () => void {
 	void CapApp.addListener('appStateChange', ({ isActive }) => {
 		if (isActive) void refreshDynamicScheme();
 	}).then((h) => {
-		// The listener can resolve after the effect has already torn down (a fast
-		// unmount, or a hot reload). Removing it then is the only way to avoid a
-		// listener that outlives the component that asked for it.
+		// The listener can resolve after teardown (fast unmount, hot reload) — remove it then and there.
 		if (disposed) void h.remove();
 		else handle = h;
 	});
@@ -317,14 +180,7 @@ export function watchDynamicColors(): () => void {
 	};
 }
 
-/**
- * Keep the DOM in step with the resolved theme AND the colour scheme.
- *
- * One function rather than two effects, because the two are not independent: the
- * scheme is per-theme, so a light/dark flip has to re-apply it, and a wallpaper
- * palette arriving has to apply the half that matches the current theme. Split
- * across two effects they would race on the same custom properties.
- */
+/** One function, not two effects: the scheme is per-theme, so two effects would race on the same custom properties. */
 export function applyResolvedTheme(): void {
 	applyTheme();
 	applyScheme();

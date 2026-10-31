@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-// A script, not app code — there is no `#lib` alias for `scripts/`, so this is
-// the one relative import in the suite.
+// Script, not app code — `scripts/` has no `#lib` alias, so this import is relative.
 import {
 	levelBetween,
 	levelFor,
@@ -10,19 +9,7 @@ import {
 	versionCode
 } from '../scripts/version';
 
-/**
- * Pure logic — the commit-to-version policy — so this stays on the default
- * `node` environment. Importing `scripts/version` also proves the CLI stays
- * behind its "invoked directly" guard: if it did not, this file would try to
- * read the git range on import.
- *
- * The bug class this exists to stop: our arithmetic disagreeing with
- * release-please's. The config sets `bump-patch-for-minor-pre-major` (a `feat:`
- * is a patch) and `bump-minor-pre-major` (a `!` is a minor), so a `feat:` that
- * quietly became a minor here would fail releases that release-please computed
- * correctly — and a `!` that quietly became a patch would ship an under-bump
- * nobody can undo.
- */
+/** Guards the commit-to-version policy against disagreeing with release-please's bump rules. */
 
 describe('parse', () => {
 	it('reads type, scope and description', () => {

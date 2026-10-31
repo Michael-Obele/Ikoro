@@ -1,17 +1,7 @@
 /**
- * Every environment read in this app goes through here, and every one of them is
- * LAZY.
+ * Every environment read in this app goes through here, and every one is LAZY.
  *
- * Not a style preference. `vite build` evaluates the module graph to produce a
- * production bundle, and `drizzle.config.ts` is imported by tooling at times
- * when no `.env` exists at all. A top-level `const url = process.env.DATABASE_URL`
- * followed by `neon(url)` makes the *build* fail on a machine that has never
- * been configured — a failure that has nothing to do with the code being built.
- *
- * Nothing here reads `process.env` at module scope. The error, when a value is
- * genuinely missing, is raised at the moment the value is needed and it names
- * the variable, because "DATABASE_URL is not set" is actionable and
- * "TypeError: undefined is not a string" is not.
+ * A top-level `process.env` read makes `vite build` fail on an unconfigured machine.
  */
 
 /** Placeholders a `.env.example` copy-paste leaves behind. None are a real value. */
@@ -22,19 +12,12 @@ function read(name: string): string | undefined {
 	if (raw === undefined) return undefined;
 	const trimmed = raw.trim();
 	if (PLACEHOLDERS.has(trimmed)) return undefined;
-	// A half-edited connection string (`postgresql://<host>/db`) still contains an
-	// angle bracket. Catching it here turns a confusing driver error at query time
-	// into a clear "you forgot to fill this in" at startup.
+	// A half-edited connection string still has an angle bracket — treat it as unset.
 	if (trimmed.includes('<')) return undefined;
 	return trimmed;
 }
 
-/**
- * Read a variable or throw a message that names it.
- *
- * `hint` is appended verbatim, so keep it actionable — the copy-paste command,
- * the file to edit, the reason the value is needed.
- */
+/** Read a variable or throw a message that names it. `hint` is appended verbatim. */
 export function requireEnv(name: string, hint?: string): string {
 	const value = read(name);
 	if (value !== undefined) return value;

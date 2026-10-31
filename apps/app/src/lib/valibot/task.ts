@@ -1,24 +1,16 @@
 import * as v from 'valibot';
 
 /**
- * Runtime validation for everything crossing a boundary — the task editor, the
- * backup file, the sync wire.
- *
- * The limits are not arbitrary: 1024 / 8192 are Google's own task title and notes
- * caps, and Ikoro exists to be a drop-in for tasks that already live there. A
- * task that fails to survive an export/import round-trip is data loss, so the
- * schemas are the ones the storage layer was designed around.
+ * Runtime validation for everything crossing a boundary. The 1024 / 8192 limits are
+ * Google's own title and notes caps, so a Google Task survives an import/export round-trip.
  */
 
 export const titleSchema = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(1024));
 export const notesSchema = v.nullable(v.pipe(v.string(), v.maxLength(8192)));
 
 /**
- * A shape regex alone would happily accept `2026-13-99` — it is the right length
- * and the right punctuation, just not a day that exists. Since `dueDate` is a
- * sort key that M3's overdue ordering reads, a phantom date would land a task in
- * a place the user can never find it again. So the shape is checked first, then
- * the calendar.
+ * A shape regex alone accepts `2026-13-99`, and `dueDate` is a sort key — so the shape is
+ * checked first, then the calendar.
  */
 const ISO_DAY_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -66,15 +58,8 @@ export const taskInputSchema = v.object({
 export type TaskFormValues = v.InferInput<typeof taskInputSchema>;
 
 /**
- * The backup envelope (M7).
- *
- * `schemaVersion` is a literal, not a number, so an older Ikoro refuses a newer
- * file loudly at parse time instead of guessing. Within one version the schema
- * only ever grows ADDITIVE OPTIONAL fields (`parentId`, `color`): an old file
- * missing them still parses, and a new file read by an older build merely has
- * the unknown keys stripped by the parser — degraded, never rejected. The
- * version bumps only when a same-version parser could MISREAD a file: a
- * renamed field, a changed type, a new required field.
+ * The backup envelope (M7). `schemaVersion` is a literal so an older Ikoro refuses a newer
+ * file loudly, and within a version the schema only grows ADDITIVE OPTIONAL fields.
  */
 export const exportSchema = v.object({
 	app: v.literal('ikoro'),
@@ -85,11 +70,7 @@ export const exportSchema = v.object({
 			id: v.string(),
 			name: v.pipe(v.string(), v.minLength(1)),
 			sortOrder: v.number(),
-			// Needed on the wire, not just locally: import merges by id and keeps
-			// the NEWER `updatedAt`, so without it in the file a backup could only
-			// ever overwrite, never defer to a newer local edit. Added after M1
-			// when M7 made that rule explicit; v1 has not shipped, so making it
-			// required breaks no real file.
+			// Import merges by id and keeps the NEWER `updatedAt`, so the file needs it too.
 			updatedAt: v.pipe(v.string(), v.isoTimestamp())
 		})
 	),
@@ -103,11 +84,7 @@ export const exportSchema = v.object({
 			dueTime: v.nullable(v.string()),
 			priority: v.picklist([0, 1, 2, 3]),
 			alarmAt: v.nullable(v.string()),
-			// Subtask structure and per-task colour are USER DATA, unlike the
-			// device-scoped fields — losing them on restore is data loss. Optional
-			// (not nullable-required) so backups written before subtasks/colors
-			// shipped still parse; `null` is the explicit "none" state, matching
-			// how the columns read back from IndexedDB.
+			// USER DATA, unlike the device-scoped fields: optional so older backups still parse.
 			parentId: v.optional(v.nullable(v.string())),
 			color: v.optional(v.nullable(v.string())),
 			updatedAt: v.pipe(v.string(), v.isoTimestamp())

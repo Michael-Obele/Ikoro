@@ -1,16 +1,6 @@
 /**
- * Renders the Ikoro icon set from the shared mark geometry.
- *
- * Why a script and not a checked-in binary: the mark is a handful of rectangles
- * and a circle, so the "source" is more legible as code than as a PNG nobody can
- * diff. Editing `lib/mark.ts` and re-running is a complete design workflow, and
- * every size comes out of the same geometry rather than from four hand-drawn
- * near-copies that slowly diverge.
- *
- *   bun scripts/make-icons.ts
- *
- * Dev-only: @resvg/resvg-js is a devDependency and is never bundled into the APK
- * or the desktop build.
+ * Renders the web icon set from `lib/mark.ts`. Usage: `bun scripts/make-icons.ts`.
+ * Dev-only: `@resvg/resvg-js` is a devDependency and never ships.
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
@@ -45,8 +35,7 @@ for (const target of TARGETS) {
 		background: target.maskable ? SHELL : null
 	});
 
-	// The shell draws the icon on both light and dark launchers, so every icon
-	// carries its own dark plate rather than relying on the platform to add one.
+	// Every icon carries its own dark plate — launchers may be light or dark.
 	const png = new Resvg(svg, { fitTo: { mode: 'width', value: target.size }, background: SHELL })
 		.render()
 		.asPng();

@@ -1,14 +1,4 @@
-/**
- * Everything this site claims, in one file.
- *
- * Not tidiness — a control. A marketing page is the one place where a claim
- * outlives the code it was written from, so the claims live here, next to a test
- * that fails when one of them quietly turns into something the build cannot do.
- * (`tests/content.test.ts` reads this file and the rendered markup.)
- *
- * Edit the copy here, not in the markup. If a row needs a caveat, the caveat is a
- * field on the row — a status is never implied by a heading.
- */
+/** Every claim the site makes; `tests/content.test.ts` compares it against the rendered markup. */
 
 import {
 	ASSET_ORDER,
@@ -91,11 +81,8 @@ export interface Platform {
 	id: string;
 	name: string;
 	/**
-	 * `released` — there is a file to download.
-	 * `unreleased` — it is built, and there is no download yet.
-	 * `building` — planned, not built.
-	 * `preview` — runs, with a stated limit on what it can do.
-	 * `unsupported` — will not work in this version, and saying so is the point.
+	 * `released` = downloadable; `unreleased` = built, no download; `building` = planned;
+	 * `preview` = runs with limits; `unsupported` = will not work.
 	 */
 	status: 'released' | 'unreleased' | 'building' | 'preview' | 'unsupported';
 	detail: string;
@@ -104,11 +91,7 @@ export interface Platform {
 	action?: string;
 }
 
-/**
- * What each published file is, in the words somebody downloading it needs.
- * `label` is what the button says; `note` is the line under it that decides
- * whether this is the file for them.
- */
+/** What each published file is: `label` is the button, `note` decides whether it is for them. */
 export const assetLabels: Record<AssetKind, { label: string; note: string }> = {
 	apk: { label: 'APK', note: 'Sideload on Android 8 or later.' },
 	deb: { label: 'DEB', note: 'Debian, Ubuntu, Zorin, Mint.' },
@@ -117,17 +100,8 @@ export const assetLabels: Record<AssetKind, { label: string; note: string }> = {
 };
 
 /**
- * The one thing the site is allowed to say about the current release.
- *
- * Three states, because there are three truths and they need different words:
- *
- * - `ready` — GitHub reported every file the pipeline publishes.
- * - `building` — the tag exists and some files have not landed yet. Two
- *   independent builds upload minutes apart, so this is normal, not broken.
- *   The page must SAY that, because the alternative is a download button that
- *   leads to a GitHub 404.
- * - `unconfirmed` — the build could not reach GitHub at all, so it knows the
- *   version number and nothing else. No file is promised.
+ * What the site may say about the release. `building` is normal while the Android and Linux
+ * builds upload minutes apart, and must be said out loud -- a button that 404s is worse.
  */
 export interface ReleaseNotice {
 	state: 'ready' | 'building' | 'unconfirmed';
@@ -142,11 +116,7 @@ function joinWords(items: string[]): string {
 	return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 }
 
-/**
- * Shown on the home page and on /download. The size and date clauses appear
- * only when the release knows them; nothing here names a file GitHub did not
- * report.
- */
+/** Home page and /download. Size and date clauses appear only when the release knows them. */
 export function releaseNotice(r: ReleaseInfo): ReleaseNotice {
 	if (r.source === 'derived') {
 		return {
@@ -175,7 +145,7 @@ export function releaseNotice(r: ReleaseInfo): ReleaseNotice {
 		};
 	}
 
-	// Only the files GitHub actually reported, with the size when it reported one.
+	// Only files GitHub reported, with the size when it reported one.
 	const files = ASSET_ORDER.flatMap((kind) => {
 		const asset = r.assets[kind];
 		if (asset === undefined) return [];
@@ -200,9 +170,8 @@ export function formatBytes(n: number): string {
 }
 
 /**
- * An ISO timestamp to an en-GB date, e.g. `28 Oct 2026`. The locale and the
- * options are pinned so the output is deterministic regardless of host locale
- * (tests run in node, prerender runs on Netlify).
+ * ISO timestamp to an en-GB date. Locale and options are pinned so node tests and Netlify
+ * prerender produce the same string.
  */
 export function formatReleaseDate(iso: string): string {
 	return new Intl.DateTimeFormat('en-GB', {
@@ -212,11 +181,7 @@ export function formatReleaseDate(iso: string): string {
 	}).format(new Date(iso));
 }
 
-/**
- * The Android row without its release facts. The detail is standing copy —
- * what the platform does does not change per release — while the status, href
- * and action are filled in by `platformRows` from the release itself.
- */
+/** The Android row minus release facts; `platformRows` fills status, href and action. */
 const androidBase: Omit<Platform, 'href' | 'action' | 'status'> = {
 	id: 'android',
 	name: 'Android 8 and later',
@@ -227,10 +192,7 @@ const androidBase: Omit<Platform, 'href' | 'action' | 'status'> = {
 		'is how you install it.'
 };
 
-/**
- * The Linux desktop row, same shape and same rule: the release decides whether
- * it may claim a download.
- */
+/** The Linux desktop row, same shape and same rule: the release decides whether it may claim a download. */
 const linuxBase: Omit<Platform, 'href' | 'action' | 'status'> = {
 	id: 'linux-desktop',
 	name: 'Linux desktop',
@@ -241,11 +203,7 @@ const linuxBase: Omit<Platform, 'href' | 'action' | 'status'> = {
 		'build one.'
 };
 
-/**
- * The platform rows that never change: every row the release cannot affect.
- * Android and Linux are built by `platformRows`, because whether they have a
- * download is a fact about the release, not about the platform.
- */
+/** Rows the release cannot affect; Android and Linux come from `platformRows`. */
 export const platforms: Platform[] = [
 	{
 		id: 'windows-macos',
@@ -267,21 +225,14 @@ export const platforms: Platform[] = [
 	}
 ];
 
-/**
- * A platform may claim `released` only when the release is live AND carries
- * every file that platform promises. A derived release is not live, so it
- * releases nothing — which is how the table stays silent about files the page
- * has not seen.
- */
+/** `released` only when the release is live and carries every promised file. */
 function statusFor(r: ReleaseInfo, platform: PlatformKey): Platform['status'] {
 	return isDownloadable(r, platform) ? 'released' : 'unreleased';
 }
 
 /**
- * The honest platform table. Status, href and action come from the release, so
- * a new version never needs a hand edit here and a half-uploaded release never
- * claims a download it cannot serve. Nothing here promises a capability M8 did
- * not observe.
+ * Status, href and action come from the release, so a half-uploaded release never
+ * claims a download it cannot serve.
  */
 export function platformRows(r: ReleaseInfo): Platform[] {
 	const href = r.tagUrl;
@@ -368,14 +319,7 @@ export const sitePrivacy: PrivacyPoint[] = [
 	}
 ];
 
-/**
- * One changelog entry, in the shape /changelog prints.
- *
- * There is no hand-written field here on purpose. Version, date and the notes
- * all come from the release GitHub published, and `missing` comes from the files
- * it did not attach — so a version cannot be current in one place and stale in
- * another, because there is only one place.
- */
+/** A /changelog entry; nothing is hand-written, so no two places can disagree. */
 export interface Release {
 	/** Version without the `v`, from the tag GitHub published. */
 	version: string;
@@ -385,21 +329,13 @@ export interface Release {
 	tagUrl: string;
 	/** What the release says it changed, one line each. */
 	included: string[];
-	/** Files this particular release did not carry — a fact about its assets. */
+	/** Files this release did not carry. */
 	missing: string[];
 }
 
 /**
- * GitHub's release body as the lines a reader can scan.
- *
- * Two shapes arrive: release-please's `### Features` / `### Bug Fixes` sections
- * with one `* ` line per commit, and GitHub's older "What's Changed" blocks.
- * Both reduce to their `* ` lines once the heading, the commit link and the bold
- * markers are gone. Bot lines are dropped because "chore(master): release 0.3.2
- * by github-actions" is the release announcing itself, not a change in it.
- *
- * A body that is only a "Full Changelog" link yields nothing — the page says it
- * has no notes rather than inventing one the release does not have.
+ * GitHub's release body as scannable lines: release-please's `###` sections and older
+ * "What's Changed" blocks both reduce to their `* ` lines; bot lines are dropped.
  */
 export function releaseNotes(body: string): string[] {
 	return body
@@ -417,11 +353,7 @@ export function releaseNotes(body: string): string[] {
 		.filter((line) => line.length > 0 && !line.includes('github-actions[bot]'));
 }
 
-/**
- * GitHub's release list as changelog entries, in the order GitHub returned them
- * (newest first). Nothing here names a version: publish a release and the page
- * is current at the next build.
- */
+/** The release list as changelog entries, newest first. */
 export function releaseEntries(releases: ReleaseInfo[]): Release[] {
 	return releases.map((release) => ({
 		version: release.version,
@@ -434,8 +366,5 @@ export function releaseEntries(releases: ReleaseInfo[]): Release[] {
 	}));
 }
 
-/**
- * Internal links. A route that appears in the navigation must appear here, or the
- * nav test fails — which is the point of listing them.
- */
+/** Internal links; a route in the navigation must appear here or the nav test fails. */
 export const routes = ['/', '/download', '/privacy', '/changelog'] as const;

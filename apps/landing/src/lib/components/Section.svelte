@@ -1,13 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 
-	/**
-	 * A titled band of the page.
-	 *
-	 * Every page on this site is a stack of these, which is why it is a component:
-	 * the heading level, the container width and the anchor offset are decided once
-	 * here instead of being retyped per page until one of them drifts.
-	 */
+	/** A titled band of the page: heading level, width and anchor offset decided once here. */
 	let {
 		id,
 		title,

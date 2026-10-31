@@ -1,17 +1,7 @@
 /**
  * The change feed: pull (GET) and push (POST).
  *
- * ── `userId` is never read from the request ──────────────────────────────────
- * It comes from `event.locals.userId`, which `hooks.server.ts` set from the
- * session. There is no branch anywhere in this file that would honour a
- * `userId` in the query string or the body — and `findForbiddenFields` rejects a
- * payload that carries one, because a payload `userId` is the other way an IDOR
- * gets in, and silently dropping it would hide the attempt.
- *
- * ── What is shared between the two methods ───────────────────────────────────
- * Both validate against `@ikoro/sync` schemas, both clamp their inputs, and both
- * return `nextRev`. A client pulls, pushes, and reads the same cursor type in
- * both directions.
+ * `userId` always comes from `event.locals`, never from the query string or body.
  */
 
 import type { RequestHandler } from './$types';
@@ -43,16 +33,12 @@ const JSON_HEADERS = { 'content-type': 'application/json', ...NO_STORE } as cons
 // ── pull ─────────────────────────────────────────────────────────────────────
 
 /**
- * `GET /api/v1/changes?since=<rev>&limit=500`
- *
- * Returns every row for this user with `rev > since`, ascending, tombstones
- * INCLUDED, capped at `limit`. `nextRev` is the highest rev actually returned —
- * or `since` when nothing came back, so an idle client never rewinds its cursor.
+ * `GET /api/v1/changes?since=<rev>&limit=500` — this user's rows above `since`, ascending,
+ * tombstones included.
  */
 export const GET: RequestHandler = async ({ url, locals }) => {
 	const userId = locals.userId;
-	// `hooks.server.ts` already 401s an unauthenticated request to this path. This
-	// is a type-narrowing guard, not a second auth check.
+	// `hooks.server.ts` already 401s an unauthenticated request here; this only narrows the type.
 	if (!userId) return jsonError(401, 'unauthorized', 'Sign in with a passkey to use sync.');
 
 	const since = parseSince(url.searchParams.get('since'));
@@ -60,8 +46,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
 	const raw = await fetchChanges(userId, since, limit);
 
-	// `fetchChanges` asks for `limit + 1` so `hasMore` costs no extra query. The
-	// extra row is dropped here and never reaches the client.
+	// `fetchChanges` asked for `limit + 1` so `hasMore` costs no extra query; drop the extra row.
 	const page = raw.length > limit ? raw.slice(0, limit) : raw;
 	const hasMore = computeHasMore(page, limit);
 
@@ -83,9 +68,8 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
 	const nextRev = computeNextRev(changes, since);
 
-	// Validated before it leaves. A response that does not satisfy
-	// `changesResponseSchema` is a protocol break, and catching it HERE means the
-	// client sees a clean 500 instead of a shape it cannot parse.
+	// Validated before it leaves: a response that violates the wire schema is a protocol break,
+	// so the client gets a clean 500 rather than an unparseable shape.
 	const parsed = v.safeParse(changesResponseSchema, { changes, nextRev, hasMore });
 	if (!parsed.success) {
 		return jsonError(
@@ -102,18 +86,14 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 // ── push ─────────────────────────────────────────────────────────────────────
 
 /**
- * `POST /api/v1/changes`
- *
- * Idempotent by `op.id`, merged with `mergeRow` from `@ikoro/sync`, and each op
- * committed by one atomic statement. See `src/lib/db/queries.ts` for why the
- * claim and the write are a single statement rather than two.
+ * `POST /api/v1/changes` — idempotent by `op.id`, merged with `mergeRow`, each op committed by one
+ * atomic statement (see `src/lib/db/queries.ts`).
  */
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const userId = locals.userId;
 	if (!userId) return jsonError(401, 'unauthorized', 'Sign in with a passkey to use sync.');
 
-	// Read the body as text and check its size BEFORE parsing. `request.json()`
-	// would happily buffer an unbounded body first, which is the whole attack.
+	// Read as text and check the size BEFORE parsing; `request.json()` buffers an unbounded body.
 	const raw = await request.text();
 	if (raw.length > MAX_PUSH_BODY_BYTES) {
 		return jsonError(
@@ -134,15 +114,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		);
 	}
 
-	// Check the wire version BEFORE full schema validation, and that ordering is the
-	// whole point.
-	//
-	// `pushRequestSchema` types `wireVersion` as `v.literal(WIRE_VERSION)`, so a
-	// mismatched client would otherwise be rejected by the generic 400 validation
-	// path, with a message about an invalid value — technically true, and useless.
-	// The actionable answer is "this server speaks version N, you sent M, update
-	// the app", and it is a 409, not a 400: the request was well-formed, the
-	// client is simply too old or too new.
+	// Check the wire version BEFORE schema validation: `pushRequestSchema` types it as a literal,
+	// so afterwards the client would only get a generic 400. A mismatch is a 409 — the request was
+	// well-formed, the client is simply the wrong version.
 	if (typeof body === 'object' && body !== null && 'wireVersion' in body) {
 		const sent = (body as { wireVersion: unknown }).wireVersion;
 		if (sent !== WIRE_VERSION) {
@@ -170,18 +144,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	// ── per-op validation ─────────────────────────────────────────────────────
-	// A malformed op does not fail the batch. A phone that queued 300 edits
-	// should not lose all 300 because one payload was truncated by a bad network;
-	// the client reconciles from `rejected`.
+	// One bad op does not fail the batch; the client reconciles from `rejected`.
 	const prepared: PreparedOp[] = [];
 	const rejected: { opId: string; reason: RejectReason }[] = [];
 
 	for (const op of ops) {
-		// A SECOND gate, not the only one. `changeOpSchema` already restricts `kind`
-		// to a picklist, so an unknown kind fails the envelope above and this branch
-		// is unreachable today. It stays because the alternative — a kind that
-		// reaches the SQL layer unchecked — is how a value ends up interpolated into
-		// a table name.
+		// A SECOND gate: the envelope's picklist makes this unreachable today, but an
+		// unchecked kind must never reach the SQL layer.
 		if (!KNOWN_KINDS.includes(op.kind)) {
 			rejected.push({ opId: op.id, reason: 'unknown-kind' });
 			continue;
@@ -213,18 +182,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	const allRejected = [...rejected, ...result.rejected];
 
-	// `nextRev` must never be something a client can store and rewind its cursor
-	// to. When every op was rejected before touching the database, `applyOps` has
-	// no rev to report and returns 0 — and a client that stored that would re-pull
-	// its entire history. So in the "nothing was applied" case, report the
-	// server's actual high-water mark instead: it is monotonic, it is never a
-	// rewind, and it costs one query only on a path that applied no work.
+	// Never report a 0 a client could store and rewind with. When nothing was applied, report the
+	// server's high-water mark instead — monotonic, and one query only on a no-op path.
 	const nextRev = result.accepted.length > 0 ? result.nextRev : await currentRev();
 
 	// ── notify the user's other devices ───────────────────────────────────────
-	// Only when something was actually committed. A pure replay or a stale
-	// rejection changes nothing, and waking every stream for it would make a
-	// retry storm into a notification storm.
+	// Only when something committed; a replay changes nothing and a retry storm would become a
+	// notification storm.
 	if (result.accepted.length > 0) {
 		notify(userId, 'change', { rev: nextRev });
 	}

@@ -1,18 +1,8 @@
 /**
- * `ikoro-dynamic-colors` — the Android 12+ Material You palette reader.
- *
- * A LOCAL Capacitor plugin, not a published one. It exists because the app's
- * theme is a Material 3 role set (`--md-sys-color-*` in `routes/layout.css`) and
- * the one thing a WebView cannot do for itself is read the wallpaper palette the
- * OS already computed. Everything else — the tonal-to-role mapping, the oklch()
- * conversion, writing the CSS variables — stays in the web layer, where it is
- * testable without a device.
- *
- * The name is registered on BOTH sides and must match exactly:
- *   - here, in `registerPlugin<IDynamicColorsPlugin>('IkoroDynamicColors')`
- *   - in Kotlin, `@CapacitorPlugin(name = "IkoroDynamicColors")`
- * A mismatch is silent: the JS object exists, and every call rejects with
- * "not implemented" with nothing in logcat to explain it.
+ * `ikoro-dynamic-colors` -- local Capacitor plugin that reads the Android 12+
+ * Material You tonal palettes, the one thing a WebView cannot do itself. The plugin
+ * name must match the Kotlin `@CapacitorPlugin` exactly; a mismatch only shows up as
+ * a silent "not implemented".
  */
 import { registerPlugin } from '@capacitor/core';
 import type {
@@ -24,24 +14,16 @@ import type {
 export * from './definitions';
 
 /**
- * The plugin instance.
- *
- * On a non-Android shell this resolves to the web implementation in `web.ts`,
- * which answers `available: false`. That is why callers can call it
- * unconditionally and only branch on the RESULT — there is no platform check to
- * forget.
+ * The plugin instance. Off Android this resolves to `web.ts`, which answers
+ * `available: false`, so callers can branch on the result instead of the platform.
  */
 export const IkoroDynamicColors = registerPlugin<IDynamicColorsPlugin>('IkoroDynamicColors', {
 	web: () => import('./web').then((m) => new m.DynamicColorsWeb())
 });
 
 /**
- * Read the palettes, or `null` when this device cannot supply them.
- *
- * The helper exists so the theme store does not have to repeat the
- * "unavailable means null, and a rejection means null too" rule. A rejection is
- * treated as unavailable rather than propagated: the theme is decoration, and a
- * wallpaper read that fails must never take the app down with it.
+ * The palettes, or `null` when unavailable. A rejection is also `null` -- the
+ * theme is decoration and must never take the app down.
  */
 export async function readDynamicPalettes(): Promise<DynamicPalettesResult | null> {
 	try {

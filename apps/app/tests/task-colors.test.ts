@@ -4,31 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { TASK_COLORS, TASK_COLOR_IDS, taskColorValue } from '#lib/task-colors';
 
 /**
- * THE TASK-COLOUR CONTRACT — ids in, audited colours out.
- *
- * WHAT THIS FILE IS FOR. `src/lib/task-colors.ts` promises, in its docblock,
- * that every colour clears WCAG 2.1 SC 1.4.11 (3:1 non-text) against every
- * surface it is painted on, in both themes. A promise like that decays the
- * moment someone retunes a value by eye, so this file measures the REAL
- * `TASK_COLORS` values against the REAL `layout.css` tokens — the same
- * parse-the-stylesheet discipline `tests/theme-contrast.test.ts` established.
- * The only way to make it pass is to make the palette pass.
- *
- * THE FOUR SURFACES. The bar renders on the row, whose resting backdrop is
- * `--background`; the picker renders inside the sheet, whose surface is
- * `--popover`. Light and dark each define both. Eight colours x four surfaces
- * = thirty-two measurements, every one asserted at 3:1.
- *
- * THE CLASS OF BUG THIS CATCHES. A colour that looks fine in light mode but
- * dissolves into the dark background (or vice versa); a hue added at a
- * lightness outside the window both themes permit; a value swapped for a raw
- * hex that nothing audits. All three ship silently without this file.
- *
- * WHY THE COLOUR MATHS ARE COPIES. Lifted verbatim from
- * `tests/theme-contrast.test.ts`, whose helpers are module-private and which
- * cannot be imported without re-registering its whole suite here. The repo
- * already accepted that trade in `theme-schemes.test.ts`, with the same
- * standing obligation: if the conversion changes there, change it here too.
+ * Guards the palette at 3:1 against `--background`/`--popover` in both themes; colour maths copied from theme-contrast.test.ts.
  */
 
 const CSS_PATH = fileURLToPath(new URL('../src/routes/layout.css', import.meta.url));
@@ -36,9 +12,7 @@ const CSS_PATH = fileURLToPath(new URL('../src/routes/layout.css', import.meta.u
 /** WCAG 2.1 SC 1.4.11 non-text contrast — the floor for an accent bar. */
 const NON_TEXT = 3;
 
-/* ------------------------------------------------------------------ *
- * Colour maths — copied verbatim from tests/theme-contrast.test.ts
- * ------------------------------------------------------------------ */
+/* Colour maths — copied from tests/theme-contrast.test.ts. */
 
 type Rgb = readonly [number, number, number];
 
@@ -75,11 +49,7 @@ function oklchToSrgbRaw(L: number, C: number, hue: number): Rgb {
 const isInSrgb = (rgb: Rgb): boolean =>
 	rgb.every((v) => v >= -GAMUT_EPSILON && v <= 1 + GAMUT_EPSILON);
 
-/**
- * CSS Color 4 gamut mapping: keep lightness and hue, reduce chroma until the
- * colour is representable in sRGB. Browsers do this when rendering `oklch()`,
- * so it has to happen here too or every out-of-gamut ratio is fiction.
- */
+/** CSS Color 4 gamut mapping: reduce chroma until sRGB-representable, as browsers do. */
 function gamutMap(L: number, C: number, hue: number): { rgb: Rgb; chroma: number } {
 	if (isInSrgb(oklchToSrgbRaw(L, C, hue))) {
 		return { rgb: oklchToSrgbRaw(L, C, hue), chroma: C };
@@ -116,15 +86,9 @@ function parseOklch(raw: string, what: string): Rgb {
 	return gamutMap(Number(m[1]), Number(m[2]), Number(m[3])).rgb;
 }
 
-/* ------------------------------------------------------------------ *
- * Reading the surfaces out of layout.css
- * ------------------------------------------------------------------ */
+/* Reading the surfaces out of layout.css. */
 
-/**
- * Reads one top-level `<selector> { ... }` block. Same block parser as
- * `theme-contrast.test.ts` — including the start-of-line anchor that keeps
- * `@custom-variant dark (...)` from being mistaken for the `.dark` block.
- */
+/** Reads one top-level `<selector> { ... }` block, anchored at line start so `@custom-variant dark (...)` is not mistaken for `.dark`. */
 function readBlock(css: string, selector: string): Record<string, string> {
 	const start = css.search(
 		new RegExp(`^\\s*${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{`, 'm')
@@ -160,9 +124,7 @@ const THEMES = [
 /** The surfaces the bar and the picker actually sit on. */
 const SURFACES = ['background', 'popover'] as const;
 
-/* ------------------------------------------------------------------ *
- * 1 — the palette audit
- * ------------------------------------------------------------------ */
+/* 1 — the palette audit */
 
 describe('task colors — WCAG 2.1 non-text contrast against the real surfaces', () => {
 	// Built once, printed once: the audit table for all 8 x 4 pairs.
@@ -212,9 +174,7 @@ describe('task colors — WCAG 2.1 non-text contrast against the real surfaces',
 	});
 });
 
-/* ------------------------------------------------------------------ *
- * 2 — the lookup contract
- * ------------------------------------------------------------------ */
+/* 2 — the lookup contract */
 
 describe('taskColorValue', () => {
 	it('returns the CSS value for every id the palette publishes', () => {

@@ -1,9 +1,4 @@
-/**
- * Battery-saver facts for the reliability banner. Every function degrades to a
- * no-op on platforms without the native plugin, so the banner component needs
- * no platform branch of its own: `batteryStatus()` answers `null` where the
- * question cannot be asked.
- */
+/** Battery-saver facts for the reliability banner. Every function no-ops off Android, so the banner needs no platform branch. */
 import { Capacitor } from '@capacitor/core';
 import { IkoroAlarm, type IkoroBatteryStatus } from './plugin';
 

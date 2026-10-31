@@ -1,16 +1,6 @@
 /**
- * Drive the running app's WebView over the Chrome DevTools Protocol.
- *
- * Why not `adb shell input tap`: the permission dialog and the spike buttons
- * live at coordinates that differ per device and per dialog state, and a wrong
- * tap silently tests nothing. CDP evaluates real JavaScript in the real page, so
- * what is verified is what the app actually does — not a guess at where the
- * button was.
- *
- * Used only for the M4-S1 device gate. It drives the app; it does not reimplement
- * anything in it.
- *
- *   bun scripts/spike-drive.ts <command> [args...]
+ * Drives the running WebView over CDP (the M4-S1 device gate): `bun scripts/spike-drive.ts <command> [args...]`.
+ * CDP evaluates real JS in the page, unlike `adb shell input tap` on guessed coordinates.
  */
 import { readFileSync } from 'node:fs';
 
@@ -76,16 +66,14 @@ const [, , command, ...args] = process.argv;
 switch (command) {
 	case 'goto': {
 		await evaluate(`location.href = ${JSON.stringify(args[0])}; true`);
-		// A SvelteKit client-side navigation is instant; the load event is what
-		// matters, and the capacitor:// origin resolves locally either way.
+		// Navigation is instant; give the local capacitor:// page a moment to load.
 		await new Promise((r) => setTimeout(r, 2500));
 		console.log(await evaluate('({ url: location.href, title: document.title })'));
 		break;
 	}
 
 	case 'dump': {
-		// Everything the spike page renders — permissions, exact-alarm setting,
-		// and any verbatim error — as plain text.
+		// Everything the spike page renders, as plain text.
 		const text = await evaluate<string>(
 			'document.body.innerText.replace(/\\n{2,}/g, "\\n").trim()'
 		);
@@ -99,8 +87,7 @@ switch (command) {
 	}
 
 	case 'click': {
-		// Click a button by its visible label, so a UI change breaks loudly
-		// instead of tapping empty space.
+		// Click by label, so a UI change fails loudly instead of tapping empty space.
 		const label = args[0];
 		const result = await evaluate<boolean>(
 			`(() => {

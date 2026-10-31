@@ -4,17 +4,7 @@ import { incomingFromOp, resolveWrite, toChangeRow } from '#lib/sync/merge';
 import type { IncomingRow, StoredRow } from '#lib/sync/merge';
 import type { ChangeOp } from '@ikoro/sync';
 
-/**
- * The server's merge decision.
- *
- * The class of bug this catches: the server and `apps/app` disagreeing about who
- * wins a conflict. That bug is invisible in a single-device test, appears only
- * when two devices edit the same task, and — because both implementations are
- * "reasonable" — is very hard to reproduce from a report.
- *
- * The load-bearing assertion is the LAST one in `resolveWrite`: that the argument
- * order passed to `mergeRow` still means what the comment says it means.
- */
+/** The server's merge verdict: server and app must agree on who wins a conflict. */
 
 const payload = { title: 'x' } as IncomingRow['payload'];
 
@@ -63,10 +53,7 @@ describe('resolveWrite — LWW', () => {
 	});
 
 	it('REJECTS an exact timestamp tie, keeping the stored row', () => {
-		// The critical case. `mergeRow` gives ties to its `remote` argument, so the
-		// stored row is passed as `remote` precisely so it wins here. If someone
-		// swaps the arguments, this test fails — and the failure is a silent,
-		// order-dependent loss of committed data, so it is worth failing loudly.
+		// `mergeRow` gives ties to its `remote` argument, which must be the stored row.
 		const outcome = resolveWrite(
 			stored({ updatedAt: '2026-10-02T12:00:00.000Z' }),
 			incoming({ updatedAt: '2026-10-02T12:00:00.000Z' })
@@ -77,8 +64,7 @@ describe('resolveWrite — LWW', () => {
 
 describe('resolveWrite — tombstones', () => {
 	it('a delete beats a live row even with an OLDER clock', () => {
-		// The phone's clock is a week fast, the user deleted on the laptop. The
-		// delete must win, or the task comes back from the dead.
+		// The phone's clock is a week fast; the delete must still win.
 		const outcome = resolveWrite(
 			stored({ deletedAt: null, updatedAt: '2026-10-08T12:00:00.000Z' }),
 			incoming({ deletedAt: '2026-10-01T12:00:00.000Z', updatedAt: '2026-10-01T12:00:00.000Z' })
@@ -116,9 +102,7 @@ describe('incomingFromOp — deletes are soft', () => {
 		} as ChangeOp;
 
 		const row = incomingFromOp(op, 'user-1');
-		// The tombstone carries the DELETING DEVICE's instant, not a server "now".
-		// Inventing server time here would hand the server clock authority the
-		// protocol explicitly refuses it.
+		// The tombstone carries the DELETING DEVICE's instant, never a server "now".
 		expect(row.deletedAt).toBe('2026-10-03T09:00:00.000Z');
 		expect(row.updatedAt).toBe('2026-10-03T09:00:00.000Z');
 		expect(row.userId).toBe('user-1');
@@ -154,9 +138,7 @@ describe('incomingFromOp — deletes are soft', () => {
 
 describe('the server delegates to mergeRow', () => {
 	it('produces the same verdict mergeRow does, for the same pair', () => {
-		// This is the anti-drift test. `resolveWrite` must not have grown a rule
-		// of its own: for every timestamp ordering, its answer must match what the
-		// shared library says when the stored row is the `remote` side.
+		// Anti-drift: `resolveWrite` must not have grown a rule of its own.
 		const stamps = [
 			'2026-10-01T00:00:00.000Z',
 			'2026-10-02T00:00:00.000Z',
@@ -170,9 +152,7 @@ describe('the server delegates to mergeRow', () => {
 					const i = incoming({ updatedAt: incomingAt, deletedAt: deleted });
 					const outcome = resolveWrite(s, i);
 
-					// By reference, exactly as resolveWrite does — a fresh
-					// literal here would make this comparison always false and the
-					// test would silently assert nothing.
+					// By reference, exactly as resolveWrite does — a fresh literal would never match.
 					const local: IncomingRow = i;
 					const remote: StoredRow = s;
 					const expected = mergeRow(local, remote);
@@ -190,9 +170,7 @@ describe('the server delegates to mergeRow', () => {
 
 describe('toChangeRow — what the client is told', () => {
 	it('passes updatedAt and deletedAt through verbatim', () => {
-		// The client merges locally with `mergeChanges`. If the server paraphrased
-		// either field, the client's merge would decide differently than the
-		// server's did, and the two would diverge silently.
+		// The client merges locally; a paraphrased field would make it decide differently.
 		const wire = toChangeRow('task', stored({ rev: 99, deletedAt: null }));
 		expect(wire).toMatchObject({
 			kind: 'task',

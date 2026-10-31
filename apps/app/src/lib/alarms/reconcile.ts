@@ -1,32 +1,10 @@
-/**
- * Reconciliation: make the platform's alarms match what the store says should be
- * armed, and notice when one was missed.
- *
- * This is the function that runs on every resume, and it exists because the
- * platform is not trustworthy over the lifetime of an alarm. On Android:
- *
- *   - revoking "alarms & reminders" in system settings DELETES every armed
- *     exact alarm, silently;
- *   - an inexact fallback deletes itself after firing;
- *   - the app being force-stopped can drop pending work.
- *
- * So the store is the source of truth and `getPending()` is only evidence about
- * it. Everything is derived by diffing the two — never by trusting either alone.
- */
+/** Reconciles platform alarms against the store and reports what was missed. Android silently drops armed alarms on revoke, so both sides are diffed. */
 import { db, type Task } from '$lib/db/schema';
 import * as repo from '$lib/db/repo';
 import { ringtoneFor } from './ringtone';
 import type { AlarmScheduler } from './types';
 
-/**
- * How far into the past a still-open alarm counts as "missed" and worth
- * reporting.
- *
- * One day, not one minute: reconcile runs on every resume, and a user who has
- * had their phone off overnight should see one clear "you missed this", not a
- * wall of them. Anything older than this is dropped from the report entirely
- * rather than shown — a reminder from last March is history, not news.
- */
+/** A day, not a minute: a user back after a night off wants one "you missed this", not a wall of them. */
 export const MISSED_REPORT_WINDOW_MS = 86_400_000;
 
 /** A missed alarm, as the UI needs to describe it. */
@@ -64,11 +42,7 @@ export interface ReconcileOptions {
 
 const asTask = (row: Record<string, unknown>) => row as unknown as Task;
 
-/**
- * The bare hash inside a platform id — `systemd:1663646904` becomes
- * `1663646904`. Null for anything that is not a systemd hash, so no other
- * platform can ever be mistaken for a delivered stamp.
- */
+/** Bare hash from `systemd:1663646904`; null for anything else, so no other platform reads as a stamp. */
 function platformHash(platformId: string | null): string | null {
 	if (!platformId) return null;
 	const bare = platformId.replace(/^systemd:/, '');
@@ -80,26 +54,13 @@ function wantsAlarm(task: Task): boolean {
 	return task.alarmAt !== null && task.completedAt === null && task.deletedAt === null;
 }
 
-/**
- * `where('byAlarm')` rather than `getAll()`: the index holds only rows that
- * actually carry an alarm, so this is O(alarmed) instead of O(every task) — the
- * difference between a resume that is instant and one that scans a decade of
- * history.
- */
+/** The `byAlarm` index, not `getAll()`: O(alarmed) instead of O(every task ever written). */
 async function loadAlarmableTasks(): Promise<Task[]> {
 	const rows = await db.tasks.where('byAlarm').toArray();
 	return rows.map(asTask);
 }
 
-/**
- * Bring the platform in line with the store, and report what it cost.
- *
- * Three outcomes per task, and they are deliberately not collapsed: armed,
- * degraded (armed but inexact), and failed are different promises to the user
- * and the UI must render them differently. The same goes for `missed`, which is
- * never folded into `armed` — an alarm that did not fire is not a success, and
- * the report is the only place that distinction exists.
- */
+/** Bring the platform in line with the store. Armed, degraded and failed stay distinct; `missed` is never folded into `armed`. */
 export async function reconcile({
 	scheduler,
 	now = new Date()
@@ -107,12 +68,10 @@ export async function reconcile({
 	const tasks = await loadAlarmableTasks();
 	const pending = await scheduler.getPending();
 
-	// Stamps the OS left behind. Only a scheduler that schedules outside the
-	// process can answer; everywhere else this is empty and nothing below changes.
+	// Only an out-of-process scheduler can answer; empty elsewhere, and nothing below changes.
 	const delivered = (await scheduler.firedStamps?.()) ?? new Set<string>();
 
-	// Every platform id the store believes is armed, so an id that appears in
-	// `pending` but in nobody's `alarmId` is an orphan worth cancelling.
+	// Ids the store claims, so a pending id nobody claims is an orphan worth cancelling.
 	const claimed = new Set<string>();
 
 	const report: ReconcileReport = {
@@ -139,13 +98,9 @@ export async function reconcile({
 
 		const dueAt = new Date(alarmAt as string);
 
-		// The instant has passed. Either the platform already has it — in which
-		// case it is a genuine miss, because the time came and went — or it has
-		// gone, in which case it fired and we simply were not awake to hear it.
+		// Past due: still pending means a genuine miss; already gone means it fired while we slept.
 		if (dueAt.getTime() <= now.getTime()) {
-			// Read the delivery evidence FIRST. Cancelling below deletes the stamp,
-			// so asking afterwards would turn a delivered alarm into a "missed" one
-			// whenever the app happens to open while the unit is still ringing.
+			// Read the stamp FIRST. Cancelling below deletes it, which would turn a delivered alarm into a miss.
 			const stampHash = platformHash(task.alarmId);
 			const wasDelivered = stampHash !== null && delivered.has(stampHash);
 
@@ -155,10 +110,7 @@ export async function reconcile({
 				report.cancelled.push(task.alarmId as string);
 			}
 
-			// A stamp is the OS saying "I rang this before I stopped". That is a
-			// delivery, not a miss, and reporting it as a miss was exactly what the
-			// desktop path got wrong: the alarm rang, the user opened the app, and the
-			// app told them it never happened.
+			// A stamp is the OS saying "I rang before I stopped" -- a delivery, not a miss.
 			if (wasDelivered) {
 				await markFired(task.id, task.alarmFiredAt ?? (alarmAt as string));
 				continue;
@@ -179,9 +131,7 @@ export async function reconcile({
 			title: task.title,
 			at: alarmAt as string,
 			ringtone: ringtoneFor(task),
-			// The notes ride with the alarm so the ringing screen can say what this
-			// is about. Read at arm time, which is the last moment the row is known
-			// to be current.
+			// Read at arm time -- the last moment the row is known to be current.
 			description: task.notes ?? null
 		});
 
@@ -195,15 +145,13 @@ export async function reconcile({
 		if (outcome.exact) {
 			report.armed.push(task.id);
 		} else {
-			// Armed, but not exact. Reported separately so the banner can say
-			// "reminders may be late" instead of pretending everything is fine.
+			// Armed but inexact: reported apart from clean arms so the banner can warn.
 			report.degraded.push({ taskId: task.id, title: task.title, warning: outcome.warning });
 			report.armed.push(task.id);
 		}
 	}
 
-	// Stamps have been read. Clear them, so the same stamp cannot later be read
-	// as evidence for a different alarm on the same task.
+	// Cleared so the same stamp cannot later be read as evidence for another alarm on this task.
 	if (delivered.size > 0) await scheduler.clearStamps?.();
 
 	// Anything armed on the platform that no live task claims.
@@ -216,14 +164,7 @@ export async function reconcile({
 	return report;
 }
 
-/**
- * Persist the platform id.
- *
- * Through `repo.updateTask`, NOT a raw get→put: every task write in the app
- * shares one queue there, and a reconcile running on resume must not be able to
- * interleave with a reminder being armed by the sheet — the loser of that race
- * wipes `alarmAt` while the platform still holds the notification.
- */
+/** Via `repo.updateTask`, not a raw get->put: that queue stops reconcile racing the sheet and wiping `alarmAt`. */
 async function setAlarmId(taskId: string, platformId: string): Promise<void> {
 	await repo.updateTask(taskId, { alarmId: platformId });
 }
@@ -232,15 +173,7 @@ async function clearAlarmId(taskId: string): Promise<void> {
 	await repo.updateTask(taskId, { alarmId: null });
 }
 
-/**
- * Stamp `alarmFiredAt` with the instant the alarm was DUE, not the moment we
- * noticed. The difference matters when the phone was off for eight hours: the
- * user needs to know when it was supposed to ring, not when the app woke up.
- *
- * Clearing `alarmAt` here is what RETIRES the alarm. Leaving it set kept
- * `wantsAlarm` true forever, so every resume re-reported a reminder that had
- * actually fired and the row kept its bell for good.
- */
+/** Stamps the DUE instant, not when we noticed. Clearing `alarmAt` retires the alarm -- leaving it set re-reported it every resume. */
 async function markFired(taskId: string, at: string): Promise<void> {
 	await repo.updateTask(taskId, { alarmFiredAt: at, alarmAt: null, alarmId: null });
 }

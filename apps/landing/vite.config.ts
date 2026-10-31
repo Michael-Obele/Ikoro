@@ -5,9 +5,7 @@ import path from 'node:path';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-	// Same reason as apps/app: shadcn-svelte's registry output and its
-	// components.json still speak `$lib/...`, so the alias is re-declared here for
-	// Vite while tsconfig `paths` covers tsc. Both are required.
+	// Same as apps/app — shadcn output speaks `$lib/...`.
 	resolve: {
 		alias: { $lib: path.resolve('./src/lib') }
 	},
@@ -21,10 +19,8 @@ export default defineConfig({
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
 
-			// Prerendered HTML is the point of this site, so `ssr` stays on
-			// (its default) and every route exports `prerender = true`. There is
-			// no `fallback`: this is a set of pages, not an SPA, and a fallback
-			// page would hide a 404 behind the homepage.
+			// Prerendered HTML by design; no `fallback` — one would hide a 404 behind
+			// the homepage.
 			adapter: staticAdapter({
 				pages: 'build',
 				assets: 'build',
@@ -32,8 +28,7 @@ export default defineConfig({
 				strict: true
 			}),
 
-			// Svelte inspector — always on, one block, as in apps/app. SvelteKit 3
-			// removed `vitePlugin`, so these options sit on the sveltekit() plugin.
+			// Svelte inspector, always on; Kit 3 dropped `vitePlugin`, so options sit here.
 			inspector: {
 				toggleKeyCombo: 'alt-x',
 				showToggleButton: 'active',

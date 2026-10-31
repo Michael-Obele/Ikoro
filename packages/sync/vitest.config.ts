@@ -1,10 +1,6 @@
 import { defineConfig } from 'vitest/config';
 
-/**
- * No Svelte, no DOM, no database. The wire protocol is pure logic by design —
- * it is the one thing both the app and the server must agree on exactly, so it
- * has to be testable without either.
- */
+/** Pure logic — no Svelte, no DOM, no database; both sides must agree on it exactly. */
 export default defineConfig({
 	test: {
 		include: ['tests/**/*.test.ts'],

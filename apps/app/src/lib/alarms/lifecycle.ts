@@ -1,19 +1,4 @@
-/**
- * The app's alarm lifecycle, in one place.
- *
- * Three things have to happen, and none of them can be done once at startup:
- *
- *  1. On start, re-arm everything the store believes should be armed.
- *  2. On every resume, re-read permissions AND re-arm. This is not optional:
- *     revoking "alarms & reminders" in Android system settings DELETES every
- *     armed exact alarm, silently. Without this, the user revokes once and their
- *     reminders quietly stop existing with no error anywhere.
- *  3. Route notification taps back to the task they belong to.
- *
- * Everything here is idempotent. `reconcile()` diffs the store against the
- * platform rather than blind-writing, so running it twice costs nothing — which
- * is what makes "on every resume" safe.
- */
+/** Alarm lifecycle: re-arm on start and on every resume (Android deletes armed alarms on revoke), route taps back. All idempotent. */
 import { App as CapApp } from '@capacitor/app';
 import * as repo from '$lib/db/repo';
 import { getScheduler, AndroidScheduler } from '$lib/alarms/scheduler';
@@ -62,14 +47,7 @@ function publishReport(next: ReconcileReport | null) {
 	for (const listener of reportListeners) listener(next);
 }
 
-/**
- * Re-read permissions and re-arm everything.
- *
- * Guarded by `running` because `appStateChange` can fire twice in quick
- * succession (a rotation, a notification shade pull) and two concurrent
- * reconciles would each schedule the same alarm — which is how you end up with
- * two notifications for one reminder.
- */
+/** Re-read permissions and re-arm. Guarded by `running`: `appStateChange` can fire twice and both would schedule the same alarm. */
 export async function syncAlarms(): Promise<ReconcileReport | null> {
 	if (running) return report;
 	running = true;
@@ -80,8 +58,7 @@ export async function syncAlarms(): Promise<ReconcileReport | null> {
 		publishReport(next);
 		return next;
 	} catch (error) {
-		// A failed sync must not take the app down with it: the data is still
-		// there, the store is still the truth, and the next resume will retry.
+		// A failed sync must not take the app down; the store is still the truth and the next resume retries.
 		console.error('[ikoro] alarm sync failed', error);
 		return report;
 	} finally {
@@ -115,13 +92,7 @@ export async function requestNotificationPermission(): Promise<void> {
 
 let wired = false;
 
-/**
- * Wire the native lifecycle. Called once from the layout; safe to call again.
- *
- * `appStateChange` → `active` is the resume hook. It fires when the user comes
- * back from Settings, which is exactly when a revoked permission has to be
- * noticed.
- */
+/** Wire the native lifecycle; called once from the layout, safe to repeat. `appStateChange` -> `active` is the resume hook. */
 export async function wireAlarmLifecycle(): Promise<() => void> {
 	if (wired) return () => {};
 	wired = true;
@@ -130,12 +101,8 @@ export async function wireAlarmLifecycle(): Promise<() => void> {
 
 	const scheduler = getScheduler();
 	scheduler.onAction(() => {
-		// Deliberately NO `alarmFiredAt` write here.
-		//
-		// `reconcile` stamps that field with the DUE instant via `markFired`. Writing
-		// the tap time as well recorded when the user dismissed the notification as
-		// if it were when the alarm was due, which is the one number the "missed
-		// while Ikoro was closed" report depends on.
+		// Deliberately NO `alarmFiredAt` write: `reconcile` stamps the DUE instant, and writing the tap
+		// time here would corrupt the number the "missed while Ikoro was closed" report depends on.
 		void syncAlarms();
 	});
 

@@ -4,11 +4,7 @@
 	import Section from '$lib/components/Section.svelte';
 	import { formatReleaseDate, limits, releaseEntries, site } from '$lib/content';
 
-	/**
-	 * Every release GitHub returned at build time, in its own order (newest
-	 * first). There is no curated copy to fall behind: publishing a release is
-	 * how a version appears here, and the notes are the body GitHub holds.
-	 */
+	/** Every release GitHub returned, newest first; the notes are GitHub's own release body. */
 	const shown = $derived(releaseEntries(page.data.releases));
 </script>
 
@@ -53,10 +49,7 @@
 </Section>
 
 {#each shown as entry, index (entry.version)}
-	<!--
-		No 01 / 02 / 03 markers: the version IS the order, and re-stating it as a
-		decorative index would encode nothing the reader did not already have.
-	-->
+	<!-- No 01 / 02 / 03 markers: the version IS the order. -->
 	<Section id={index === 0 ? entry.version : undefined} title="v{entry.version}">
 		{#if entry.date}
 			<Badge variant="outline" class="font-mono">{formatReleaseDate(entry.date)}</Badge>

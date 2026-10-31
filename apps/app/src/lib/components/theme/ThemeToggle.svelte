@@ -1,20 +1,5 @@
 <script lang="ts">
-	/**
-	 * System / Light / Dark.
-	 *
-	 * A `ToggleGroup` rather than a `Switch`. A switch has two positions, and the
-	 * third state here — "follow the OS" — is the one most people want and the one
-	 * a switch cannot express without becoming a switch whose meaning depends on
-	 * context. Three labelled buttons say what they do.
-	 *
-	 * Icons are deliberately absent: the word is the visible label and the
-	 * accessible name, so there is nothing left to be inferred from a glyph.
-	 *
-	 * Data flow is one-way and has no `$effect`. The store is the single source of
-	 * truth — `value` reads from it, `onValueChange` writes to it. Binding
-	 * `bind:value` instead would need a local mirror kept in sync with a store that
-	 * can also change from another tab, which is sync-by-effect for no gain.
-	 */
+	/** System / Light / Dark as a `ToggleGroup`, not a `Switch`: the third state has no on/off. */
 	import * as ToggleGroup from '$lib/components/ui/toggle-group';
 	import {
 		THEME_CHOICES,
@@ -37,8 +22,7 @@
 	};
 
 	function select(next: string): void {
-		// Bits UI emits an empty string when the pressed item is toggled off.
-		// Re-clicking "Dark" must not silently fall back to System.
+		// Bits UI emits '' when the pressed item is toggled off; do not fall back to System.
 		if (!next) return;
 		if (!THEME_CHOICES.includes(next as ThemeChoice)) return;
 		setTheme(next as ThemeChoice);
@@ -66,13 +50,7 @@
 		{/each}
 	</ToggleGroup.Root>
 
-	<!--
-		Announcing the RESOLVED theme matters as much as the choice: "System" on its
-		own says nothing about what is on screen right now. The choice itself does not
-		need repeating — the toggle directly above is a labelled control that already
-		shows which option is pressed — and stating it twice only made this wrap onto
-		two lines in the sidebar footer.
-	-->
+	<!-- Announce the RESOLVED theme: "System" alone says nothing about what is on screen now. -->
 	<p class="text-xs text-muted-foreground" aria-live="polite">
 		Showing the {resolvedTheme()} theme
 	</p>

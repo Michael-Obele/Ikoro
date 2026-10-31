@@ -1,30 +1,6 @@
 /**
- * The version guard. The release workflow runs it on the tag and refuses a
- * release whose own commit history does not justify it.
- *
- *   bun apps/app/scripts/version.ts check
- *
- * WHO OWNS THE NUMBER: release-please. It reads the commits, keeps a release PR
- * open, and cuts the tag when that PR is merged — see `release-please-config.json`
- * and `.github/workflows/release-please.yml`. So this file decides nothing and
- * bumps nothing. It only checks, which is the one thing release-please cannot do
- * for us: a message it cannot parse is silently dropped from the bump and the
- * changelog, with no failure anywhere.
- *
- * THE RULE — and the reason for both flags in `release-please-config.json`:
- *
- * | commit                                                 | bump  |
- * | ------------------------------------------------------ | ----- |
- * | anything conventional — `feat:` included                | patch |
- * | `type!:` / `type(scope)!:` / a BREAKING CHANGE: footer  | minor |
- * |                                                        | no major before 1.0.0 |
- *
- * `bump-patch-for-minor-pre-major` is what makes a `feat:` a patch: before
- * 1.0.0, a new capability is not yet a promise. `bump-minor-pre-major` is what
- * makes a breaking change a minor instead of a major. Both are set, so the
- * arithmetic here and the arithmetic in release-please agree — and if they ever
- * disagree, this check fails the build instead of shipping a number the store
- * cannot take back.
+ * Guards the release: fails when the tag is smaller than the commits claim.
+ * Usage: `bun apps/app/scripts/version.ts check` — release-please owns the number.
  */
 import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
@@ -71,8 +47,7 @@ export function parse(message: string): Commit | null {
 	return {
 		type: type.toLowerCase(),
 		scope: scope?.trim() ?? null,
-		// The footer is checked against the whole message: `feat!:` may omit it,
-		// but a `fix:` carrying one is still a minor.
+		// A `fix:` carrying a BREAKING CHANGE: footer is still a minor.
 		breaking: Boolean(bang) || BREAKING.test(message),
 		description
 	};
@@ -117,11 +92,7 @@ function git(args: string[]): string {
 	return execFileSync('git', args, { cwd: APP, encoding: 'utf8' });
 }
 
-/**
- * Release tags reachable from HEAD, newest first. `--sort=-v:refname` is git's
- * version sort — plain text sort puts v0.9.0 above v0.10.0 and would quietly
- * pick the wrong "previous" tag once the minor reaches ten.
- */
+/** Ranked tag sort — plain text sort puts v0.9.0 above v0.10.0. */
 function releaseTags(): string[] {
 	return git(['tag', '--list', 'v*', '--merged', 'HEAD', '--sort=-v:refname'])
 		.split('\n')
@@ -204,8 +175,7 @@ async function check(): Promise<void> {
 		]);
 	}
 
-	// Play orders uploads by versionCode, so a collision is a release that can
-	// never be published: 0.3.100 and 0.4.0 both come out as 400.
+	// Minor/patch above 99 collides in versionCode: 0.3.100 and 0.4.0 both read 400.
 	const [, minor, patch] = parseSemver(version);
 	if (minor > 99 || patch > 99) {
 		fail([

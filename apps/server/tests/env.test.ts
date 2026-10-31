@@ -1,19 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { envList, envInt, optionalEnv, requireEnv } from '#lib/server/env';
 
-/**
- * The lazy environment reader.
- *
- * The rule this file exists to enforce: an UNCONFIGURED machine must still be
- * able to build. `vite build` walks the module graph, so a top-level
- * `process.env.DATABASE_URL` fed straight into `neon()` fails the build of code
- * that has nothing wrong with it.
- *
- * A placeholder is treated as absent on purpose. `.env.example` ships
- * `<user>/<host>` placeholders, and a developer who copies it and forgets to
- * fill it in should get "DATABASE_URL is not set", not a DNS failure against a
- * host named `<host>`.
- */
+/** The lazy env reader: an unconfigured machine must still build, and a placeholder counts as unset. */
 
 const KEYS = ['DATABASE_URL', 'BETTER_AUTH_SECRET', 'TRUSTED_ORIGINS', 'SOME_INT'];
 let saved: Record<string, string | undefined>;
@@ -59,8 +47,7 @@ describe('requireEnv', () => {
 	});
 
 	it('treats a half-edited connection string as absent', () => {
-		// More realistic than the untouched placeholder: someone edited the user
-		// and forgot the host. An angle bracket anywhere means "not finished".
+		// An angle bracket anywhere means "not finished".
 		process.env.DATABASE_URL = 'postgresql://me:secret@<host>/ikoro';
 		expect(() => requireEnv('DATABASE_URL')).toThrow(/DATABASE_URL/);
 	});

@@ -20,23 +20,9 @@ import {
 import { getSyncSettings } from '$lib/sync/config';
 import type { ChangeOp, ChangeRow } from '@ikoro/sync';
 
-/**
- * A fake transport, so every assertion here is about the client's behaviour and
- * none of it depends on a server, a network or a database.
- *
- * The cases are chosen around the three ways a local-first sync client destroys
- * somebody's data:
- *
- *  1. losing an edit (clearing `dirty` for something the server rejected);
- *  2. creating an echo (writing back rows that did not actually change);
- *  3. resurrecting a deletion (a tombstone losing to a stale live copy).
- */
+/** Guards the three ways a sync client destroys data: losing an edit, echoing unchanged rows, resurrecting a deletion. */
 
-/**
- * `reject: true` makes the server refuse every op, which leaves the rows dirty —
- * the state a retry happens from, and the state where losing an edit would show
- * up. It is a MODE rather than a method override so that recording still happens.
- */
+/** `reject: true` makes the server refuse every op, leaving rows dirty — the state a retry starts from. */
 function fakeTransport(
 	options: { reject?: boolean; changes?: ChangeRow[]; hasMore?: boolean } = {}
 ) {
@@ -84,8 +70,7 @@ describe('enableSync', () => {
 
 		await enableSync('https://sync.example.com');
 
-		// Without this, the user turns sync on and their existing tasks silently
-		// never appear on their other phone — with no error anywhere.
+		// Otherwise existing tasks never reach the server — silently, with no error.
 		expect(await countPending()).toBe(2);
 	});
 
@@ -127,7 +112,6 @@ describe('push', () => {
 		await createTask({ listId: list.id, title: 'keep' });
 
 		// The server rejects one op — a stale edit, or a validation failure.
-		// The server confirms the first op and rejects the rest.
 		const { transport } = fakeTransport();
 		transport.push = async (ops) => ({
 			accepted: ops.slice(0, 1).map((op) => ({ opId: op.id, entityId: op.entityId, rev: 7 })),
@@ -137,8 +121,7 @@ describe('push', () => {
 
 		await push(transport);
 
-		// The rejected task is STILL dirty. Clearing it would drop the user's edit
-		// silently — the one failure a sync client must never have.
+		// The rejected task is STILL dirty — clearing it would drop the user's edit.
 		const rows = await db.tasks.getAll();
 		expect(rows[0].dirty).toBe(1);
 	});
@@ -164,15 +147,13 @@ describe('push', () => {
 		const list = await createList('Errands');
 		await createTask({ listId: list.id, title: 'same' });
 
-		// Reject everything, so the rows stay dirty and the second push has the
-		// same work to do — which is exactly the retry scenario that matters.
+		// Reject everything so the rows stay dirty — that is the retry scenario.
 		const first = fakeTransport({ reject: true });
 		await push(first.transport);
 		const second = fakeTransport({ reject: true });
 		await push(second.transport);
 
-		// A random id per attempt would make the server's idempotency ledger
-		// useless: every retry would look like a new operation.
+		// A random id per attempt would make the server's idempotency ledger useless.
 		expect(second.pushed[0][0].id).toBe(first.pushed[0][0].id);
 	});
 
@@ -239,9 +220,7 @@ describe('pull', () => {
 		const task = await createTask({ listId: list.id, title: 'deleted here' });
 		await deleteTask(task.id);
 
-		// The server has not seen the delete yet and sends the live row back with
-		// a NEWER timestamp — which is exactly the case a naive last-writer-wins
-		// gets wrong.
+		// The server has not seen the delete and sends the live row with a NEWER timestamp.
 		const remote: ChangeRow = {
 			kind: 'task',
 			entityId: task.id,
@@ -275,8 +254,7 @@ describe('pull', () => {
 		const { transport } = fakeTransport({ changes: [remote] });
 		await pull(transport, 0);
 
-		// Identical data. Writing it would bump updatedAt and set dirty, and the
-		// next push would send it straight back — forever.
+		// Writing identical data would bump updatedAt, set dirty, and echo forever.
 		const after = (await getTask(task.id)) as { updatedAt: string; dirty: number };
 		expect(after.updatedAt).toBe(before.updatedAt);
 		expect(after.dirty).toBe(0);
@@ -340,8 +318,7 @@ describe('sync', () => {
 
 		await Promise.all([sync(transport), sync(transport), sync(transport)]);
 
-		// Two overlapping cycles push the same ops twice; with deterministic op ids
-		// the server dedupes, but there is no reason to make it do the work.
+		// Overlapping cycles push the same ops twice; the server dedupes, but why make it.
 		expect(maxConcurrent).toBe(1);
 	});
 
@@ -380,9 +357,7 @@ describe('boundary', () => {
 			if (/\bfetch\(/.test(source) && !file.startsWith('transport')) offenders.push(file);
 		}
 
-		// Everything above the transport takes a SyncTransport and does not know
-		// the network exists — which is what makes every sync behaviour testable
-		// with a fake and no fetch.
+		// Only the transport may fetch; everything above it takes a SyncTransport, which is what keeps sync testable with a fake.
 		expect(offenders).toEqual([]);
 	});
 });

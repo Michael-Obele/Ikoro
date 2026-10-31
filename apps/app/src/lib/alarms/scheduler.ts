@@ -1,11 +1,4 @@
-/**
- * The one module the rest of the app imports to reach an alarm.
- *
- * Nothing else knows which platform it is on, and nothing else knows that
- * Android exists. That is the entire point: M6 can replace the desktop
- * implementation, or a future Capacitor upgrade can change a schedule option,
- * and the blast radius is this file.
- */
+/** The only module the rest of the app imports to reach an alarm; swapping an implementation has this file as its blast radius. */
 import { detectPlatform } from '$lib/platform';
 import { AndroidScheduler } from './android-scheduler';
 import { BrowserScheduler } from './browser-scheduler';
@@ -25,18 +18,7 @@ export type { DesktopMode, DesktopProbe } from './systemd';
 
 let instance: AlarmScheduler | null = null;
 
-/**
- * One scheduler for the app's lifetime.
- *
- * Cached rather than constructed per call: `AndroidScheduler` registers plugin
- * listeners, and a fresh instance per reconcile would accumulate them until the
- * platform started dropping notifications. The platform cannot change while the
- * app is running, so there is nothing to invalidate.
- *
- * The desktop shell gets `DesktopScheduler`, which probes at its own first call
- * and then picks between systemd and the in-process timer. Construction here is
- * deliberately lazy for that reason — no `systemctl` subprocess at import time.
- */
+/** Cached, not per call: `AndroidScheduler` registers plugin listeners that would accumulate. Lazy so no `systemctl` runs at import. */
 export function getScheduler(): AlarmScheduler {
 	instance ??=
 		detectPlatform() === 'android'

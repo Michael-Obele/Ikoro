@@ -1,20 +1,6 @@
 /**
- * Guards the build-time release fetch against lying or crashing.
- *
- * Class of bug caught: the landing page renders a version number and download
- * links that are only as true as the last person who hand-edited them. This
- * file pins the GitHub API parsing (shape drift, error paths that must degrade
- * to the app-version derivation instead of throwing during prerender) and the
- * display formatters (a locale-dependent date or a wrong byte divisor ships a
- * wrong claim to static HTML with no server to fix it).
- *
- * It also pins the one fact this page exists to stop getting wrong: tagging a
- * release starts two builds minutes apart, so "the release exists" and "the APK
- * exists" are different facts. The old model conflated them, fell back to a
- * hand-built download URL, and sent visitors to a GitHub 404. Every fixture
- * below keeps the two apart on purpose.
- *
- * No network here — `fetch` is always an injected fake.
+ * Guards the build-time release fetch against lying or crashing: API shape drift, error
+ * paths that must degrade to the derived version, and "a tag exists" vs "the APK exists".
  */
 import { describe, expect, it } from 'vitest';
 import type { ReleaseInfo } from '#lib/release';
@@ -30,13 +16,7 @@ import {
 
 const DOWNLOAD = 'https://github.com/Michael-Obele/Ikoro/releases/download';
 
-/**
- * The real shape of GET /repos/Michael-Obele/Ikoro/releases/latest on
- * 2026-10-29 (tag v0.3.2). Written from the observed response, not invented:
- * asset entries carry name/size/browser_download_url, nothing else is read.
- * Two assets only — v0.3.2 predates the desktop build, which is a real case:
- * a published release that carries no Linux files at all.
- */
+/** The real `/releases/latest` shape (tag v0.3.2, 2026-10-29), two assets: that release predates the desktop build. */
 const LATEST_FIXTURE = {
 	tag_name: 'v0.3.2',
 	name: 'v0.3.2',
@@ -56,11 +36,7 @@ const LATEST_FIXTURE = {
 	]
 };
 
-/**
- * The five entries v0.3.4 really carried, with the sizes GitHub reported. The
- * AAB is included on purpose: the release ships it, and the site must ignore
- * it rather than offer it.
- */
+/** The five entries v0.3.4 really carried. The AAB is included on purpose: the site must ignore it. */
 const COMPLETE_FIXTURE = {
 	tag_name: 'v0.3.4',
 	published_at: '2026-10-29T12:58:00Z',
@@ -108,11 +84,7 @@ describe('parseLatestRelease', () => {
 		expect(parseLatestRelease({ ...LATEST_FIXTURE, published_at: 'not-a-date' })).toBeNull();
 	});
 
-	/**
-	 * The case the old parser turned into a 404. A tag exists the moment
-	 * release-please cuts it; the files arrive minutes later. That release is
-	 * real, so it must parse — and it must not offer a download.
-	 */
+	/** A tag exists the moment release-please cuts it; the files arrive minutes later. It must parse, and offer no download. */
 	it('parses a release with no assets at all as a release that has nothing to download', () => {
 		const empty = parseLatestRelease({ ...LATEST_FIXTURE, assets: [] });
 		expect(empty).not.toBeNull();
@@ -124,11 +96,7 @@ describe('parseLatestRelease', () => {
 		expect(isDownloadable(empty as ReleaseInfo, 'linux')).toBe(false);
 	});
 
-	/**
-	 * The two-minute window that started all of this: Android uploaded, desktop
-	 * still compiling. Android is downloadable; Linux is not; and neither answer
-	 * involves inventing a URL.
-	 */
+	/** Android uploaded, desktop still compiling: neither answer may invent a URL. */
 	it('opens Android as soon as its file lands, without waiting for the desktop build', () => {
 		const androidOnly = parseLatestRelease({
 			...COMPLETE_FIXTURE,
@@ -201,11 +169,7 @@ describe('deriveRelease', () => {
 		});
 	});
 
-	/**
-	 * The regression that started all of this: the offline path used to build
-	 * apk/aab URLs from the version alone. Every one of them 404s until the
-	 * build finishes, and some of them 404 forever.
-	 */
+	/** The offline path used to build URLs from the version alone; every one of them 404s. */
 	it('offers no download for either platform, and says so', () => {
 		const derived = deriveRelease('0.3.2');
 		expect(isDownloadable(derived, 'android')).toBe(false);
@@ -227,10 +191,7 @@ describe('fetchReleases', () => {
 		]);
 	});
 
-	/**
-	 * An empty list, not null: the layout has one shape to reason about, and
-	 * /changelog says "could not reach GitHub" rather than printing nothing.
-	 */
+	/** Empty list, not null, so the layout has one shape and /changelog can say GitHub was unreachable. */
 	it('returns an empty list on non-ok responses, network errors, and unparseable bodies', async () => {
 		const notOk = (async () => ({ ok: false, json: async () => ({}) })) as unknown as typeof fetch;
 		expect(await fetchReleases(notOk)).toEqual([]);
@@ -287,10 +248,7 @@ describe('parseReleases', () => {
 		expect(parseReleases([])).toEqual([]);
 	});
 
-	/**
-	 * The changelog's notes ARE the release body. Carrying it through the parser
-	 * is what lets /changelog stop holding a copy that goes stale.
-	 */
+	/** The changelog's notes ARE the release body, so /changelog holds no copy that can go stale. */
 	it('carries the release body through, and omits it when the release has none', () => {
 		const withBody = parseLatestRelease({ ...LATEST_FIXTURE, body: '### Features\n\n* x' });
 		expect(withBody?.body).toBe('### Features\n\n* x');
@@ -319,11 +277,7 @@ describe('release display helpers', () => {
 		expect(notice.body).toContain('Published 29 Oct 2026');
 	});
 
-	/**
-	 * The sentence the whole change exists for. Somebody who opens the page
-	 * eighteen seconds after a tag is cut must be told to wait — not handed a
-	 * download that 404s.
-	 */
+	/** Someone who opens the page eighteen seconds after a tag is cut must be told to wait. */
 	it('tells the reader a half-uploaded release is still building, and which files are late', () => {
 		const androidOnly = parseLatestRelease({
 			...COMPLETE_FIXTURE,

@@ -22,9 +22,8 @@ export default defineConfig(
 			// see: https://typescript-eslint.io/troubleshooting/faqs/eslint/#i-get-errors-from-the-no-undef-rule-about-global-variables-not-being-defined-even-though-there-are-no-typescript-errors
 			'no-undef': 'off',
 
-			// A leading underscore means "deliberately discarded". Destructuring an
-			// object to drop one property, or a callback parameter kept only for its
-			// signature, is a normal idiom — not an oversight.
+			// A leading underscore means "deliberately discarded" — dropping a destructured
+			// property or keeping a signature's parameter is normal, not an oversight.
 			'@typescript-eslint/no-unused-vars': [
 				'error',
 				{
@@ -47,8 +46,7 @@ export default defineConfig(
 		}
 	},
 	{
-		// Override or add rule settings here, such as:
-		// 'svelte/button-has-type': 'error'
+		// Add rule overrides here, e.g. 'svelte/button-has-type': 'error'
 		rules: {}
 	}
 );

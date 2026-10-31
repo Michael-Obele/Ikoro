@@ -1,24 +1,6 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 
-/**
- * The push endpoint's HTTP contract.
- *
- * Two things here are pure protocol decisions that are easy to get subtly wrong
- * and impossible to notice in a two-device test, so they are asserted directly
- * against the exported handler:
- *
- *  1. **The wire-version check must run BEFORE schema validation.** `pushRequestSchema`
- *     types `wireVersion` as `v.literal(WIRE_VERSION)`, so checking afterwards means
- *     an out-of-date client gets a generic 400 ("invalid value") instead of an
- *     actionable 409 telling it to update. Ordering is the whole behaviour.
- *  2. **`nextRev` must never be a rewind.** When every op is rejected, there is no
- *     rev to report; returning 0 invites a client to store 0 as its cursor and
- *     re-pull its entire history.
- *
- * `applyOps` and `currentRev` are mocked, so these tests need no database. The
- * mocked `currentRev` stands in for "the server's high-water mark", which is the
- * value the real one returns from the shared sequence.
- */
+/** The push endpoint's HTTP contract: wire-version order and a `nextRev` that never rewinds. */
 
 const KEYS = ['DATABASE_URL', 'BETTER_AUTH_SECRET', 'APP_ORIGIN'];
 const applyOps = vi.hoisted(() => vi.fn());
@@ -83,12 +65,8 @@ const op = (over: Record<string, unknown> = {}) => ({
 });
 
 /**
- * Assert that NO op reached the query layer.
- *
- * Not `expect(applyOps).not.toHaveBeenCalled()`: the route filters ops first and
- * then always calls `applyOps` with whatever survived, so a batch where every op
- * was refused still calls it — with an empty array. What matters is that nothing
- * was handed to the database, not that a function was skipped.
+ * Assert that NO op reached the query layer. Not `not.toHaveBeenCalled()`: the route always calls
+ * `applyOps`, with an empty array when everything was refused.
  */
 function expectNoOpsReachedDatabase() {
 	expect(applyOps).toHaveBeenCalledWith('user-1', []);
@@ -136,8 +114,7 @@ describe('a mismatched wire version is a 409, not a 400', () => {
 
 describe('nextRev is never a rewind', () => {
 	it('reports the server high-water mark when every op is rejected', async () => {
-		// The dangerous shape: nothing applied, so `applyOps` has no rev and returns
-		// 0. A client storing 0 as its cursor re-pulls everything.
+		// Nothing applied, so `applyOps` returns 0 — which a client would store and rewind to.
 		applyOps.mockResolvedValue({ accepted: [], rejected: [], nextRev: 0 });
 		const res = await post({ wireVersion: 1, ops: [op()] });
 		const body = (await res.json()) as { nextRev: number };
@@ -164,8 +141,7 @@ describe('nextRev is never a rewind', () => {
 
 describe('per-op validation does not fail the batch', () => {
 	it('rejects a bad payload and still applies the good ops', async () => {
-		// A phone that queued 300 edits must not lose all 300 because one payload
-		// was truncated by a bad network.
+		// A phone that queued 300 edits must not lose all 300 over one bad payload.
 		applyOps.mockResolvedValue({
 			accepted: [{ opId: 'op-2', entityId: 'task-2', rev: 5 }],
 			rejected: [],
@@ -186,8 +162,7 @@ describe('per-op validation does not fail the batch', () => {
 	});
 
 	it('rejects a payload carrying a userId as forbidden, not silently', async () => {
-		// Stripping the field quietly would hide the IDOR attempt; the op has to be
-		// refused so it shows up in the client's `rejected` list.
+		// Stripping it quietly would hide the IDOR attempt; the op has to be refused.
 		const res = await post({
 			wireVersion: 1,
 			ops: [op({ payload: { ...validPayload, userId: 'attacker' } })]
@@ -199,8 +174,7 @@ describe('per-op validation does not fail the batch', () => {
 	});
 
 	it('rejects a device-scoped alarmId rather than storing it', async () => {
-		// A platform notification id from one phone is meaningless on another — and
-		// a client that believes it was registered would think its alarm is armed.
+		// A notification id from one phone is meaningless on another.
 		const res = await post({
 			wireVersion: 1,
 			ops: [op({ payload: { ...validPayload, alarmId: '9999' } })]
@@ -210,11 +184,8 @@ describe('per-op validation does not fail the batch', () => {
 	});
 
 	it('rejects an unknown kind at the envelope, naming the field', async () => {
-		// `changeOpSchema` types `kind` as a picklist of ['list','task'], so an
-		// unknown kind fails the WHOLE request before per-op validation runs. The
-		// route's own `unknown-kind` branch is therefore a second gate behind this
-		// one — kept deliberately, because a future loosening of the schema must
-		// not turn into a SQL fragment built from an unchecked kind.
+		// `changeOpSchema` restricts `kind` to a picklist, so this fails the whole request.
+		// The route's `unknown-kind` branch is a deliberate second gate.
 		const res = await post({ wireVersion: 1, ops: [op({ kind: 'reminder' })] });
 		expect(res.status).toBe(400);
 
@@ -243,8 +214,7 @@ describe('only the session supplies userId', () => {
 			ops: [op({ payload: { ...validPayload, userId: 'attacker' } })],
 			userId: 'attacker'
 		});
-		// The payload's userId made it into `rejected`, and nothing that claimed a
-		// foreign user reached the query layer.
+		// The payload's userId made it into `rejected`; nothing foreign reached the query layer.
 		expectNoOpsReachedDatabase();
 	});
 });

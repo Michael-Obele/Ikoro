@@ -1,32 +1,6 @@
 /**
- * The server's merge decision.
- *
- * ── `mergeRow` IS IMPORTED, NOT REIMPLEMENTED ───────────────────────────────
- * `@ikoro/sync` exports `mergeRow` and it is used here exactly as published.
- * That is not tidiness, it is the whole point of the package: `apps/app` runs
- * the identical function during a pull, so if the server had its own copy, two
- * implementations of conflict resolution would be two behaviours — and the bug
- * would be unreproducible, because it would depend on which device you asked.
- *
- * ── Argument order is the whole trick ───────────────────────────────────────
- * `mergeRow(local, remote)` is "newer wins, and on an exact TIE THE REMOTE
- * WINS". So *whichever side is passed as `remote` wins ties*, and that is the
- * one knob that decides a contested tie.
- *
- * On the server the side that must win a tie is the STORED row: the protocol's
- * tie-break exists so every device converges, and the stored row is the copy
- * every device is converging ON. Handing a tie to the incoming op instead would
- * let an op carrying an identical millisecond timestamp clobber committed data
- * purely because it arrived later — a silent, order-dependent loss.
- *
- * So the incoming row is passed as `local` and the stored row as `remote`:
- *
- *   incoming newer   → newer wins  → incoming applies
- *   incoming older   → newer wins  → stored wins, op reported `stale`
- *   exact tie        → remote wins → stored wins, op reported `stale`
- *   delete vs live   → deleted side wins, regardless of clock
- *
- * Every one of those four outcomes is decided by the library, not here.
+ * The server's merge decision. `mergeRow` is imported, not reimplemented, and the STORED row is
+ * passed as `remote` because that side wins ties.
  */
 
 import { mergeRow, type ChangeOp, type EntityKind, type Mergeable } from '@ikoro/sync';
@@ -68,17 +42,8 @@ export type MergeOutcome =
 	  };
 
 /**
- * Turn an op into the row it wants to write.
- *
- * `op: 'delete'` produces a TOMBSTONE, never a `DELETE` statement. This is the
- * single most important behaviour in the file: if a delete removed the row, a
- * peer that had not yet seen the delete would push the task straight back and
- * the user would watch their deleted task reappear on its own. The row has to
- * survive until every peer has seen it.
- *
- * The tombstone's `updatedAt` is the op's own `updatedAt` — the instant the
- * deleting device observed. Inventing a server-side "now" instead would hand the
- * server the clock authority the protocol explicitly refuses it.
+ * Turn an op into the row it wants to write. `op: 'delete'` produces a TOMBSTONE, never a DELETE —
+ * a removed row would be pushed straight back by a peer that had not seen the delete.
  */
 export function incomingFromOp(op: ChangeOp, userId: string): IncomingRow {
 	return {
@@ -91,25 +56,16 @@ export function incomingFromOp(op: ChangeOp, userId: string): IncomingRow {
 }
 
 /**
- * Decide what a push does to a stored row.
- *
- * Delegates the conflict rule to `mergeRow` and translates its verdict into an
- * INSERT / UPDATE / REJECT, because the database cannot express "reject" and the
- * SQL layer must not be inventing a comparison of its own.
+ * Decide what a push does to a stored row: INSERT / UPDATE / REJECT, delegated to `mergeRow` so
+ * the SQL layer never invents a comparison of its own.
  */
 export function resolveWrite(existing: StoredRow | undefined, incoming: IncomingRow): MergeOutcome {
 	if (!existing) {
 		return { decision: 'insert', row: incoming, reason: 'new' };
 	}
 
-	// `mergeRow` needs only `updatedAt` and `deletedAt`, so both sides are passed
-	// by REFERENCE rather than as fresh `{ updatedAt, deletedAt }` literals.
-	//
-	// That is load-bearing, not a style choice: `mergeRow` returns one of the two
-	// objects it was handed, so reference identity is an exact answer to "which
-	// side won?". Handing it new literals makes that comparison always false, and
-	// every op is then reported as applied — a stale push silently overwrites a
-	// newer row, which is the precise corruption the merge rules exist to prevent.
+	// Passed by REFERENCE: `mergeRow` returns one of the two objects it was handed, so identity
+	// answers "which side won". Fresh literals would make every op look applied.
 	const local: Mergeable = incoming;
 	const remote: Mergeable = existing;
 
@@ -120,10 +76,7 @@ export function resolveWrite(existing: StoredRow | undefined, incoming: Incoming
 		return { decision: 'reject', reason: 'stale', storedUpdatedAt: existing.updatedAt };
 	}
 
-	// The incoming row genuinely won. Reporting WHY matters: a tombstone beating
-	// a live row means the delete succeeded despite an older clock, which is a
-	// real condition on a device with skewed time and worth distinguishing from
-	// an ordinary newer write.
+	// A tombstone beating a live row is a real condition on a device with skewed time.
 	const reason = incoming.deletedAt !== null && existing.deletedAt === null ? 'tombstone' : 'newer';
 
 	return { decision: 'update', row: incoming, reason };
@@ -140,13 +93,8 @@ export interface WireChangeRow {
 }
 
 /**
- * Project a stored row onto the wire shape.
- *
- * The server never decides what a client should merge — `mergeChanges` in
- * `@ikoro/sync` does that, on the client, against its own local copy. What the
- * server owes the client is an honest `updatedAt` and `deletedAt` so the client's
- * merge sees exactly what was committed, and `rev` to advance its cursor past
- * it.
+ * Project a stored row onto the wire shape. The server decides nothing here — the client merges
+ * with `mergeChanges`, so it owes an honest `updatedAt`, `deletedAt` and `rev`.
  */
 export function toChangeRow(kind: EntityKind, row: StoredRow): WireChangeRow {
 	return {

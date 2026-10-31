@@ -5,21 +5,10 @@
 	import { ASSET_ORDER, type AssetKind, type ReleaseInfo } from '$lib/release';
 
 	/**
-	 * The arrival list: one row per file this site offers, each stated as arrived,
-	 * in transit, or not confirmed.
-	 *
-	 * This is the page's signature element, and it is load-bearing rather than
-	 * decorative. A release is not one thing that exists or does not: tagging it
-	 * starts two builds that upload minutes apart, so there is a real window in
-	 * which the release is half-delivered. The old page resolved that window by
-	 * guessing a download URL — which 404s — and the visitor reads a 404 as "this
-	 * product is broken". Showing the files and what each one is doing says the
-	 * same thing without ever lying, and it turns "wait, where is my file?" into a
-	 * status you can read.
-	 *
-	 * Motion is confined to the one row that is genuinely waiting: a slow pulse on
-	 * the in-transit dot, silenced under `prefers-reduced-motion`. Nothing else
-	 * moves — the page is a status board, not a showreel.
+	 * One row per offered file, stated as arrived, in transit, or not confirmed. The
+	 * window matters: tagging a release starts two builds minutes apart, and guessing a
+	 * download URL in that window produced a 404 that read as "the product is broken".
+	 * Only the in-transit dot moves (a pulse, silenced under `prefers-reduced-motion`).
 	 */
 	let { release }: { release: ReleaseInfo } = $props();
 

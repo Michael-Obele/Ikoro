@@ -1,42 +1,16 @@
-/**
- * Browser alarms — a DEVELOPMENT PREVIEW ONLY.
- *
- * A web page cannot fire a notification while it is closed. There is no API for
- * it, and there will not be: that is the browser's sandbox working as designed.
- * So this implementation schedules an in-page timer and says, truthfully and
- * every single time, that the reminder needs the app open.
- *
- * The honesty is the feature. Returning `{ ok: true, exact: true }` here would
- * make the demo look like the product; returning `exact: false` with a warning
- * means the browser preview shows the exact banner the real degraded state
- * produces, and a user who tries the web build is told the truth instead of
- * discovering at 9am that their reminder never arrived.
- */
+/** Browser alarms -- a DEVELOPMENT PREVIEW ONLY. A closed page cannot fire a notification, so every schedule answers `exact: false`. */
 import { hashId } from '$lib/utils/id';
 import type { AlarmPermissionStatus, AlarmRequest, AlarmScheduler, ScheduleOutcome } from './types';
 
 export const BROWSER_LIMITATION =
 	'Reminders need Ikoro open in the browser — install the Android or desktop app for alarms that fire when closed.';
 
-/**
- * `setTimeout` is capped at a signed 32-bit int, which overflows past ~24.8
- * days and fires IMMEDIATELY. Anything further out is armed in stages instead,
- * so a reminder set for next month does not ring the instant it is created.
- */
+/** `setTimeout` overflows past 2^31-1 ms and fires IMMEDIATELY, so far-off alarms are armed in stages. */
 const MAX_TIMEOUT_MS = 2_147_483_647;
 const STAGE_MS = MAX_TIMEOUT_MS - 60_000;
 
 export class BrowserScheduler implements AlarmScheduler {
-	/**
-	 * `browser`, deliberately — including when this backs the desktop shell.
-	 *
-	 * Tauri v2's official notification plugin cannot schedule on desktop: the
-	 * docs say so outright, `pending()` is mobile-only, and there is no cancel
-	 * API. So the desktop shell gets the in-page timer and this exact warning,
-	 * and says plainly that Ikoro must be running. Shipping that honestly beats
-	 * shipping a `desktop` label on a timer that only works while a window is
-	 * open. OS-native desktop scheduling is M12.
-	 */
+	/** `browser`, deliberately: Tauri's notification plugin cannot schedule on desktop, so an honest label beats a lying one. */
 	readonly platform = 'browser' as const;
 
 	#timers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -47,8 +21,7 @@ export class BrowserScheduler implements AlarmScheduler {
 			return {
 				notifications: 'denied',
 				exact: 'unsupported',
-				// A page cannot take over the screen either, so this is not a
-				// revocation the user could undo.
+				// A page cannot take over the screen, so this is not a revocation the user could undo.
 				fullScreenIntent: 'unsupported'
 			};
 		}
@@ -58,10 +31,7 @@ export class BrowserScheduler implements AlarmScheduler {
 				permission === 'granted' ? 'granted' : permission === 'denied' ? 'denied' : 'prompt',
 			// No browser can promise an exact minute, so this is never 'granted'.
 			exact: 'unsupported',
-			// And no browser can take over the screen: a page's notification is a
-			// notification. There is no equivalent to grant or revoke, so this is
-			// 'unsupported' rather than 'denied' -- there is nothing for the user
-			// to go and fix.
+			// And never 'denied': there is no equivalent to grant or revoke, so nothing for the user to fix.
 			fullScreenIntent: 'unsupported'
 		};
 	}

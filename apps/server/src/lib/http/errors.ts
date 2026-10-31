@@ -1,12 +1,6 @@
 /**
- * Error responses.
- *
- * AGENTS.md's rule applies to a server as much as to an app: assert on the
- * MESSAGE, because the message is what is read when something fails. So every
- * failure this server produces deliberately names the thing that was wrong, and
- * a Valibot issue is rendered with its field path rather than swallowed.
- *
- * Nothing here leaks a stack trace, a connection string, or a SQL fragment.
+ * Error responses. Every failure names the thing that was wrong, and never leaks a stack trace,
+ * a connection string or a SQL fragment.
  */
 
 import * as v from 'valibot';
@@ -39,13 +33,7 @@ export const forbidden = (message = 'This record belongs to another account.') =
 
 export const notFound = (message = 'Not found.') => jsonError(404, 'not_found', message);
 
-/**
- * Render a Valibot failure as a 400.
- *
- * The message includes the path of the offending field, because "ops.3.payload.
- * title: Invalid type: Expected string but received 3" is the difference between
- * a bug report that can be acted on and one that cannot.
- */
+/** Render a Valibot failure as a 400, including the path of the offending field. */
 export function validationError(schema: v.GenericSchema, input: unknown, what: string): Response {
 	const result = v.safeParse(schema, input);
 	if (result.success) {
@@ -65,14 +53,8 @@ export function validationError(schema: v.GenericSchema, input: unknown, what: s
 }
 
 /**
- * The client IP, for rate limiting only.
- *
- * `fly-client-ip` is set by Fly.io's edge and is the real client address. The
- * `x-forwarded-for` fallback is only trusted to the LEFTMOST value, because a
- * client can prepend anything it likes and every element after the first hop is
- * attacker-influenced on some deployments. This feeds a per-instance bucket,
- * never an access-control decision, so the fallback's imperfection is bounded —
- * but the header is still never used for `userId`.
+ * The client IP, for rate limiting only. Trusts only the LEFTMOST `x-forwarded-for` value, and
+ * never feeds a `userId`.
  */
 export function clientIp(event: Pick<RequestEvent, 'request' | 'getClientAddress'>): string {
 	const flyIp = event.request.headers.get('fly-client-ip');

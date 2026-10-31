@@ -1,27 +1,11 @@
 <script lang="ts">
-	/**
-	 * A date and an optional time — never a combined datetime.
-	 *
-	 * The split is not cosmetic: `dueDate` is the part Google Tasks can sync and
-	 * `dueTime` is deliberately local-only, because Google's API discards the
-	 * time part. Collapsing them into one field would make that loss impossible
-	 * to see.
-	 *
-	 * Clearing the date clears the time too — a time with no day is a value that
-	 * would silently do nothing.
-	 */
+	/** A date and an optional time — never a combined datetime: Google's API drops the time part. */
 	import Input from '$lib/components/ui/input/input.svelte';
 	import Label from '$lib/components/ui/label/label.svelte';
 
 	/**
-	 * CONTROLLED, not bound.
-	 *
-	 * These fields used to own a copy of the schedule, and that copy is what made
-	 * the reminder lie: the alarm control wrote the time it armed, `DuePicker`
-	 * kept showing the draft it opened with, and a later date edit saved the draft
-	 * back over the real one. The values now come from the task row, and every
-	 * edit leaves through a callback. A minimum date of "no date" is still a real
-	 * value — the parent decides what clearing the day means for the clock.
+	 * CONTROLLED, not bound: a local copy is what let the picker show a stale time. The
+	 * parent decides what clearing the day means for the clock.
 	 */
 	let {
 		dueDate,
@@ -31,8 +15,7 @@
 	}: {
 		dueDate: string | null;
 		dueTime: string | null;
-		/** Raw input value. `''` is the user clearing the field; the parent decides
-		 *  what that means (and which partial values to ignore). */
+		/** Raw input value; `''` means the user cleared it. The parent decides what that means. */
 		ondatechange?: (value: string) => void;
 		ontimechange?: (value: string) => void;
 	} = $props();

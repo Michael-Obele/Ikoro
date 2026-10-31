@@ -11,22 +11,7 @@ import {
 } from '#lib/sse/hub';
 import { openStream, SSE_HEADERS } from '#lib/sse/stream';
 
-/**
- * The SSE hub.
- *
- * Two failure modes, and only one of them is loud:
- *
- *  - **A leaked subscriber.** A reconnecting client that never fires `abort`
- *    leaves a dead controller in the set forever. On a 512 MB instance that is
- *    an OOM arriving a few thousand reconnects later — which reads as "the
- *    server fell over last week" with nothing pointing at the cause.
- *  - **A notification that stops reaching later subscribers.** If one dead
- *    subscriber throws inside the notify loop and the loop dies, every
- *    subscriber AFTER it in the set is silently un-notified. That looks
- *    exactly like "sync stopped working for some users".
- *
- * Both are asserted here, because neither produces an error you would see.
- */
+/** The SSE hub: leaked subscribers (silent OOM) and one dead stream starving the others. */
 
 beforeEach(() => {
 	resetSubscribers();
@@ -38,8 +23,7 @@ describe('framing', () => {
 	});
 
 	it('a keepalive is a comment, so a client parser ignores it', () => {
-		// If it were `event: keepalive`, every EventSource would fire a handler
-		// for it and M11's stream.ts would need to filter it out.
+		// `event: keepalive` would make every EventSource fire a handler for it.
 		expect(keepaliveChunk(123)).toMatch(/^: keepalive/);
 		expect(keepaliveChunk(123).endsWith('\n\n')).toBe(true);
 	});
@@ -62,8 +46,7 @@ describe('subscribe / unsubscribe', () => {
 	});
 
 	it('is idempotent — abort and write-failure both fire', () => {
-		// Both paths run on a normal disconnect. An unsubscribe that threw or
-		// double-decremented would either crash the teardown or corrupt the count.
+		// Both paths run on a normal disconnect; a double-decrement would corrupt the count.
 		const off = subscribe('u1', { send: () => {}, close: () => {} });
 		off();
 		expect(() => off()).not.toThrow();
@@ -71,8 +54,7 @@ describe('subscribe / unsubscribe', () => {
 	});
 
 	it('drops the empty Set, not just the member', () => {
-		// Otherwise every user who has ever signed out leaves a Map key behind for
-		// the lifetime of the process.
+		// Otherwise every signed-out user leaves a Map key behind for the whole process.
 		const off = subscribe('u1', { send: () => {}, close: () => {} });
 		off();
 		expect(subscriberCountFor('u1')).toBe(0);
@@ -111,9 +93,7 @@ describe('notify', () => {
 	});
 
 	it('a throwing subscriber does not stop the ones after it', () => {
-		// THE test in this file. The dead stream is in the MIDDLE of the set, so
-		// if the loop did not catch, the third subscriber — a healthy connection —
-		// would silently stop receiving updates.
+		// The dead stream is in the MIDDLE: an uncaught throw would starve the third.
 		const before: string[] = [];
 		const after: string[] = [];
 

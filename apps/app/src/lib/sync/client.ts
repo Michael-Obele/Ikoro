@@ -1,23 +1,7 @@
 /**
- * The sync client: the part of the app that talks to `/api/v1`.
+ * The sync client -- the only part of the app that talks to `/api/v1`.
  *
- * ── Why there is no outbox store ────────────────────────────────────────────
- *
- * The obvious design is an outbox table: a row per pending change, written
- * alongside the change itself. svelte-idb has **no transaction API**, so those
- * two writes are two independent operations — and a crash between them leaves
- * either an outbox entry for a change that never landed, or a change with no
- * outbox entry, which is silent, permanent data loss.
- *
- * So the queue IS the `dirty` flag that M1 already puts on every row, set in the
- * same single `put()` that changes it. `where('byDirty').equals(1)` is the entire
- * "what needs pushing" query. There is no second store to keep in step, and no
- * atomicity to lose.
- *
- * ── What this must never do ─────────────────────────────────────────────────
- *
- * Push on every mutation, unthrottled, from a phone that may be on a train. A
- * sync layer that hammers the server is a sync layer the user turns off.
+ * The queue IS the `dirty` flag: svelte-idb has no transactions, so an outbox row written beside a change can be lost. Never push unthrottled.
  */
 
 import * as repo from '$lib/db/repo';
@@ -25,7 +9,7 @@ import { db, type Task, type TaskList } from '$lib/db/schema';
 import { mergeChanges, WIRE_VERSION, type ChangeOp, type ChangeRow } from '@ikoro/sync';
 import { getSyncSettings, setSyncSettings } from './config';
 
-/** How many ops go in one push. Small on purpose: a retried request must be cheap. */
+/** Ops per push -- small so a retry stays cheap. */
 export const PUSH_BATCH_SIZE = 50;
 
 /** How many rows one pull page returns. */
@@ -35,7 +19,7 @@ export type SyncState = 'off' | 'idle' | 'pushing' | 'pulling' | 'error';
 
 export interface SyncStatus {
 	state: SyncState;
-	/** Set on `error`; the last failure, in words the UI can show. */
+	/** Set on `error` -- showable to the user. */
 	error: string | null;
 	pending: number;
 	lastSyncedAt: string | null;
@@ -46,7 +30,7 @@ export interface SyncStatus {
 /** One store's worth of dirty rows. Lists always precede tasks. */
 export type SyncQueue = { kind: 'list' | 'task'; rows: (TaskList | Task)[] }[];
 
-/** The transport, injected. Tests replace it; production passes the real one. */
+/** Injected so tests can fake it. */
 export interface SyncTransport {
 	push(ops: ChangeOp[]): Promise<{
 		accepted: { opId: string; entityId: string; rev: number }[];
@@ -89,10 +73,7 @@ export function currentStatus(): SyncStatus {
 }
 
 /**
- * Everything marked for pushing, in a stable order.
- *
- * The `byDirty` index holds only rows whose `dirty` is 1 — which is every row
- * that has changed since the server last confirmed it. It is the entire queue.
+ * Everything marked for pushing, in a stable order -- the `byDirty` index IS the queue.
  */
 export async function pendingRows(): Promise<SyncQueue> {
 	const [lists, tasks] = await Promise.all([
@@ -101,9 +82,7 @@ export async function pendingRows(): Promise<SyncQueue> {
 	]);
 
 	const queue: SyncQueue = [];
-	// Lists first: a task whose list has not arrived yet is skipped and counted,
-	// not dropped. Pushing a task before its list would create an orphan the
-	// server accepts and the client cannot render.
+	// Lists first: before its list lands, a task is an orphan the server accepts and the client cannot render.
 	if (lists.length) queue.push({ kind: 'list', rows: lists as unknown as TaskList[] });
 	if (tasks.length) queue.push({ kind: 'task', rows: tasks as unknown as Task[] });
 	return queue;
@@ -114,16 +93,12 @@ function toOp(kind: 'list' | 'task', row: TaskList | Task): ChangeOp {
 	const deleted = record.deletedAt !== null;
 
 	return {
-		// Deterministic from (kind, id, updatedAt): a retry of the same edit
-		// produces the SAME op id, which is what makes the server's idempotency
-		// work. A random id per attempt would defeat it entirely.
+		// Deterministic so a retry reuses the same op id -- that is what makes the server idempotent.
 		id: `${kind}:${record.id}:${record.updatedAt}`,
 		kind,
 		entityId: record.id,
 		op: deleted ? 'delete' : 'upsert',
-		// Device-scoped fields never travel: another device cannot use this
-		// phone's notification id, and a sync cursor from a server is meaningless
-		// offline.
+		// Device-scoped fields never travel.
 		payload: deleted
 			? {}
 			: kind === 'list'
@@ -142,11 +117,7 @@ function toOp(kind: 'list' | 'task', row: TaskList | Task): ChangeOp {
 }
 
 /**
- * Push everything dirty, then pull everything new.
- *
- * Idempotent and safe to call on an interval, on resume, or on demand: each
- * phase diffs the store against the server rather than assuming anything about
- * the last run.
+ * Push everything dirty, then pull everything new -- idempotent, safe on an interval, on resume or on demand.
  */
 export function sync(transport: SyncTransport): Promise<SyncStatus> {
 	if (inFlight) return inFlight;
@@ -159,8 +130,7 @@ export function sync(transport: SyncTransport): Promise<SyncStatus> {
 
 		try {
 			await push(transport);
-			// The cursor lives in `meta`, written after every page, so a long pull
-			// that dies halfway resumes from where it got to.
+			// Cursor is written after every page, so a half-dead pull resumes.
 			await pull(transport, (await repo.getMeta<number>('syncCursor')) ?? 0);
 			await repo.setMeta('lastSyncedAt', new Date().toISOString());
 
@@ -171,9 +141,7 @@ export function sync(transport: SyncTransport): Promise<SyncStatus> {
 				lastSyncedAt: await repo.getMeta<string>('lastSyncedAt')
 			});
 		} catch (error) {
-			// A failed sync must never lose the queue: the rows stay dirty, the
-			// cursor stays where it was, and the next attempt tries again. That is
-			// the whole reason the queue is a flag on the row.
+			// Nothing is lost: rows stay dirty and the cursor stays put for the next attempt.
 			return publish({
 				state: 'error',
 				error: error instanceof Error ? error.message : 'Sync failed.',
@@ -192,14 +160,7 @@ export async function countPending(): Promise<number> {
 	return groups.reduce((total, group) => total + group.rows.length, 0);
 }
 
-/**
- * Push one batch.
- *
- * Lists are pushed before tasks so a new task's list already exists on the
- * server when the task lands. Ops are sent in pages of `PUSH_BATCH_SIZE`; a
- * batch that fails is retried on the next cycle, and because the op ids are
- * deterministic the server recognises the replay.
- */
+/** Push one batch -- lists before tasks, in pages of `PUSH_BATCH_SIZE`; replays are recognised by op id. */
 export async function push(transport: SyncTransport): Promise<number> {
 	const groups = await pendingRows();
 	const ops = groups.flatMap((group) => group.rows.map((row) => toOp(group.kind, row)));
@@ -214,9 +175,7 @@ export async function push(transport: SyncTransport): Promise<number> {
 		const result = await transport.push(batch);
 		accepted += result.accepted.length;
 
-		// Clear `dirty` only for what the server CONFIRMED. A rejected op stays
-		// dirty so it is retried — clearing it would drop the edit silently, which
-		// is the one failure mode a sync client must never have.
+		// Only confirmed ops are cleared; a rejected op stays dirty and is retried.
 		for (const row of result.accepted) {
 			await clearDirty(row.entityId, row.rev);
 		}
@@ -249,9 +208,7 @@ export async function pull(transport: SyncTransport, since: number): Promise<num
 		applied += await applyChanges(page.changes);
 		cursor = page.nextRev;
 
-		// The cursor is persisted after every page, not once at the end: a long
-		// pull that dies halfway resumes from where it got to instead of
-		// re-downloading everything.
+		// Persist per page so a half-dead pull resumes instead of re-downloading.
 		await repo.setMeta('syncCursor', cursor);
 
 		if (!page.hasMore) break;
@@ -261,15 +218,7 @@ export async function pull(transport: SyncTransport, since: number): Promise<num
 }
 
 /**
- * Merge server rows into the local store.
- *
- * `mergeChanges` returns ONLY rows that actually differ. Writing an unchanged
- * row would bump its `updatedAt` and set `dirty`, and the next push would send
- * it straight back — an echo that never terminates.
- *
- * Rows are compared as `{id, updatedAt, deletedAt, payload}` rather than as the
- * full local record: the server only carries the syncable subset, so comparing
- * the whole record would call every remote row a change and guarantee the echo.
+ * Merge server rows into the local store -- only rows that actually differ, compared as {id, updatedAt, deletedAt, payload}, or the echo never ends.
  */
 interface SyncRow {
 	id: string;
@@ -283,8 +232,7 @@ export async function applyChanges(changes: ChangeRow[]): Promise<number> {
 
 	let written = 0;
 
-	// Lists first, always: a task whose list has not arrived yet renders as a
-	// task pointing at nothing.
+	// Lists first: a task pointing at a missing list renders as nothing.
 	for (const kind of ['list', 'task'] as const) {
 		const incoming = changes.filter((change) => change.kind === kind);
 		if (incoming.length === 0) continue;
@@ -310,15 +258,13 @@ export async function applyChanges(changes: ChangeRow[]): Promise<number> {
 			const previous = localRows.find((candidate) => candidate.id === row.id) ?? {};
 
 			await store.put({
-				// Start from the local record so device-scoped fields survive:
-				// this phone's notification id means nothing anywhere else, and a
-				// server cursor is meaningless offline.
+				// Start from the local record so device-scoped fields survive.
 				...previous,
 				...(row.payload as Record<string, unknown>),
 				id: row.id,
 				updatedAt: row.updatedAt,
 				deletedAt: row.deletedAt,
-				// A row that came FROM the server is by definition not pending.
+				// Came from the server, so not pending.
 				dirty: 0
 			} as Record<string, unknown>);
 			written++;
@@ -328,14 +274,12 @@ export async function applyChanges(changes: ChangeRow[]): Promise<number> {
 	return written;
 }
 
-/** The fields that travel, projected out of a local record for comparison. */
+/** The fields that travel, projected for comparison. */
 function syncableFields(row: Record<string, unknown>): unknown {
 	const { listId, title, notes, dueDate, dueTime, priority, alarmAt, name, sortOrder } =
 		row as Record<string, unknown>;
 
-	// A list has no `listId`/`title`; a task has no `name`. Returning `undefined`
-	// for absent keys keeps the projection stable, so the same row always
-	// projects to the same object and the comparison is meaningful.
+	// `undefined` for absent keys keeps the projection stable, so comparison means something.
 	return {
 		listId: listId ?? undefined,
 		title: title ?? undefined,
@@ -350,12 +294,7 @@ function syncableFields(row: Record<string, unknown>): unknown {
 }
 
 /**
- * Turn sync on for the first time.
- *
- * Everything already on the device is marked dirty, because the server has never
- * seen it. Forgetting this is the classic local-first sync bug: the user turns
- * sync on, their existing tasks silently never appear on their other phone, and
- * there is no error anywhere.
+ * Turn sync on for the first time -- mark everything dirty, or existing tasks never reach the server and nothing reports an error.
  */
 export async function enableSync(baseUrl: string): Promise<void> {
 	await repo.markAllDirty();

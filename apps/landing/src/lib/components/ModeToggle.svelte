@@ -4,12 +4,8 @@
 	import { buttonVariants, DropdownMenu } from '$lib/components/ui';
 
 	/**
-	 * The theme toggle in the site header.
-	 *
-	 * The shadcn-svelte dark-mode pattern: an icon button that opens a menu
-	 * with Light / Dark / System. The choice persists to localStorage under
-	 * the mode-watcher key, and the inline script in app.html applies it
-	 * before first paint so dark-mode users never see a light flash.
+	 * Theme toggle: a menu of Light / Dark / System. The choice persists under the
+	 * mode-watcher key, and an inline script in app.html applies it before first paint.
 	 */
 </script>
 

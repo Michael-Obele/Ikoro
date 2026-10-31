@@ -5,12 +5,7 @@ import { render, screen, fireEvent, cleanup } from '@testing-library/svelte';
 import TaskRow from '#lib/components/task/TaskRow.svelte';
 import type { Task } from '#lib/db/schema';
 
-/**
- * `repo` is mocked rather than driven against a real database: what this test is
- * about is the row's own behaviour — does one click produce exactly one write,
- * with the right id — and a real IndexedDB round trip would only add timing noise
- * on top of that question.
- */
+/** Guards the row's own behaviour — one click, one write, right id — with `repo` mocked. */
 vi.mock('#lib/db/repo', () => ({
 	toggleTask: vi.fn(async () => {})
 }));
@@ -46,9 +41,7 @@ beforeEach(() => {
 	vi.clearAllMocks();
 });
 
-// `globals` is off in this workspace (every test imports from vitest explicitly),
-// which also disables @testing-library/svelte's automatic afterEach cleanup.
-// Without this, each render stays in the document and `getByRole` finds several.
+// `globals` is off here, so @testing-library/svelte's automatic cleanup is disabled too.
 afterEach(cleanup);
 
 describe('TaskRow', () => {
@@ -108,9 +101,7 @@ describe('TaskRow', () => {
 	});
 
 	it('renders the colour edge with the palette value when the task has a colour', () => {
-		// INTENTIONAL DOM CHANGE: TaskRow now paints a 3px left edge for coloured
-		// tasks. The assertion is on the inline style, because that is the whole
-		// contract — the resolved palette value, painted as the bar's background.
+		// The contract is the inline style: the resolved palette value painted as the bar.
 		render(TaskRow, { props: { task: fixture({ color: 'teal' }) } });
 
 		const edge = screen.getByTestId('task-color-edge');
@@ -125,12 +116,7 @@ describe('TaskRow', () => {
 	});
 
 	/**
-	 * SUBTASKS. The bug these guard against is specific and silent: the row used a
-	 * `<self>` tag for its recursive call, and Svelte has no such tag — it compiled
-	 * to an unknown element that renders nothing. The "0/3" count still appeared, so
-	 * the row looked alive while the nested list was a zero-height `<ul>` full of
-	 * empty custom elements, and the chevron appeared to do nothing. Asserting on
-	 * the child's TEXT is what catches that; asserting on the count would not.
+	 * Subtask rows must be real rows, not just a count: asserting on the child's TEXT is what catches a nested list that renders nothing.
 	 */
 	it('renders its subtasks as real rows, not just a count', () => {
 		render(TaskRow, {

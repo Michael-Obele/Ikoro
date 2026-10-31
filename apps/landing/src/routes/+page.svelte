@@ -1,11 +1,5 @@
 <script lang="ts">
-	/**
-	 * The home page: the promise, then the evidence for it.
-	 *
-	 * The copy lives in `$lib/content` — this file decides where it goes and what
-	 * structure holds it. Editing a sentence here would let the sentence drift away
-	 * from the claims the tests check.
-	 */
+	/** The home page: the promise, then the evidence. Copy lives in `$lib/content`; this file only lays it out. */
 	import {
 		Alert,
 		AlertDescription,
@@ -30,12 +24,7 @@
 		views
 	} from '$lib/content';
 
-	/**
-	 * The release in the header, in words that match what the release actually
-	 * has. A tagged-but-still-building release says so here too — the home page
-	 * is the first place a download begins, so it cannot be the one page that
-	 * claims a file exists before it does.
-	 */
+	/** The release in the header -- a still-building release says so here too, never claiming a file early. */
 	const notice = $derived(releaseNotice(page.data.release));
 </script>
 
@@ -70,9 +59,8 @@
 			<Button size="lg" variant="outline" href="/download">What runs where</Button>
 		</div>
 
-		<!-- `role="note"` on purpose: this is a standing statement about the page,
-		     not something that just went wrong. Alert's own `role="alert"` would make
-		     assistive technology announce it as an urgent live update. -->
+		<!-- `role="note"` on purpose: a standing statement, not a failure. Alert's own
+		     `role="alert"` would have assistive technology announce it as urgent. -->
 		<Alert role="note" class="mt-12">
 			<CircleAlert aria-hidden="true" />
 			<AlertTitle>{notice.title}</AlertTitle>
@@ -167,8 +155,7 @@
 >
 	<Alert>
 		<CircleAlert aria-hidden="true" />
-		<!-- The version is the release GitHub returned at build time — the list below
-		     is standing copy, because no API knows what a version does not do. -->
+		<!-- The version comes from the build; the list below is standing copy. -->
 		<AlertTitle>In v{page.data.release.version}</AlertTitle>
 		<AlertDescription>
 			<ul class="mt-1 flex flex-col gap-1.5">

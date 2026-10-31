@@ -1,17 +1,7 @@
 /**
- * The ONE database instance, and the only one.
+ * The ONE database instance -- change events do not cross connections, so never a second one.
  *
- * svelte-idb's change notifications do not cross connections, so a second
- * `createReactiveDB()` for the reactive layer would open a separate connection
- * that never observes `repo.ts`'s writes. Everything — reads, mutations and
- * `liveAll()` subscriptions — goes through this object. That is also why
- * `repo.ts` is exposed from here rather than from the core `svelte-idb` entry
- * point: one instance means one event bus.
- *
- * The schema is declared COMPLETE at version 1, including the sync-only fields
- * (`rev`, `dirty`, `deletedAt`), so Phase A never performs an upgrade —
- * `onUpgrade` is a raw IndexedDB hook and "migration sugar" is unfinished
- * upstream, so the cheapest way to never need it is to never change the shape.
+ * Schema is complete at v1, sync fields included, so no `onUpgrade` is ever needed.
  */
 import { createReactiveDB } from 'svelte-idb/svelte';
 
@@ -43,24 +33,9 @@ export interface Task {
 	alarmAt: string | null; // ISO — the instant the alarm should fire
 	alarmId: string | null; // platform id returned by the scheduler
 	alarmFiredAt: string | null;
-	/**
-	 * Optional-by-design: a key into `lib/task-colors.ts` ('red', 'teal', …),
-	 * never a raw hex, so the palette stays auditable. OPTIONAL so adding it
-	 * needs no version bump and no index — IndexedDB stores whole records, an
-	 * absent key reads back as `undefined`, and the schema stays complete at
-	 * version 1. Null is the explicit "no colour" state.
-	 */
+	/** Key into `lib/task-colors.ts`, never raw hex. Optional, so no version bump or index is needed. */
 	color?: string | null;
-	/**
-	 * This device's sound for this task's alarm: the `content://` uri the system
-	 * ringtone picker returned, or null/absent for "the global default". OPTIONAL
-	 * for the same reason `color` is — no version bump, no index.
-	 *
-	 * DEVICE-SCOPED, like `alarmId`: a media uri from this phone's media store
-	 * means nothing on another device, so it never reaches the export file (the
-	 * backup schema is an allow-list that does not carry it). The Kotlin alarm
-	 * store is what actually needs it at fire time, copied in at arm time.
-	 */
+	/** Device-scoped `content://` ringtone uri, copied into the Kotlin store at arm time; never exported. */
 	ringtone?: string | null;
 	sortOrder: number;
 	createdAt: string;
@@ -83,9 +58,9 @@ export interface TaskInput {
 	parentId?: string | null;
 	repeat?: null | 'daily' | 'weekdays' | 'weekly' | 'monthly';
 	alarmAt?: string | null;
-	/** Optional task colour — see the comment on `Task.color`. */
+	/** Optional task colour -- see `Task.color`. */
 	color?: string | null;
-	/** Optional per-task alarm sound — see the comment on `Task.ringtone`. */
+	/** Optional per-task alarm sound -- see `Task.ringtone`. */
 	ringtone?: string | null;
 	sortOrder?: number;
 }
@@ -120,8 +95,7 @@ export const db = createReactiveDB({
 				byDirty: { keyPath: 'dirty' }
 			}
 		},
-		// App-level scalars: the sync cursor, the enabled flag, the last sync time.
-		// Declared at v1 so M11 needs no schema change.
+		// App-level scalars (sync cursor, enabled flag) -- declared at v1 so M11 needs no change.
 		meta: { keyPath: 'key' }
 	}
 });

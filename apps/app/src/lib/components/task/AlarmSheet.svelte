@@ -1,22 +1,5 @@
 <script lang="ts">
-	/**
-	 * "Remind me" — the control the whole product exists for.
-	 *
-	 * THE ROW IS THE TRUTH. `armed` and `time` are derived from the live task and
-	 * written straight back through `repo`; this control keeps no second copy of
-	 * either. The copy is how the switch could sit on while the store said
-	 * otherwise, and how the clock kept showing yesterday's time after the date
-	 * above it had already been changed.
-	 *
-	 * Mounted inside `TaskSheet`. The switch is optimistic-looking but the truth
-	 * is the OUTCOME: if the platform downgraded the alarm to inexact, or refused
-	 * it outright, that is shown here in words. A switch that flips on while the
-	 * reminder is quietly inexact is a lie the user discovers hours later, at
-	 * exactly the moment the promise was supposed to be kept.
-	 *
-	 * `alarmAt` is stored, never recomputed at fire time — a later timezone change
-	 * must not silently move an alarm that has already been made.
-	 */
+	/** "Remind me" — arms the alarm. The task row is the only state; no local copy. */
 	import { useDebounce } from 'runed';
 	import Switch from '$lib/components/ui/switch/switch.svelte';
 	import Label from '$lib/components/ui/label/label.svelte';
@@ -39,20 +22,13 @@
 
 	let { task }: { task: Task } = $props();
 
-	/**
-	 * The clock used when the task has no time of its own. One hour from now, not
-	 * "now" — an alarm that fires before the sheet is closed is a bug, not a
-	 * default. Held in state so it stays put while the sheet is open.
-	 */
+	/** Default clock: one hour from now, held in state so it stays put. */
 	let fallbackTime = $state('');
 
 	/** The switch reflects the STORE, not a local hope. */
 	const armed = $derived(task.alarmAt !== null);
 
-	/**
-	 * The clock shown, in priority order: the task's own time, then the fallback.
-	 * Writing the new value to `dueTime` is what makes this field move.
-	 */
+	/** The task's own time, else the fallback. */
 	const time = $derived(task.dueTime ?? fallbackTime);
 
 	let outcome = $state<
@@ -63,8 +39,7 @@
 	let sound = $state<string | null>(null);
 	let soundLabel = $state('Default');
 
-	/** Bumped when a clock entry is rejected, so the input can be re-rendered
-	 *  showing the store's value instead of the value it refused. */
+	/** Bumped on a rejected clock entry, to re-render the input with the stored value. */
 	let resetNonce = $state(0);
 
 	$effect(() => {
@@ -76,9 +51,7 @@
 		}
 	});
 
-	// The NAME of the sound, resolved natively. Runs whenever `sound` changes —
-	// including when the picker below returns — and degrades to a plain word
-	// when the uri cannot be resolved (a sound the device no longer has).
+	// Resolved natively; falls back to a plain word when the uri is gone.
 	$effect(() => {
 		void ringtoneTitleOf(sound).then(
 			(title) => (soundLabel = title ?? (sound ? 'Custom sound' : defaultSoundLabel()))
@@ -89,13 +62,7 @@
 		return ringtoneFor(task) ? 'All reminders (default)' : 'Default';
 	}
 
-	/**
-	 * The system ringtone picker, then re-arm.
-	 *
-	 * Re-arming matters: an alarm that is already armed carries its sound INSIDE
-	 * the platform's alarm record, so changing the sound on an armed task without
-	 * re-arming it would do nothing until the next reconcile happened to notice.
-	 */
+	/** Pick a ringtone, then re-arm — the sound lives inside the platform's alarm record. */
 	async function changeSound() {
 		if (busy) return;
 		const pick = await pickRingtone(ringtoneFor(task));
@@ -103,9 +70,7 @@
 		await repo.updateTask(task.id, { ringtone: pick.uri });
 		sound = pick.uri;
 		if (!armed) return;
-		// No `busy` juggling here: `arm()` owns that flag, and setting it before the
-		// call made `arm()` return immediately — which cancelled the old alarm and
-		// never armed the new one, leaving the reminder silently gone.
+		// `arm()` owns the busy flag; setting it here made it return early and drop the alarm.
 		if (task.alarmId) await getScheduler().cancel(task.alarmId);
 		await arm(true, time, pick.uri);
 	}
@@ -120,14 +85,7 @@
 		await arm(true, time, null);
 	}
 
-	/**
-	 * With no time on the task, the least surprising default is one hour from
-	 * now — not "now", which would fire before the user has closed the sheet.
-	 *
-	 * Deliberately not derived from the task: a task with no `dueTime` has no
-	 * natural reminder time, and borrowing its due date to invent one would
-	 * schedule an alarm the user never agreed to.
-	 */
+	/** One hour from now, never derived from the due date — that would arm an alarm nobody asked for. */
 	function defaultTime(): string {
 		const d = new Date(Date.now() + 3_600_000);
 		return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -139,13 +97,7 @@
 		if (!allowRoll || !at) return at;
 		if (new Date(at).getTime() > Date.now()) return at;
 
-		//
-		// The clock here is the DEFAULT (one hour from now), and the task's day may
-		// be long past. Rolling straight to "tomorrow" would move an overdue task a
-		// day into the future every time the switch was flipped; rolling to the
-		// nearest future occurrence of the same clock keeps it today when today still
-		// works, and only reaches tomorrow when the clock has already passed. An
-		// explicitly picked past time is still reported as invalid by the caller.
+		// Keep the same clock on the nearest future day; a past EXPLICIT time is still rejected by the caller.
 		const today = localDayString();
 		const todayAt = atLocal(today, hhmm);
 		if (todayAt && new Date(todayAt).getTime() > Date.now()) return todayAt;
@@ -175,17 +127,14 @@
 	) {
 		if (busy) return;
 		busy = true;
-		// The sheet is NOT keyed, and a subtask tap re-points `task` without
-		// unmounting this control. Remember which row this operation belongs to, so
-		// an arm that resolves late cannot stamp itself onto the next row.
+		// A subtask tap re-points `task` without unmounting; remember which row this arm belongs to.
 		const idAtEntry = task.id;
 		try {
 			const scheduler = getScheduler();
 
 			if (!next) {
 				if (task.alarmId) await scheduler.cancel(task.alarmId);
-				// `alarmFiredAt` goes too: a spent reminder is not a record to keep
-				// once the user has asked for it to be off.
+				// `alarmFiredAt` clears too: a spent reminder is not a record to keep.
 				await repo.updateTask(task.id, { alarmAt: null, alarmId: null, alarmFiredAt: null });
 				outcome = null;
 				return;
@@ -199,9 +148,7 @@
 				return;
 			}
 
-			// `armAlarm` is the GATED entry point: it refuses before scheduling when
-			// notifications are denied. Calling `schedule()` directly here is how an
-			// alarm used to be "armed" on a device that could never show it.
+			// `armAlarm` is the gated entry point — it refuses when notifications are denied.
 			const result = await armAlarm(scheduler, {
 				taskId: task.id,
 				title: task.title,
@@ -211,28 +158,19 @@
 			});
 
 			if (!result.ok) {
-				// Do NOT clear `alarmAt` here. The platform was never written, so any
-				// alarm that was already armed is still armed.
+				// Not clearing `alarmAt`: the platform was never written, so the old alarm still stands.
 				outcome = { ok: false, reason: result.reason };
 				return;
 			}
 
 			if (task.id !== idAtEntry) {
-				// The sheet moved to another row while the platform was arming this one.
-				// Nothing would ever record it, so cancel it rather than leave a phantom
-				// notification behind for the orphan sweep to find much later.
+				// The sheet moved rows; cancel rather than leave an orphan notification.
 				await scheduler.cancel(result.platformId);
 				return;
 			}
 
-			// Persist BEFORE reporting success: if the app dies between here and the
-			// write, reconcile() will re-arm it. The other way round would leave a
-			// notification with nothing in the store to reconcile against.
-			//
-			// `dueDate`/`dueTime` are written too, so the three can never disagree. A
-			// default clock can roll past midnight, and arming for "tomorrow" while the
-			// task still said "today" is exactly the stale-promise bug this control is
-			// here to prevent. A re-arm after a fire must not inherit the old stamp.
+			// Persist before reporting success so reconcile() can re-arm. The day and clock
+			// are written too: a default clock can roll past midnight.
 			await repo.updateTask(task.id, {
 				alarmAt: at,
 				dueDate: localDayOfInstant(at),
@@ -250,18 +188,10 @@
 		}
 	}
 
-	/**
-	 * Editing the clock while armed must MOVE the alarm, and must not cancel the
-	 * old one until the new value is known to be valid.
-	 *
-	 * The native time input fires `input` on every spinner tick, so the write is
-	 * debounced. Cancelling and re-arming per keystroke is how an intermediate
-	 * value reached the failure path and silently switched the reminder off.
-	 */
+	/** Debounced: the input fires per spinner tick, and re-arming per keystroke switched the reminder off. */
 	const commitTime = useDebounce((hhmm: string, forId: string) => {
 		void (async () => {
-			// A subtask tap re-points `task` without unmounting this control, so a
-			// queued write must prove it still belongs to the row it was typed on.
+			// A queued write must prove it still belongs to the row it was typed on.
 			if (task.id !== forId) return;
 
 			const at = instantFor(task, hhmm);
@@ -289,23 +219,13 @@
 	}, 250);
 
 	function changeTime(hhmm: string) {
-		// Ignore partial values the picker emits while the user is still choosing
-		// ("" while clearing, "1" mid-typing) — persisting those would delete the
-		// task's due time.
+		// Ignore partial values the picker emits mid-typing; they would delete the due time.
 		if (!/^\d{1,2}:\d{2}$/.test(hhmm)) return;
 		// A superseded call rejects with 'Cancelled'; that is normal, not an error.
 		commitTime(hhmm, task.id).catch(() => {});
 	}
 
-	/**
-	 * Switching rows (or unmounting) must not leave a queued write aimed at the
-	 * row we just left. runed's debounce is a plain timer with no teardown of its
-	 * own, so the cleanup is ours.
-	 *
-	 * Keyed on the ID, not the object: svelte-idb hands out a fresh row object on
-	 * every write, so an object-keyed effect would cancel a clock edit that was
-	 * still being typed the moment any other field saved.
-	 */
+	/** Cancel a queued write when the row changes. Keyed on the id: svelte-idb hands out a new object per write. */
 	const rowId = $derived(task.id);
 	$effect(() => {
 		rowId;
@@ -314,14 +234,7 @@
 
 	const isBrowser = $derived(detectPlatform() === 'browser');
 
-	/**
-	 * The three moments people actually mean, as one-tap choices.
-	 *
-	 * A native time picker is three taps and a spin. These cover "soon", "this
-	 * evening" and "first thing tomorrow" — and `when` is a real Date so the
-	 * choice can never land in the past (tonight's 8 pm becomes tomorrow's 8 pm
-	 * once it has passed).
-	 */
+	/** One-tap times; each is a real Date, so it can never land in the past. */
 	function quickTimes(): { label: string; when: Date }[] {
 		const soon = new Date(Date.now() + 3_600_000);
 
@@ -344,20 +257,13 @@
 	async function setQuick(when: Date) {
 		const dueDate = localDayOfInstant(when.toISOString());
 		const hhmm = `${String(when.getHours()).padStart(2, '0')}:${String(when.getMinutes()).padStart(2, '0')}`;
-		// Derived from the day + clock, not from `when`, so the instant has the same
-		// minute granularity as `dueTime`. A millisecond-precise instant would never
-		// compare equal to `deriveAlarmAt(...)`, and every later edit would look like
-		// a change.
+		// Derived from day + clock so it has minute granularity and compares equal to `deriveAlarmAt`.
 		const at = atLocal(dueDate, hhmm) ?? when.toISOString();
 		await repo.updateTask(task.id, { dueDate, dueTime: hhmm });
 		await arm(true, hhmm, ringtoneFor(task), at);
 	}
 
-	/**
-	 * The promise, in the user's own calendar — computed from the same instant the
-	 * alarm will be armed for, so the label cannot claim "Today" for a time that
-	 * actually rolls into tomorrow.
-	 */
+	/** Computed from the instant the alarm is armed for, so the label cannot say "Today" for tomorrow. */
 	function whenLabel(t: Task, hhmm: string): string {
 		const at = instantFor(t, hhmm, t.dueDate === null);
 		if (!at) return `At ${hhmm}`;
@@ -379,11 +285,7 @@
 	}
 </script>
 
-<!--
-	No border and no radius. This block sits inside TaskSheet, which already draws a
-	hairline between sections — a second box around it would be a card inside a
-	card, and the rounded one it used to be was the only rounded thing on the sheet.
--->
+<!-- No border or radius: TaskSheet already draws the hairline between sections. -->
 <div class="grid grid-cols-1 gap-2.5">
 	<div class="flex items-center justify-between gap-3">
 		<Label for="alarm-{task.id}" class="text-sm font-medium">Remind me</Label>
@@ -400,12 +302,7 @@
 			<Label for="alarm-time-{task.id}" class="text-xs text-muted-foreground">
 				{whenLabel(task, time)}
 			</Label>
-			<!--
-				Keyed on the clock PLUS the rejection counter: when an entry is
-				refused, the store still holds the accepted time, and without a
-				re-render the input would keep displaying the value it just said no
-				to. Harnessing the store value keeps the field honest.
-			-->
+			<!-- Keyed on the rejection counter too, so a refused entry re-renders with the stored time. -->
 			{#key resetNonce}
 				<Input
 					id="alarm-time-{task.id}"
@@ -438,11 +335,7 @@
 			</div>
 		{/if}
 	{:else}
-		<!--
-			One-tap times. Offered only while the reminder is OFF: with it armed, the
-			useful controls are the clock and the sound, and a chip row would be a
-			third way to do the same thing.
-		-->
+		<!-- Quick times, offered only while the reminder is off. -->
 		<div class="flex flex-wrap gap-1.5">
 			{#each quickTimes() as option (option.label)}
 				<Button

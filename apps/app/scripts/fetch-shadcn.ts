@@ -1,12 +1,6 @@
 /**
- * Fetches shadcn-svelte components straight from the public registry.
- *
- * Why not `bunx shadcn-svelte add`? The CLI hangs in this environment (it never
- * prints, never writes). The registry is the same source the CLI reads — a JSON
- * document per component, pinned to the style in components.json — so fetching it
- * directly is deterministic and reviewable, and it keeps the Bun-only rule.
- *
- *   bun scripts/fetch-shadcn.ts checkbox dialog sheet ...
+ * Fetches shadcn-svelte components from the public registry — `bunx shadcn-svelte add` hangs here.
+ * Usage: `bun scripts/fetch-shadcn.ts <component...>`
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
@@ -49,12 +43,8 @@ function resolvePath(file: RegistryFile): string {
 	return base ? join(ROOT, base, ...rest) : join(ROOT, file.path);
 }
 
-/**
- * The CLI rewrites these placeholders to the user's configured aliases before it
- * writes a file. The raw registry JSON still contains them verbatim, so doing it
- * here is what keeps `bun run check` honest — a literal `$UTILS$.js` in a
- * component is a broken import, not a placeholder.
- */
+// The raw registry JSON ships `$UTILS$`-style placeholders verbatim; left alone
+// they are broken imports, which is what keeps `bun run check` honest.
 const PLACEHOLDERS: Record<string, string> = {
 	$UTILS$: '$lib/utils',
 	$UI$: '$lib/components/ui',

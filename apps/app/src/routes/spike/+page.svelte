@@ -1,38 +1,8 @@
 <script lang="ts">
 	/**
-	 * The M4-S1 device harness.
-	 *
-	 * ⚠️ THIS ROUTE IS NOT A THROWAWAY. The build plan says to build a throwaway
-	 * spike route, prove the alarm on a device, and delete it. The device gate has
-	 * NOT been cleared — see `docs/build/M4-alarm-engine.md` § Findings — so this
-	 * route is the tool that clears it, and it stays until someone runs it.
-	 *
-	 * WHAT IT DOES: schedules a real alarm two minutes out through the SHIPPING alarm
-	 * seam (`getScheduler()` → the `IkoroAlarm` plugin on Android), and shows every raw
-	 * value it returned. Nothing here is mocked.
-	 *
-	 * It used to drive `@capacitor/local-notifications` directly. That plugin is no
-	 * longer what arms a reminder, so the gate was validating a transport the app had
-	 * retired — a green run would have proved nothing about the promise the product
-	 * makes. Going through the seam means this route exercises the same permission
-	 * gate, the same id hashing and the same native plugin that a real reminder does.
-	 *
-	 * HOW TO RUN THE GATE:
-	 *
-	 *   1. `bun run build && bunx cap sync android`
-	 *   2. `cd android && ./gradlew assembleDebug`
-	 *   3. `adb install -r app/build/outputs/apk/debug/app-debug.apk`
-	 *   4. Open this route on the device, tap "Schedule in 2 minutes", note the
-	 *      time, then force-stop and idle:
-	 *
-	 *        adb shell am force-stop com.michaelobele.ikoro
-	 *        adb shell dumpsys deviceidle force-idle
-	 *
-	 *   5. Wait past the alarm time. The notification must arrive AT that minute
-	 *      (±60 s) with the app killed and the screen off.
-	 *   6. Record the result in the milestone's `## Findings`.
-	 *
-	 * When the gate passes, this route can be deleted.
+	 * The M4-S1 device harness — ⚠️ NOT a throwaway. The gate has not been cleared, so this route
+	 * stays until it is run on a real device; steps are in `docs/build/M4-alarm-engine.md`.
+	 * Schedules a real alarm two minutes out through the shipping alarm seam, nothing mocked.
 	 */
 	import Button from '$lib/components/ui/button/button.svelte';
 	import { getScheduler, armAlarm } from '$lib/alarms/scheduler';
@@ -41,11 +11,7 @@
 	/** Two minutes: long enough to arm, short enough not to make anybody wait. */
 	const DELAY_MS = 120_000;
 
-	/**
-	 * A fixed fake task id. The native side only needs an id to key the alarm and
-	 * to name it on the ringing screen, and the shipping `hashId` mapping is what
-	 * turns it into the 32-bit notification id — so this exercises the real path.
-	 */
+	/** A fixed fake task id: the shipping `hashId` mapping is what makes it a real notification id. */
 	const TASK_ID = 'spike';
 	const PLATFORM_ID = String(hashId(TASK_ID));
 
@@ -60,8 +26,7 @@
 		busy = true;
 		scheduleError = null;
 		try {
-			// The same gate the app runs before arming anything. If this reports
-			// `denied`, a real reminder would have been refused too.
+			// The same gate the app runs before arming anything.
 			const scheduler = getScheduler();
 			const gate = await scheduler.ensureReady();
 			permissions = gate;

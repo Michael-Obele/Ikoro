@@ -10,14 +10,7 @@ import {
 } from '#lib/utils/time';
 import type { Task } from '#lib/db/schema';
 
-/**
- * Pure logic — no database, no DOM — so this stays on the default `node`
- * environment.
- *
- * The whole file exists to stop one specific class of bug: a task that is due
- * "today" being treated as due tomorrow because something compared a local
- * calendar day against a UTC instant. Every case below is chosen to break that.
- */
+/** Guards calendar-day logic: a task due "today" must never be read as due tomorrow via UTC. */
 
 function task(overrides: Partial<Task> = {}): Task {
 	return {
@@ -50,8 +43,6 @@ describe('todayISO', () => {
 	});
 
 	it('reads the LOCAL day even when the UTC day is different', () => {
-		// 23:30 local on the 1st is already the 2nd in UTC for any positive
-		// offset. `new Date().toISOString()` would answer "the 2nd" here.
 		const d = new Date(2026, 2, 1, 23, 30);
 		expect(todayISO(d)).toBe('2026-03-01');
 	});
@@ -72,9 +63,6 @@ describe('isoDaysAgo', () => {
 	});
 
 	it('crosses a DST boundary without drifting', () => {
-		// Late March is when most of Europe changes offset. Counting in
-		// milliseconds here would land on the 23rd; counting in calendar days
-		// lands on the 22nd, which is the day the user meant.
 		const now = new Date(2026, 2, 30, 12);
 		const result = isoDaysAgo(now, 7);
 		const expected = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);

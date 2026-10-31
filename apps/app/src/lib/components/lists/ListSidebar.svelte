@@ -1,15 +1,7 @@
 <script lang="ts">
 	/**
-	 * Navigation. In the desktop sidebar the views come first, then the user's own
-	 * lists. In the phone's drawer the lists come first and the views are gone:
-	 * Today / Upcoming / Done already own the bottom bar, so repeating them here
-	 * would only push the lists (the reason the drawer was opened) down the panel.
-	 * Settings has no bottom-bar slot, so the drawer keeps it.
-	 *
-	 * Reads the active route from `$app/state` (Kit 3 removed `$app/stores`; a
-	 * module-level `$state` object is the reactive replacement). Every row
-	 * highlights itself from `page.url.pathname` rather than from a prop, so a
-	 * row can never be out of step with where the user actually is.
+	 * Navigation contents for both shells: desktop sidebar and phone drawer. Each row
+	 * highlights itself from `page.url.pathname`.
 	 */
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
@@ -28,11 +20,7 @@
 	import ListDialog from './ListDialog.svelte';
 	import { liveListById, liveLists } from '$lib/stores/view';
 
-	// The responsive shell (sidebar / sheet) lives in +layout.svelte; this component
-	// renders the contents of both. `variant` is how the shell tells them apart: the
-	// desktop aside wants the full navigation, the phone's drawer wants only the
-	// lists plus the two destinations the bottom bar cannot reach: Settings and the
-	// theme switch.
+	// `variant` says which shell is asking: the drawer keeps only the lists, Settings and the theme.
 	let { variant = 'sidebar' }: { variant?: 'sidebar' | 'drawer' } = $props();
 
 	let dialog = $state<'create' | 'rename' | 'delete'>('create');
@@ -43,8 +31,7 @@
 	const lists = $derived(liveLists());
 	const path = $derived(page.url.pathname);
 
-	// Settings is pulled out of VIEWS because the drawer renders it on its own,
-	// below the lists; the sidebar keeps it as the last of the views.
+	// Pulled out of VIEWS so the drawer can render it below the lists.
 	const VIEWS = [
 		{ href: '/today', label: 'Today', icon: CalendarClock },
 		{ href: '/upcoming', label: 'Upcoming', icon: CalendarDays },
@@ -66,8 +53,7 @@
 	}
 
 	function onDialogDone(result: { created?: string; renamed?: string; deleted?: string }) {
-		// Deleting the list you are standing in has to move you somewhere real,
-		// or the route renders an empty state that looks like data loss.
+		// Deleting the list you are standing in must move you somewhere real.
 		if (result.deleted && path.startsWith(`/lists/${result.deleted}`)) {
 			void goto('/today');
 		}
@@ -77,11 +63,7 @@
 
 {#snippet navRow(item: NavItem)}
 	<li>
-		<!--
-			The active state is a 2px bar on the leading edge plus a tinted row, not a
-			rounded pill. It is the same indicator language as the phone's bottom bar,
-			so "where am I" reads identically on both layouts.
-		-->
+		<!-- Same indicator language as the phone's bottom bar: 2px bar plus a tinted row. -->
 		<a
 			href={item.href}
 			aria-current={isActive(item.href) ? 'page' : undefined}
@@ -155,12 +137,7 @@
 {/snippet}
 
 <nav class="flex h-full flex-col gap-1 p-3" aria-label="Main">
-	<!--
-		The desktop sidebar carries the brand and the full set of views. The phone's
-		drawer drops both: Today / Upcoming / Done already sit in the bottom bar, so
-		repeating them only pushed the lists (the reason the drawer was opened) below
-		the fold.
-	-->
+	<!-- Sidebar carries the brand and the views; the drawer drops both — they already sit in the bottom bar. -->
 	{#if variant === 'sidebar'}
 		<a href="/today" class="mb-3 flex items-center gap-2 px-2 text-sm font-semibold tracking-tight">
 			<CalendarClock class="size-4 text-primary" />
@@ -177,23 +154,14 @@
 
 	{@render listsSection()}
 
-	<!--
-		Settings has no bottom-bar slot, so the drawer must carry it or it becomes
-		unreachable on a phone. In the sidebar it is simply the last view above.
-	-->
+	<!-- Settings has no bottom-bar slot, so the drawer must carry it. -->
 	{#if variant === 'drawer'}
 		<ul class="mt-5 grid gap-0.5">
 			{@render navRow(SETTINGS)}
 		</ul>
 	{/if}
 
-	<!--
-		The theme switch lives here, not only in Settings, because this component
-		IS the navigation: it renders as the desktop sidebar and (inside the sheet
-		in +layout.svelte) as the phone's nav drawer. In the drawer it is the only
-		copy, so it has to survive the smaller surface too. `mt-auto` pins it to the
-		bottom, where a global setting is expected to be.
-	-->
+	<!-- `mt-auto` pins it to the bottom, where a global setting is expected to be. -->
 	<div class="mt-auto pt-4">
 		<ThemeToggle />
 	</div>

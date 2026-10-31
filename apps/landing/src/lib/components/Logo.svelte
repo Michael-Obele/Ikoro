@@ -1,11 +1,5 @@
 <script lang="ts">
-	/**
-	 * The app icon, used as the wordmark's picture.
-	 *
-	 * `alt=""` on purpose: every place this appears already sets the name in text
-	 * beside it, so announcing the logo again would just make a screen reader say
-	 * "Ikoro, image" after it has already read "Ikoro".
-	 */
+	/** The app icon for the wordmark. `alt=""` is on purpose: the name is always set in text beside it. */
 	let { class: className = 'size-8' }: { class?: string } = $props();
 </script>
 

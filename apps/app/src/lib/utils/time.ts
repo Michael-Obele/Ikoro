@@ -1,22 +1,7 @@
 /**
- * Every date the app shows, and every instant it arms.
- *
- * This file is deliberately PURE — no database, no Svelte, no Capacitor, no DOM.
- * Date handling is where a reminder app quietly breaks: "due today" silently
- * becomes "due tomorrow" because something compared a local calendar day against
- * a UTC instant, and the user finds out at 9am the following day. Keeping the
- * arithmetic here, with no ambient state to get wrong, is the defence.
- *
- * The three rules everything below obeys:
- *
- *  1. `dueDate` is a LOCAL calendar day (`YYYY-MM-DD`), never an instant. It is
- *     read with `getFullYear()` / `getMonth()` / `getDate()` — in the viewer's own
- *     timezone, the same day the user typed.
- *  2. `new Date('2026-01-01')` parses as UTC midnight, which in any negative
- *     offset is the previous day. Local days go through `parseLocalDay`.
- *  3. Days are counted in CALENDAR days, never by dividing milliseconds by
- *     86_400_000 — that arithmetic is an hour out across a DST boundary, which is
- *     enough to put a task on the wrong day twice a year.
+ * Every date the app shows and every instant it arms. Deliberately PURE: no db, no Svelte, no DOM.
+ * `dueDate` is a LOCAL day — `new Date('2026-01-01')` parses as UTC and lands a day early.
+ * Days are counted in calendar days; dividing ms by 86_400_000 is an hour out across DST.
  */
 
 /** Mirrors `repo.PAST_WINDOW_DAYS`; a literal so this file imports nothing. */
@@ -59,8 +44,7 @@ export function todayWindowStart(now: Date = new Date()): string {
 export function daysUntil(day: string, now: Date = new Date()): number {
 	const a = parseLocalDay(todayISO(now));
 	const b = parseLocalDay(day);
-	// Two local midnights are not always 86_400_000 ms apart when a DST boundary
-	// sits between them, so correct for it rather than trusting the division.
+	// Two local midnights are not always 86_400_000 ms apart across a DST boundary.
 	const tzDrift =
 		a.getTimezoneOffset() === b.getTimezoneOffset()
 			? 0
@@ -69,12 +53,8 @@ export function daysUntil(day: string, now: Date = new Date()): number {
 }
 
 /**
- * The ISO instant for a local date + time pair — or `null` if either is missing.
- *
- * This is the ONLY place a `dueDate` + `dueTime` pair becomes an instant. It runs
- * once, when the user sets the time; the result is stored in `alarmAt` and never
- * recomputed, so a later timezone change cannot silently move an alarm that has
- * already been promised.
+ * The ISO instant for a local date + time pair, or `null`. The ONLY place a pair becomes an
+ * instant — the result is stored in `alarmAt` and never recomputed.
  */
 export function atLocal(dateISO: string | null, timeHHmm: string | null): string | null {
 	if (!dateISO || !timeHHmm) return null;
@@ -100,12 +80,8 @@ export function isPastDue(
 }
 
 /**
- * Group tasks by dueDate.
- *
- * Group order is FIRST-SEEN, not sorted, and within a group the input order is
- * preserved: callers have already decided the ordering that matters (most
- * overdue first, say) and re-sorting here would quietly undo it. Undated tasks
- * are dropped — they have no day to group under.
+ * Group tasks by dueDate. Order is first-seen and input order is kept — callers have
+ * already decided the ordering. Undated tasks are dropped.
  */
 export function groupByDay<T extends { dueDate: string | null }>(
 	tasks: T[]
@@ -148,12 +124,8 @@ export function formatDayHeading(day: string, now: Date = new Date()): string {
 }
 
 /**
- * `null` in, `null` out — an undated task has nothing to say about its due date,
- * and every caller would otherwise have to re-check.
- *
- * The result carries a `tone`, not just text: "Overdue" and "Due today" are the
- * same kind of string but must not look the same on screen, and deciding that
- * with a substring test at the call site is how it drifts.
+ * `null` in, `null` out. The result carries a `tone` as well as text, so "Overdue" and
+ * "Due today" cannot drift into looking the same.
  */
 export function formatDue(
 	task: { dueDate: string | null; dueTime: string | null; completedAt: string | null },

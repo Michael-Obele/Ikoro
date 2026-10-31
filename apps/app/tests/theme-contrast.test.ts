@@ -3,36 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 /**
- * WCAG 2.1 CONTRAST AUDIT OF THE REAL PALETTE.
- *
- * WHY THIS FILE PARSES CSS INSTEAD OF LISTING COLOURS.
- *
- * An earlier version of this idea kept the OKLCH values inline in the test, as
- * constants. That is a test of a copy. The moment someone edits `layout.css`
- * the suite still passes, and the app ships at 4.7:1 while a green checkmark
- * says AAA. This file reads `src/routes/layout.css`, pulls the custom
- * properties out of the `:root` and `.dark` blocks, and measures THOSE. The
- * only way to make it pass is to make the stylesheet pass.
- *
- * WHY AAA, SPECIFICALLY.
- *
- * Ikoro's users include people with ADHD, for whom low-contrast text is a
- * real attention cost rather than an aesthetic complaint. AA (4.5:1) is the
- * floor a normal site settles for; 7:1 is the number that was asked for, so
- * 7:1 is what is asserted.
- *
- * WHAT THE NUMBERS ARE.
- *
- * - `oklch()` -> linear sRGB -> XYZ -> WCAG relative luminance, per the
- *   conversion CSS Color 4 specifies. Full matrices are in `oklchToLinearSrgb`
- *   below; the values are not eyeballed or approximated.
- * - Out-of-gamut colours are gamut-mapped the way CSS Color 4 specifies (hold L
- *   and H, binary-search C down until the colour fits sRGB). Skipping this step
- *   silently clamps channels and produces ratios that match nothing the user sees.
- * - Alpha is composited. This is not bookkeeping pedantry: the generated
- *   components paint `focus-visible:ring-ring/50` and `dark:bg-destructive/20`,
- *   so the colour on screen is the token AT THAT ALPHA over its backdrop.
- *   Asserting the opaque token would be asserting a colour the app never draws.
+ * Guards the real palette at AAA by parsing `src/routes/layout.css` and compositing alpha as the components paint — so a stylesheet edit cannot leave a green test behind.
  */
 
 const CSS_PATH = fileURLToPath(new URL('../src/routes/layout.css', import.meta.url));
@@ -42,9 +13,7 @@ const AAA_TEXT = 7;
 /** WCAG 2.1 SC 1.4.11 non-text contrast. AAA and AA agree here. */
 const NON_TEXT = 3;
 
-/* ------------------------------------------------------------------ *
- * Colour maths
- * ------------------------------------------------------------------ */
+/* Colour maths */
 
 type Rgb = readonly [number, number, number];
 
@@ -81,11 +50,7 @@ function oklchToSrgbRaw(L: number, C: number, hue: number): Rgb {
 const isInSrgb = (rgb: Rgb): boolean =>
 	rgb.every((v) => v >= -GAMUT_EPSILON && v <= 1 + GAMUT_EPSILON);
 
-/**
- * CSS Color 4 gamut mapping: keep lightness and hue, reduce chroma until the
- * colour is representable in sRGB. Browsers do this when rendering `oklch()`,
- * so it has to happen here too or every out-of-gamut ratio is fiction.
- */
+/** CSS Color 4 gamut mapping: reduce chroma until sRGB-representable, as browsers do. */
 function gamutMap(L: number, C: number, hue: number): { rgb: Rgb; chroma: number } {
 	if (isInSrgb(oklchToSrgbRaw(L, C, hue))) {
 		return { rgb: oklchToSrgbRaw(L, C, hue), chroma: C };
@@ -117,9 +82,7 @@ function contrast(fg: Rgb, bg: Rgb): number {
 const composite = (fg: Rgb, bg: Rgb, alpha: number): Rgb =>
 	fg.map((c, i) => c * alpha + bg[i] * (1 - alpha)) as unknown as Rgb;
 
-/* ------------------------------------------------------------------ *
- * Parsing layout.css
- * ------------------------------------------------------------------ */
+/* Parsing layout.css */
 
 interface Colour {
 	rgb: Rgb;
@@ -153,14 +116,7 @@ function parseColour(token: string, raw: string): Colour {
 }
 
 /**
- * Reads one top-level `<selector> { ... }` block out of the stylesheet.
- *
- * The selector is matched at the START OF A LINE and must be followed by the
- * brace. A plain `indexOf('.dark')` is wrong, and was: the stylesheet's first
- * line of `.dark` is inside `@custom-variant dark (&:is(.dark *));`, so a
- * substring search found that one, walked forward to the next `{`, and returned
- * the `:root` block under the label "dark". Both themes then measured the same
- * palette and the dark audit was silently worthless.
+ * Reads one top-level `<selector> { ... }` block, matched at the start of a line — `.dark` also appears inside `@custom-variant dark (...)`, and a substring search silently measured `:root` twice.
  */
 function readBlock(css: string, selector: string): Record<string, string> {
 	const start = css.search(
@@ -191,10 +147,7 @@ function readBlock(css: string, selector: string): Record<string, string> {
 const css = readFileSync(CSS_PATH, 'utf8');
 
 /**
- * Raw token values, parsed lazily by `colour()`. `--radius` is not a colour and
- * lives in the same block, so parsing everything up front would make a non-colour
- * token a test failure. A colour token that is malformed still throws the moment
- * something measures it.
+ * Raw token values, parsed lazily by `colour()`: `--radius` shares the block and is not a colour.
  */
 function palette(selector: string): Record<string, string> {
 	return readBlock(css, selector);
@@ -213,9 +166,7 @@ const THEMES = [
 
 type ThemeId = (typeof THEMES)[number]['id'];
 
-/* ------------------------------------------------------------------ *
- * The pairs the app actually paints
- * ------------------------------------------------------------------ */
+/* The pairs the app actually paints */
 
 type Pair = {
 	/** Shown in the audit table, so the report names what a user sees. */
@@ -227,11 +178,7 @@ type Pair = {
 	/** A translucent colour laid over `bg`, for `bg-destructive/20`-style fills. */
 	tint?: { token: string; alpha: number };
 	/**
-	 * Restricts the pair to one theme, for variants that only exist in one.
-	 * The destructive Button is `bg-destructive/10` with `dark:bg-destructive/20`,
-	 * so the light theme never paints the /20 tint. Asserting it there would test
-	 * a rendering that cannot occur, and "fixing" it would mean distorting the
-	 * light palette to satisfy a screen nobody sees.
+	 * Restricts the pair to one theme: the destructive Button is `bg-destructive/10` with `dark:bg-destructive/20`, so the light theme never paints the /20 tint.
 	 */
 	only?: ThemeId[];
 	min: number;
@@ -250,9 +197,7 @@ const TEXT_PAIRS: Pair[] = [
 	{ label: 'foreground on popover', fg: 'foreground', bg: 'popover', min: AAA_TEXT },
 	{ label: 'foreground on muted', fg: 'foreground', bg: 'muted', min: AAA_TEXT },
 	{ label: 'foreground on accent', fg: 'foreground', bg: 'accent', min: AAA_TEXT },
-	// The two that always fail first. `text-muted-foreground` is used for every
-	// secondary line in the app — timestamps, counts, hints — so it is the single
-	// pair that decides whether the AAA claim is real.
+	// `text-muted-foreground` carries every secondary line — the pair that decides if AAA is real.
 	{
 		label: 'muted-foreground on background',
 		fg: 'muted-foreground',
@@ -296,9 +241,7 @@ const TEXT_PAIRS: Pair[] = [
 	},
 	{ label: 'destructive on background', fg: 'destructive', bg: 'background', min: AAA_TEXT },
 	{ label: 'destructive on card', fg: 'destructive', bg: 'card', min: AAA_TEXT },
-	// The destructive Button and DropdownMenuItem paint `bg-destructive/10` and
-	// `dark:bg-destructive/20` behind `text-destructive`, so that is the real
-	// backdrop for the word "Delete" in both themes.
+	// `bg-destructive/10` (light) and `dark:bg-destructive/20` are the real backdrop for "Delete".
 	{
 		label: 'destructive on destructive/10 over background',
 		fg: 'destructive',
@@ -332,8 +275,7 @@ const TEXT_PAIRS: Pair[] = [
 		only: ['light'],
 		min: AAA_TEXT
 	},
-	// The DropdownMenuItem delete row is `text-destructive` on the popover surface,
-	// and turns to `bg-accent` on focus.
+	// The delete row sits on the popover surface and on `bg-accent` when focused.
 	{ label: 'destructive on popover', fg: 'destructive', bg: 'popover', min: AAA_TEXT },
 	{
 		label: 'destructive on accent (menu item, focused)',
@@ -347,9 +289,7 @@ const TEXT_PAIRS: Pair[] = [
 		bg: 'destructive',
 		min: AAA_TEXT
 	},
-	// `--input` is a border colour AND a translucent fill (`bg-input/50`,
-	// `disabled:bg-input/50`). A token can pass as a 3:1 boundary and still fail
-	// as a backdrop for 12px body text, so the fill case is asserted too.
+	// `--input` is a border AND a translucent fill: a token can pass as a 3:1 boundary and still fail as a text backdrop.
 	{
 		label: 'foreground on input/50 over card',
 		fg: 'foreground',
@@ -371,14 +311,11 @@ const NON_TEXT_PAIRS: Pair[] = [
 	{ label: 'border on card', fg: 'border', bg: 'card', min: NON_TEXT },
 	{ label: 'border on muted', fg: 'border', bg: 'muted', min: NON_TEXT },
 	{ label: 'sidebar-border on sidebar', fg: 'sidebar-border', bg: 'sidebar', min: NON_TEXT },
-	// `--input` is the boundary of every text field, checkbox, switch and
-	// outline button. SC 1.4.11 is about exactly this: identifying a control.
+	// `--input` bounds every field, checkbox, switch and outline button — exactly SC 1.4.11.
 	{ label: 'input on background (control boundary)', fg: 'input', bg: 'background', min: NON_TEXT },
 	{ label: 'input on card (control boundary)', fg: 'input', bg: 'card', min: NON_TEXT },
 	{ label: 'sidebar-ring on sidebar', fg: 'sidebar-ring', bg: 'sidebar', min: NON_TEXT },
-	// Focus is the one non-text affordance this app cannot afford to be quiet
-	// about. Both the opaque token AND the 50 %-alpha form the generated
-	// components actually paint (`focus-visible:ring-ring/50`) are asserted.
+	// Both the opaque ring and the 50 %-alpha form the components paint (`focus-visible:ring-ring/50`).
 	{ label: 'ring on background (opaque token)', fg: 'ring', bg: 'background', min: NON_TEXT },
 	{ label: 'ring on card (opaque token)', fg: 'ring', bg: 'card', min: NON_TEXT },
 	{ label: 'ring on muted (opaque token)', fg: 'ring', bg: 'muted', min: NON_TEXT },
@@ -412,9 +349,7 @@ const NON_TEXT_PAIRS: Pair[] = [
 	{ label: 'primary on card (switch thumb, checked)', fg: 'primary', bg: 'card', min: NON_TEXT }
 ];
 
-/* ------------------------------------------------------------------ *
- * Measurement
- * ------------------------------------------------------------------ */
+/* Measurement */
 
 interface Measurement {
 	ratio: number;
@@ -428,11 +363,7 @@ function measure(tokens: Record<string, string>, pair: Pair): Measurement {
 	const fg = colour(tokens, pair.fg);
 	const bg = colour(tokens, pair.bg);
 
-	// Backdrop first: the destructive Button paints `bg-destructive/10` in the
-	// light theme and `dark:bg-destructive/20`, so the word "Delete" actually sits
-	// on a tint of the page, not on the page. Resolve the tint over `bg` before
-	// anything else — mixing it up composites the backdrop with itself, which is a
-	// no-op that makes the number look fine while measuring nothing.
+	// Resolve the tint over `bg` first — compositing the backdrop with itself measures nothing.
 	let backdrop = bg.rgb;
 	if (pair.tint) {
 		backdrop = composite(colour(tokens, pair.tint.token).rgb, bg.rgb, pair.tint.alpha);
@@ -486,8 +417,7 @@ function report() {
 				(failures ? `, ${failures} FAIL` : '')
 		);
 
-		// Out-of-gamut tokens are reported, because a silently clamped channel
-		// is how a palette ends up looking different on screen than in the spec.
+		// A silently clamped channel is how the spec and the screen drift apart.
 		const mapped = Object.keys(tokens)
 			.filter((name) => OKLCH_RE.test(tokens[name]))
 			.map((name) => [name, colour(tokens, name)] as const)
@@ -522,9 +452,7 @@ describe('Ikoro palette — WCAG 2.1 AAA contrast', () => {
 	}
 
 	it('no failure is a pass that only appears after rounding', () => {
-		// The failure this whole file exists to prevent is someone reading
-		// "6.94:1" as "7:1" and calling it AAA. The table prints two decimals, so
-		// the printed number and the raw ratio must agree about pass or fail.
+		// Reading "6.94:1" as "7:1" is the failure; printed and raw must agree on pass/fail.
 		for (const { theme, rows } of results) {
 			for (const row of rows) {
 				const printed = Number.parseFloat(row.measured);
@@ -538,12 +466,7 @@ describe('Ikoro palette — WCAG 2.1 AAA contrast', () => {
 
 	it('leaves no pure #000 ink and no pure #fff page', () => {
 		/*
-		 * The rule is not "no colour may ever be 0 or 255". A light theme needs
-		 * one brightest surface or nothing reads as white, and --card being
-		 * #ffffff is fine; what is not fine is the halation pairing — pure black
-		 * TEXT on pure black-adjacent darkness, or pure white text on a pure
-		 * white page. So the guard is on the ink tokens and on the darkest dark
-		 * surfaces, which is where the blooming actually happens on OLED.
+		 * Not "no colour may be 0 or 255" — a #ffffff card is fine. What is not fine is halation: pure black ink on near-black, or pure white text on a pure white page.
 		 */
 		for (const theme of THEMES) {
 			const tokens = palette(theme.selector);

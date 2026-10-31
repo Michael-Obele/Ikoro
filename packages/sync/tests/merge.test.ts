@@ -10,11 +10,7 @@ import {
 } from '@ikoro/sync';
 import * as v from 'valibot';
 
-/**
- * The merge rules are the only thing in this repo that both the phone and the
- * server must agree on EXACTLY. If these drift, sync bugs stop being
- * reproducible — so the edge cases are the tests, not the happy path.
- */
+/** The merge rules are the only thing the phone and the server must agree on exactly. */
 
 interface Row {
 	id: string;
@@ -39,8 +35,7 @@ describe('mergeRow — the two rules that matter', () => {
 	});
 
 	it('a tombstone is never resurrected by a newer live row', () => {
-		// The phone's clock is a week fast and it pushes a stale copy of a task the
-		// user deleted on the laptop. The delete must win.
+		// Phone clock a week fast, pushing a task the user already deleted elsewhere: the delete wins.
 		const local = row({
 			updatedAt: '2026-10-01T12:00:00.000Z',
 			deletedAt: '2026-10-01T12:00:00.000Z'
@@ -82,8 +77,7 @@ describe('mergeRow — the two rules that matter', () => {
 	});
 
 	it('compares ISO instants, not lexicographic luck', () => {
-		// Both are valid ISO strings and lexicographic order happens to agree here —
-		// the point is that a row with no `deletedAt` key at all behaves as live.
+		// Both are valid ISO strings; the point is that a row with no `deletedAt` key behaves as live.
 		const local = { id: 'r1', updatedAt: '2026-10-01T12:00:00.000Z' };
 		const remote = { id: 'r1', updatedAt: '2026-10-02T12:00:00.000Z' };
 		expect(mergeRow(local, remote).updatedAt).toBe('2026-10-02T12:00:00.000Z');
@@ -103,9 +97,7 @@ describe('mergeChanges', () => {
 
 		const changed = mergeChanges(local, remote, (r) => r.id);
 
-		// `a` is unchanged and must NOT be written back: writing it would bump its
-		// updatedAt and re-dirty it, and the next pull would push it straight back
-		// to the server. An echo loop that never terminates.
+		// Unchanged rows must NOT be written back: re-dirtying them makes the next pull push them back.
 		expect(changed).toHaveLength(1);
 		expect(changed[0].id).toBe('b');
 	});

@@ -1,22 +1,6 @@
-/**
- * The request guard.
- *
- * Two jobs, both before any route body runs:
- *
- *  1. Attach the authenticated session to `event.locals`, so a route never has to
- *     parse a token itself and there is exactly one place that knows how auth
- *     works.
- *  2. Rate-limit `/api/v1/*` per IP, before the expensive work.
- *
- * ── Why the session is resolved in `handle` and not per route ────────────────
- * Every `/api/v1` route except `/health` requires a session. Doing it here means
- * a new route is guarded by default rather than by remembering. The opt-out is a
- * single exported `PUBLIC_ROUTES` set, which is auditable in one place — better
- * than a `requireAuth(event)` call that a new route can simply forget to make.
- */
+/** The request guard: attaches the session to `event.locals` and rate-limits `/api/v1/*` per IP. */
 
-// SvelteKit 3 moved `Handle` out of the root entry point and into
-// `@sveltejs/kit/hooks`. Importing it from '@sveltejs/kit' is a type error now.
+// SvelteKit 3 moved `Handle` to `@sveltejs/kit/hooks`; the root import is a type error now.
 import type { Handle } from '@sveltejs/kit/hooks';
 import { auth } from '#lib/server/auth';
 import { clientIp, jsonError } from '#lib/http/errors';
@@ -30,8 +14,7 @@ export const PUBLIC_ROUTES: ReadonlySet<string> = new Set(['/api/v1/health', '/a
 export const handle: Handle = async ({ event, resolve }) => {
 	const path = event.url.pathname;
 
-	// `/api/auth/**` is Better Auth's own surface; it does its own authorisation
-	// (it has to — passkey ceremonies carry their own challenges).
+	// `/api/auth/**` does its own authorisation — passkey ceremonies carry their own challenges.
 	const needsSession = path.startsWith('/api/v1') && !PUBLIC_ROUTES.has(path);
 
 	if (needsSession) {

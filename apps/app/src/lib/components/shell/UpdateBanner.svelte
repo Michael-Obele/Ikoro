@@ -1,13 +1,7 @@
 <script lang="ts">
 	/**
-	 * The update banner.
-	 *
-	 * Checks GitHub's latest published release every time the app comes to the
-	 * foreground — throttled inside `checkForUpdate` to one network hit per
-	 * window, so resume-safe and free when offline. The banner appears only when
-	 * the release tag is numerically newer than this build's version, and a
-	 * dismissal sticks PER VERSION: v0.4.0 can be dismissed, and v0.4.1 asks
-	 * again, because it is new information.
+	 * Offers a newer GitHub release. Throttled inside `checkForUpdate`; a dismissal sticks
+	 * per version, so the next release asks again.
 	 */
 	import { PersistedState } from 'runed';
 	import { App as CapApp } from '@capacitor/app';

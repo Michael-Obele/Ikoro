@@ -1,19 +1,5 @@
 <script lang="ts">
-	/**
-	 * The task editor.
-	 *
-	 * Every field saves itself. There is no Save button because there is nothing
-	 * to lose: this is a local-first app with a single local database and no
-	 * remote round trip, so deferring a write only creates a window where closing
-	 * the sheet loses work.
-	 *
-	 * Notes autosave on a 400 ms debounce (runed's `useDebounce`) rather than on
-	 * every keystroke — each keystroke is a full `put()`, and IndexedDB will not
-	 * thank you for 400 of them while somebody types a sentence.
-	 *
-	 * "Remind me" is M4's, not this milestone's. The row of controls is laid out
-	 * so it drops in without moving anything above it.
-	 */
+	/** The task editor. Every field saves itself — there is no Save button to lose work behind. */
 	import { useDebounce } from 'runed';
 	import Button from '$lib/components/ui/button/button.svelte';
 	import Input from '$lib/components/ui/input/input.svelte';
@@ -50,8 +36,7 @@
 	/** Mirrors PriorityPicker's chip labels — the prose form of the ramp. */
 	const PRIORITY_NAMES = ['None', 'Low', 'Medium', 'High'] as const;
 
-	// Local drafts. The live task is the truth on open, but editing writes
-	// straight through so the row behind the sheet updates as you type.
+	// Drafts write straight through, so the row behind the sheet updates as you type.
 	let title = $state('');
 	let notes = $state('');
 	let priority = $state<Task['priority']>(0);
@@ -61,10 +46,7 @@
 	let loadedId: string | null = null;
 
 	$effect(() => {
-		// Re-seed the drafts when a DIFFERENT task is opened. Keyed on the id, not
-		// the object, so re-opening the same row never wipes the half-typed title
-		// the user is in the middle of. Live updates to the row are handled by
-		// `liveTask` below — this block is only the first fill.
+		// Re-seed drafts only when a DIFFERENT task opens, keyed on the id.
 		if (task && task.id !== loadedId) {
 			loadedId = task.id;
 			title = task.title;
@@ -76,27 +58,14 @@
 		}
 	});
 
-	/**
-	 * The live row behind the sheet.
-	 *
-	 * Routes hand this component the row object they captured at tap time, and a
-	 * snapshot goes stale the moment any field is written. That is exactly what
-	 * made "Remind me" compute the OLD due date after the date above it changed:
-	 * the alarm control read `task.dueDate` from a row that no longer matched the
-	 * store. Re-read the row from the single live subscription instead, and hand
-	 * every child that needs freshness this value.
-	 */
+	/** The live row behind the sheet — a route's tap-time snapshot goes stale on the first write. */
 	const liveTask = $derived.by(() => {
 		const id = task?.id;
 		if (!id) return null;
 		return liveTasks().find((row) => row.id === id) ?? task;
 	});
 
-	//
-	// The schedule has NO draft. `DuePicker` is controlled by these two values and
-	// every edit goes through `queueSchedule` below, so the picker, the alarm
-	// control and the row behind the sheet can never hold three different ideas of
-	// when this task is due.
+	// No draft here: `DuePicker` is controlled by these two, so picker, alarm and row cannot disagree.
 	const dueDate = $derived(liveTask?.dueDate ?? null);
 	const dueTime = $derived(liveTask?.dueTime ?? null);
 
@@ -115,30 +84,12 @@
 		await repo.updateTask(task.id, { title: value.trim() });
 	}
 
-	/**
-	 * Write the schedule, and MOVE any armed alarm with it.
-	 *
-	 * `alarmAt` is derived when the alarm is switched on, so it does not follow
-	 * `dueDate`/`dueTime` on its own. Without the re-arm below, moving a task to
-	 * next week left its reminder armed for the old day; once that instant passed,
-	 * `reconcile` retired it as fired and the reminder was simply gone.
-	 *
-	 * `alarmAt` is still never re-derived at FIRE time — only when the user edits
-	 * the schedule, which is a new promise and deserves a new instant.
-	 */
+	/** Write the schedule and MOVE any armed alarm with it — `alarmAt` does not follow the date on its own. */
 	let scheduleChain: Promise<void> = Promise.resolve();
 
 	/**
-	 * Serialised: one schedule write at a time.
-	 *
-	 * A date field fires `input` on every keystroke and a native picker emits
-	 * partial values. Without the queue, two changes overlap, both cancel and both
-	 * re-arm, and the slower arm can persist an instant the platform no longer
-	 * holds — with a stable notification id, `reconcile` would then never notice.
-	 *
-	 * The row id is captured at ENQUEUE time. `task` can be re-pointed (a subtask
-	 * tap swaps the sheet without unmounting it), and an entry that looked its
-	 * target up late would write this schedule onto the row the user had moved to.
+	 * One schedule write at a time, with the row id captured at ENQUEUE time — a late
+	 * lookup would land on whatever row the sheet had moved to.
 	 */
 	function queueSchedule(nextDate: string | null, nextTime: string | null): Promise<void> {
 		const id = liveTask?.id ?? null;
@@ -151,14 +102,8 @@
 	}
 
 	/**
-	 * 300 ms of quiet before anything is written.
-	 *
-	 * The debounce is not politeness — it is what stops the first digit of a typed
-	 * date from clearing the clock and disarming a live reminder. Every call resets
-	 * the timer, so only the settled value lands.
-	 *
-	 * Do NOT call `.cancel()` before calling this: runed's `cancel()` kills the very
-	 * call made immediately after it, silently dropping the edit.
+	 * 300 ms of quiet: the first digit of a typed date must not clear the clock. Never
+	 * call `.cancel()` first — runed's `cancel()` kills the next call too.
 	 */
 	const applyScheduleDebounced = useDebounce(
 		(nextDate: string | null, nextTime: string | null) => {
@@ -168,16 +113,14 @@
 	);
 
 	function debounceSchedule(nextDate: string | null, nextTime: string | null) {
-		// A superseded call rejects with 'Cancelled'. That is a normal supersede,
-		// not an error, so it is swallowed rather than logged as unhandled.
+		// A superseded call rejects with 'Cancelled'; swallow it.
 		applyScheduleDebounced(nextDate, nextTime).catch(() => {});
 	}
 
 	/** `''` is a real clear; a partial value is a keystroke still in progress. */
 	function onDateChange(value: string) {
 		if (value !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
-		// Clearing the day clears the time too — a time with no day would silently
-		// do nothing. Both go through the debounce, so a partial '' cannot land.
+		// Clearing the day clears the time too; both go through the debounce.
 		debounceSchedule(value || null, value ? dueTime : null);
 	}
 
@@ -244,10 +187,7 @@
 		await repo.updateTask(task.id, { priority });
 	}
 
-	/**
-	 * Autosave for the colour, same pattern as `savePriority`: the picker writes
-	 * straight through, no Save button. `null` is the explicit "None" choice.
-	 */
+	/** Autosave, same as `savePriority`. `null` is the explicit "None" choice. */
 	async function saveColor(value: string | null) {
 		color = value;
 		if (!task) return;
@@ -262,15 +202,7 @@
 
 	// ── subtasks ────────────────────────────────────────────────────────────────
 
-	/**
-	 * The open task's subtasks, straight from the live map — ticking one updates
-	 * this list and the row behind the sheet from the same subscription.
-	 *
-	 * Shown only when the open task is TOP-LEVEL (`parentId === null`): subtasks
-	 * are one level deep, so a subtask opened in this sheet simply has no
-	 * Subtasks section rather than an empty one — the absence is the rule, not a
-	 * dead control.
-	 */
+	/** Subtasks of the open task, only when it is TOP-LEVEL — subtasks are one level deep. */
 	const subtasks = $derived(
 		task && task.parentId === null ? (liveSubtasksByParent().get(task.id) ?? []) : []
 	);
@@ -292,13 +224,10 @@
 			addingSubtask = false;
 			return;
 		}
-		// listId is inherited from the parent inside repo.createTask; passing the
-		// parent's own listId keeps the call honest if that inheritance ever moves.
+		// repo.createTask inherits listId from the parent; passing it keeps the call honest.
 		await repo.createTask({ listId: task.listId, title, parentId: task.id });
 		form.reset();
-		// Committing a subtask is a small, finished action, and the keyboard was
-		// hiding the list it just grew. Close it and let the new row be visible;
-		// "Add subtask" reopens the field for another one.
+		// The keyboard was hiding the list it just grew.
 		dismissKeyboard();
 		addingSubtask = false;
 	}
@@ -316,14 +245,10 @@
 		await repo.deleteTask(id);
 	}
 
-	/**
-	 * Close, but first flush anything still sitting in the debounce window.
-	 * Closing the sheet must never be the reason a note is lost.
-	 */
+	/** Close, flushing anything still in the debounce window. */
 	async function close() {
 		saveNotes.cancel();
-		// Before anything else: an input that keeps focus keeps the keyboard up,
-		// and a keyboard over a closing sheet is a sheet that looks stuck.
+		// A focused input keeps the keyboard up over a closing sheet.
 		dismissKeyboard();
 		if (task && notes !== lastSavedNotes) {
 			await repo.updateTask(task.id, { notes: notes || null });
@@ -335,38 +260,18 @@
 
 <Sheet.Root bind:open onOpenChange={(next) => !next && close()}>
 	<!--
-		`rounded-none` is explicit rather than inherited. The sheet is a full-height
-		panel flush against the screen edge, so a corner on it would be a corner
-		against nothing — and the generated Sheet.Content carries no radius of its
-		own, which means the shape is decided here, once, instead of by whatever
-		`--radius` happens to be.
-
-		`w-full!` and `sm:max-w-md!` carry the important modifier (Tailwind v4
-		appends it) and that is load-bearing, not decorative. The generated
-		sheet-content hard-codes `data-[side=right]:w-3/4` and
-		`data-[side=right]:sm:max-w-sm`, and a data-variant selector out-specifies a
-		plain utility — so the `w-full sm:max-w-md` this used to ask for did nothing
-		and the sheet rendered at 75% of a phone's width with a dead gutter beside
-		it. The generated component is not ours to edit, so the override happens
-		here.
+		`w-full!` / `sm:max-w-md!` are load-bearing: a data-variant selector in the generated
+		sheet-content out-specifies a plain utility, so the width override needs the `!`.
 	-->
 	<Sheet.Content side="right" class="w-full! rounded-none sm:max-w-md!">
 		{#if task}
-			<!-- The header is separated by a hairline, not by a card. Every section
-			     below is divided the same way, so the sheet reads as one ruled
-			     document rather than a stack of floating panels. -->
+			<!-- Hairline, not a card — every section below is divided the same way. -->
 			<Sheet.Header class="border-b border-outline-variant">
 				<Sheet.Title>Task</Sheet.Title>
 				<Sheet.Description class="sr-only">Edit this task</Sheet.Description>
 			</Sheet.Header>
 
-			<!--
-				`min-h-0 flex-1` is what makes `overflow-y-auto` mean anything. A flex
-				child defaults to `min-height: auto`, so this column grew to its content
-				height and pushed the delete button off the bottom of a phone screen
-				instead of scrolling — the sheet clipped it. On a 620px-tall viewport the
-				body measured 608px against a 564px box.
-			-->
+			<!-- `min-h-0` makes `overflow-y-auto` mean anything: a flex child defaults to min-height auto. -->
 			<div class="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-6">
 				<div class="grid grid-cols-1 gap-1.5 border-b border-outline-variant py-4">
 					<Label for="task-title">Title</Label>
@@ -398,13 +303,7 @@
 				</div>
 
 				<div class="grid grid-cols-1 gap-1.5 border-b border-outline-variant py-4">
-					<!--
-						The picker's chips already carry their own labels; this line states
-						the CURRENT value in prose so the section answers "what is it now?"
-						at a glance, and `aria-live` repeats the change for a screen reader
-						that did not walk the radio group. Styled like the section label so
-						the pair reads as one ruled row.
-					-->
+					<!-- Current value in prose, so the section answers "what is it now?" at a glance. -->
 					<div class="flex items-center justify-between">
 						<span class="text-sm font-medium">Priority</span>
 						<span class="text-sm text-muted-foreground" aria-live="polite">
@@ -414,13 +313,7 @@
 					<PriorityPicker bind:priority onchange={savePriority} />
 				</div>
 
-				<!--
-					The colour picker. Same swatch language as ThemeSchemePicker: boxy
-					2px corners, a 2px border, and the selected swatch wears a 2px
-					`--primary` ring offset by 2px. "None" is a bordered empty swatch —
-					a real choice, not the absence of one — and sits first so clearing
-					is always one tap to the left.
-				-->
+				<!-- Same swatch language as ThemeSchemePicker. "None" is a real choice, so it comes first. -->
 				<div class="grid grid-cols-1 gap-1.5 border-b border-outline-variant py-4">
 					<div class="flex items-center justify-between">
 						<span class="text-sm font-medium">Color</span>
@@ -464,22 +357,12 @@
 					</div>
 				</div>
 
-				<!-- The reminder control. It has to be the one field that arms a
-				     platform alarm, so it lives with the scheduler rather than in
-				     this file's local state — and it gets the LIVE row, not the
-				     snapshot, or it computes its instant from a stale date. -->
+				<!-- Gets the LIVE row, not the snapshot, or it arms from a stale date. -->
 				<div class="border-b border-outline-variant py-4">
 					<AlarmSheet task={liveTask ?? task} />
 				</div>
 
-				<!--
-					SUBTASKS. Only for top-level tasks — a subtask opened here gets no
-					section at all, because subtasks cannot nest. The section is ruled
-					like every other: hairline top and bottom, no card. Each subtask is
-					a mini row (checkbox + title + delete) whose checkbox toggles through
-					repo.toggleTask, so the parent's progress marker in the list behind
-					updates live.
-				-->
+				<!-- Subtasks, only for top-level tasks — they cannot nest. -->
 				{#if task.parentId === null}
 					<div class="border-b border-outline-variant py-4">
 						<div class="flex items-center justify-between">
@@ -506,9 +389,7 @@
 													: `Mark "${sub.title}" as done`}
 											/>
 										</label>
-										<!-- `task` is $bindable: assigning swaps the sheet onto the
-										     subtask, which re-seeds every draft via the id-keyed
-										     effect. Nice-to-have from the spec, free here. -->
+										<!-- `task` is $bindable, so assigning swaps the sheet onto the subtask. -->
 										<button
 											type="button"
 											class="min-w-0 flex-1 truncate py-1 text-left text-sm {sub.completedAt

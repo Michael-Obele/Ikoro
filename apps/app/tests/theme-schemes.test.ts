@@ -13,75 +13,23 @@ import type { TokenMap } from '#lib/theme/monet';
 import type { SeedSchemeId } from '#lib/theme/schemes';
 
 /**
- * THE HUE-ROTATION CONTRACT BEHIND THE SIX SEED SCHEMES.
- *
- * WHAT THIS FILE IS FOR. `src/lib/theme/schemes.ts` turns the one audited
- * crimson palette in `layout.css` into six schemes by rotating HUE and
- * nothing else. Its docblock makes four testable promises, and this file
- * holds it to all four:
- *
- *   1. LIGHTNESS IS PRESERVED. Every token keeps its reference L under
- *      rotation — exactly in the rotated objects `rotatePalette` returns,
- *      and to within 3-decimal rounding in the `oklch()` strings the app
- *      actually applies.
- *   2. HUE MOVES BY THE SCHEME DELTA, AND ONLY WHERE IT SHOULD. Seed-family
- *      tokens (reference hue 17.58) and the tertiary family (reference + 60)
- *      move by `scheme hue − REFERENCE_HUE`; the error family (27) never
- *      moves, so "this is destructive" is the same colour in every scheme.
- *   3. CONTRAST SURVIVES. The exact pair list `theme-contrast.test.ts`
- *      audits for crimson is re-measured for all six schemes, light and
- *      dark, against the same WCAG floors (7:1 text, 3:1 non-text).
- *   4. CHROMA IS CARRIED, NOT RE-TUNED. Rotation copies C unchanged; only
- *      CSS Color 4 gamut mapping may reduce it, and it may never increase.
- *
- * THE CLASS OF BUG THIS CATCHES. Someone "improving" a seed by hand — a
- * slightly darker primary in teal, a friendlier error in green — silently
- * breaks the invariant that six schemes share one audit. And because WCAG
- * luminance is a function of the WHOLE colour and not of OKLCH L alone, the
- * contrast audit is re-measured rather than assumed: if a rotation shifts a
- * ratio below its floor, this file names the scheme, the pair and the
- * number, instead of letting the picker ship a scheme nobody audited.
- *
- * WHY THE COLOUR MATHS AND THE PAIR LIST ARE COPIES. They are lifted
- * verbatim from `tests/theme-contrast.test.ts`, whose helpers are
- * module-private (a test file exports nothing) and which cannot be imported
- * without re-registering its whole suite inside this one. The repo treats
- * that file as a finished green audit, so duplicating the maths beats
- * touching it — with the standing obligation that the two copies must never
- * disagree: if the conversion or the pair list changes there, change it here
- * in the same commit.
- *
- * WHY THIS FILE MOCKS THE ?raw IMPORT. `schemes.ts` reads the reference
- * palette from `../../routes/layout.css?raw`. Under Vitest that resolves to
- * an EMPTY STRING: with `test.css` disabled (the default), Vitest's
- * `vitest:css-disable` plugin replaces every `.css` module — `?raw` queries
- * included — with `export default ""`, so `schemes.ts` throws
- * "layout.css has no top-level :root block" at import time. The real Vite
- * build is unaffected; this is a test-runner artefact. The mock hands back
- * the stylesheet's actual bytes via `readFileSync`, the same technique
- * `theme-contrast.test.ts` uses, so the audit still measures the real file.
+ * Guards hue rotation: L and C preserved, only seed/tertiary hues move (never error), and the crimson audit re-run for all six. Maths and pair list copied from theme-contrast.test.ts.
  */
 
-/* ------------------------------------------------------------------ *
- * The ?raw workaround — must run before schemes.ts is imported
- * ------------------------------------------------------------------ */
+/* The ?raw workaround — must run before schemes.ts is imported: Vitest resolves `?raw` CSS to an empty string. */
 
 vi.mock('../src/routes/layout.css?raw', () => ({
 	default: readFileSync(fileURLToPath(new URL('../src/routes/layout.css', import.meta.url)), 'utf8')
 }));
 
-/* ------------------------------------------------------------------ *
- * Constants the module keeps private
- * ------------------------------------------------------------------ */
+/* Constants the module keeps private */
 
 /** The two themes every seed scheme ships. */
 const MODES = ['light', 'dark'] as const;
 type Mode = (typeof MODES)[number];
 
 /**
- * Private in `schemes.ts`, restated here so the test pins the published
- * contract: if either constant silently changes, the hue assertions below
- * fail loudly instead of drifting along with the implementation.
+ * Private in `schemes.ts`, restated so the hue assertions pin the published contract rather than drift with the implementation.
  */
 const TERTIARY_OFFSET = 60;
 const ERROR_HUE = 27;
@@ -95,13 +43,7 @@ const ROUNDING_SLACK = 0.0011;
 const norm = (h: number): number => ((h % 360) + 360) % 360;
 const near = (a: number, b: number): boolean => Math.abs(a - b) < FAMILY_TOLERANCE;
 
-/* ------------------------------------------------------------------ *
- * Colour maths — copied verbatim from tests/theme-contrast.test.ts
- *
- * See the header: that file's helpers are module-private and importing a
- * *.test.ts would re-run its suite here. These two copies must never
- * disagree about what WCAG luminance is.
- * ------------------------------------------------------------------ */
+/* Colour maths — copied from tests/theme-contrast.test.ts; the two copies must agree. */
 
 type Rgb = readonly [number, number, number];
 
@@ -138,11 +80,7 @@ function oklchToSrgbRaw(L: number, C: number, hue: number): Rgb {
 const isInSrgb = (rgb: Rgb): boolean =>
 	rgb.every((v) => v >= -GAMUT_EPSILON && v <= 1 + GAMUT_EPSILON);
 
-/**
- * CSS Color 4 gamut mapping: keep lightness and hue, reduce chroma until the
- * colour is representable in sRGB. Browsers do this when rendering `oklch()`,
- * so it has to happen here too or every out-of-gamut ratio is fiction.
- */
+/** CSS Color 4 gamut mapping: reduce chroma until sRGB-representable, as browsers do. */
 function gamutMap(L: number, C: number, hue: number): { rgb: Rgb; chroma: number } {
 	if (isInSrgb(oklchToSrgbRaw(L, C, hue))) {
 		return { rgb: oklchToSrgbRaw(L, C, hue), chroma: C };
@@ -174,12 +112,7 @@ function contrast(fg: Rgb, bg: Rgb): number {
 const composite = (fg: Rgb, bg: Rgb, alpha: number): Rgb =>
 	fg.map((c, i) => c * alpha + bg[i] * (1 - alpha)) as unknown as Rgb;
 
-/* ------------------------------------------------------------------ *
- * The pairs the app actually paints — copied verbatim from
- * tests/theme-contrast.test.ts so both audits measure the same pairs.
- * If a pair is added or changed there, mirror it here: a seed scheme
- * that passes a stale copy of this list proves nothing.
- * ------------------------------------------------------------------ */
+/* The pairs the app paints — mirrored from tests/theme-contrast.test.ts, so both audits measure the same list. */
 
 /** WCAG 2.1: normal text needs 7:1 (AAA); AA is only 4.5:1. */
 const AAA_TEXT = 7;
@@ -400,26 +333,7 @@ const NON_TEXT_PAIRS: Pair[] = [
 const ALL_PAIRS: Pair[] = [...TEXT_PAIRS, ...NON_TEXT_PAIRS];
 
 /**
- * THERE ARE NO EXCEPTIONS, AND THAT IS THE POINT.
- *
- * This used to carry one: teal light, `ring/50 on muted`, at 2.995:1 against
- * the 3:1 non-text floor. It was never a bug in `schemes.ts` — the rotation
- * does preserve OKLCH L and C — it was the rotation's own limit. WCAG relative
- * luminance weights the channels (0.2126 / 0.7152 / 0.0722), so rotating the
- * hue shifts it a little even with OKLCH L frozen, and teal's green-heavy mix at
- * 50 % alpha over `muted` landed just short. `schemes.ts` claims contrast is "a
- * function of LIGHTNESS, not hue"; true of OKLCH L, very nearly true of WCAG
- * luminance, and that pair was where "very nearly" showed.
- *
- * It is fixed rather than excused. The light `primary` in `layout.css` now sits
- * at M3 tone 11 instead of 13, which puts every seed over 3:1 — worst case teal
- * at 3.07:1. So the escape hatch is gone: every pair of every scheme is asserted
- * against the same floor, with no per-scheme carve-out. A future hue that cannot
- * meet its floor must be re-tuned in the stylesheet, not exempted here.
- *
- * Beware the printed numbers: `toFixed(2)` renders 2.995 as "3.00:1", which
- * reads as a pass and is not — the rounding trap `theme-contrast.test.ts`
- * guards against explicitly, and the reason the assertions below print raw ratios.
+ * No per-scheme exceptions: teal `ring/50 on muted` measured 2.995:1 once and was fixed by retuning light `primary`, not exempted — `toFixed(2)` hid it.
  */
 
 /** Same compositing order as theme-contrast: tint the backdrop first, then the ink. */
@@ -448,9 +362,7 @@ function parseToken(map: TokenMap, name: string): { L: number; C: number; h: num
 	return { L: Number(m[1]), C: Number(m[2]), h: Number(m[3]) };
 }
 
-/* ------------------------------------------------------------------ *
- * 1 + 4 — lightness and chroma survive the rotation
- * ------------------------------------------------------------------ */
+/* 1 + 4 — lightness and chroma survive the rotation */
 
 describe('seed schemes — lightness and chroma survive the rotation', () => {
 	it('rotatePalette preserves L exactly, for every token of every seed, in both modes', () => {
@@ -526,9 +438,7 @@ describe('seed schemes — lightness and chroma survive the rotation', () => {
 	});
 });
 
-/* ------------------------------------------------------------------ *
- * The crimson reference round-trips
- * ------------------------------------------------------------------ */
+/* The crimson reference round-trips */
 
 describe('seed schemes — crimson is the reference, delta 0', () => {
 	it('crimson reproduces the layout.css palette value for value', () => {
@@ -557,15 +467,11 @@ describe('seed schemes — crimson is the reference, delta 0', () => {
 	});
 });
 
-/* ------------------------------------------------------------------ *
- * 2 — hue moves by the scheme delta, and only where it should
- * ------------------------------------------------------------------ */
+/* 2 — hue moves by the scheme delta, and only where it should */
 
 describe('seed schemes — hue moves by the scheme delta', () => {
 	it('classifies every reference token into a family: seed, tertiary (+60) or error (27)', () => {
-		// Guards the per-scheme assertions below against vacuity: a token whose
-		// hue matches no family is left unrotated by design, so a new tone added
-		// at an unexpected hue must be a conscious decision, not an accident.
+		// A token whose hue matches no family is left unrotated by design, so a new tone must be a decision.
 		for (const mode of MODES) {
 			for (const [name, colour] of Object.entries(referencePalette(mode))) {
 				const family = near(colour.h, REFERENCE_HUE)
@@ -610,7 +516,6 @@ describe('seed schemes — hue moves by the scheme delta', () => {
 					}
 				}
 
-				// Counts, so the assertions above cannot pass vacuously.
 				expect(seed, `${mode}: seed-family tokens`).toBeGreaterThan(0);
 				expect(tertiary, `${mode}: tertiary-family tokens`).toBeGreaterThan(0);
 				expect(error, `${mode}: error-family tokens`).toBeGreaterThan(0);
@@ -619,9 +524,7 @@ describe('seed schemes — hue moves by the scheme delta', () => {
 	);
 });
 
-/* ------------------------------------------------------------------ *
- * 3 — the contrast audit, re-run for all six schemes
- * ------------------------------------------------------------------ */
+/* 3 — the contrast audit, re-run for all six schemes */
 
 describe('seed schemes — WCAG contrast across all six schemes', () => {
 	for (const id of SCHEME_IDS) {
@@ -657,28 +560,11 @@ describe('seed schemes — WCAG contrast across all six schemes', () => {
 	}
 });
 
-/* ------------------------------------------------------------------ *
- * 5 — the reference is TINTED, so a scheme colours the whole app
- * ------------------------------------------------------------------ */
+/* 5 — the reference is TINTED, so a scheme colours the whole app */
 
 describe('reference palette — the neutrals carry the scheme', () => {
 	/**
-	 * THE CLASS OF BUG THIS CATCHES. Re-greying the neutrals.
-	 *
-	 * The whole six-scheme system rests on one property of the reference palette:
-	 * its surface families are CHROMATIC, so rotating the hue moves the page, the
-	 * cards, the borders and the secondary text — not just the buttons.
-	 * `layout.css` once shipped neutral chroma 0.004 and neutral-variant 0.012,
-	 * which is near-grey: all six schemes then painted the same surfaces and the
-	 * picker offered six colours that looked like one.
-	 *
-	 * A contrast audit cannot catch that. Dropping chroma makes every pair measure
-	 * the SAME or BETTER - the surfaces drift toward a neutral grey that is easier
-	 * to read, not harder. So the failure is silent exactly where this repo is
-	 * most careful, and it needs its own assertion rather than a ratio.
-	 *
-	 * The floors are deliberately below the shipped 0.012 / 0.024: this fails a
-	 * re-greying, not a legitimate re-tune of the tint.
+	 * Guards against re-greying the neutrals. Rotation only colours the page if the surfaces are chromatic; a contrast audit cannot catch this, because dropping chroma makes every ratio the same or better. Floors sit below the shipped 0.012/0.024.
 	 */
 	it('the neutral families are chromatic, in both themes', () => {
 		for (const mode of MODES) {
@@ -706,19 +592,7 @@ describe('reference palette — the neutrals carry the scheme', () => {
 	});
 
 	/**
-	 * THE MAPPING TABLE IS THE CONTRACT, SO LET IT BE CHECKED.
-	 *
-	 * `layout.css` stores each shadcn token twice: once as an M3 role
-	 * (`--md-sys-color-surface`) and once as the alias shadcn components read
-	 * (`--background`). The duplication is deliberate — the contrast audit parses
-	 * literal `oklch()` values and refuses `var()`, so an alias cannot point at its
-	 * role — and the comment above them calls the pairing "the contract".
-	 *
-	 * Until this test existed nothing enforced it. Retuning one family by search
-	 * and replace left `--sidebar-ring` on the old tone while `--primary` moved:
-	 * every pair still passed, because a focus ring two tones off is still a focus
-	 * ring, and the app shipped two different colours for the same role. That is
-	 * exactly the class of bug a test has to catch, because no ratio can.
+	 * `layout.css` stores each token twice (M3 role + shadcn alias) because the audit refuses `var()`. Nothing enforced the pairing until this: retuning one family left `--sidebar-ring` on the old tone while every ratio still passed.
 	 */
 	it('every shadcn alias is byte-equal to the M3 role it names', () => {
 		const ALIAS_TO_ROLE: Record<string, string> = {

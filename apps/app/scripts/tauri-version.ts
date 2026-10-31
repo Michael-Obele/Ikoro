@@ -1,21 +1,6 @@
 /**
- * The desktop version sync. The release workflow runs it before building so
- * the Tauri bundles never ship a stale version.
- *
- *   bun apps/app/scripts/tauri-version.ts sync    # copy package.json -> Cargo.toml
- *   bun apps/app/scripts/tauri-version.ts check   # fail when they disagree
- *
- * WHO OWNS THE NUMBER: release-please. It only touches apps/app/package.json
- * (see release-please-config.json). Cargo.toml is the single Rust-side source
- * — tauri.conf.json deliberately has NO "version" key so Tauri falls back to
- * it — but nothing keeps it in sync except this script, run by
- * .github/workflows/release-desktop.yml. So this file decides nothing and
- * bumps nothing. It only copies and checks.
- *
- * WHY Cargo.lock IS NEVER TOUCHED: cargo rewrites the lock's own `ikoro`
- * entry from Cargo.toml on the next build, and a hand-edited lock risks a
- * checksum mismatch that fails the build. Leave it alone; `tauri build`
- * regenerates it.
+ * Copies the app version into `src-tauri/Cargo.toml`; release-please owns the number.
+ * Usage: `bun apps/app/scripts/tauri-version.ts <sync|check>`
  */
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -42,10 +27,7 @@ function sectionAt(lines: string[], index: number): string | null {
 	return section;
 }
 
-/**
- * Read the [package] version from Cargo.toml text. Throws when there is none —
- * the message is what the release log shows, so it says where it looked.
- */
+/** Reads the [package] version; the thrown message is what the release log shows. */
 export function readCargoVersion(toml: string): string {
 	const lines = toml.split('\n');
 	for (let i = 0; i < lines.length; i++) {
@@ -57,14 +39,7 @@ export function readCargoVersion(toml: string): string {
 	throw new Error(NO_VERSION);
 }
 
-/**
- * Rewrite ONLY the [package] `version = "..."` line to `version`, preserving
- * the line's tabs/spacing and any trailing comment. Dependency versions such
- * as `tauri = { version = "2", ... }` sit under [dependencies] / [build-...],
- * so the section check skips them — and the anchored `version` key never
- * matches a `tauri = ...` line anyway. Throws when there is no [package]
- * version to replace.
- */
+/** Rewrite only the [package] `version` line, keeping spacing and any trailing comment. */
 export function setCargoVersion(toml: string, version: string): string {
 	const lines = toml.split('\n');
 	let replaced = false;
@@ -81,11 +56,7 @@ export function setCargoVersion(toml: string, version: string): string {
 	return out.join('\n');
 }
 
-/**
- * Pure check-style comparison: returns the cargo version when it matches
- * `pkgVersion`, throws with the release-log message when it does not. The CLI
- * `check` mode is a thin wrapper around this, so tests cover the same path.
- */
+/** Returns the cargo version when it matches `pkgVersion`, else throws. */
 export function checkCargoVersion(toml: string, pkgVersion: string): string {
 	const cargoVersion = readCargoVersion(toml);
 	if (cargoVersion !== pkgVersion.trim()) {

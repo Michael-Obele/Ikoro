@@ -1,12 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-/**
- * The Tauri bridge is mocked wholesale. What is under test is how
- * `DesktopScheduler` REACTS to what the OS says it can do — and specifically,
- * that a degraded machine produces a visibly degraded outcome rather than a
- * success that quietly depends on the window staying open.
- */
+/** Guards how `DesktopScheduler` reacts to what the OS offers — a degraded machine must report a degraded outcome, never a silent success. */
 const invoke = vi.fn();
 const isPermissionGranted = vi.fn();
 const requestPermission = vi.fn();
@@ -119,8 +114,7 @@ describe('mode: systemd', () => {
 
 		const outcome = await new DesktopScheduler().schedule({ taskId: 't1', title: 'x', at: FUTURE });
 
-		// A silent fallback would leave the user believing they have an alarm that
-		// dies with the window. Reporting failure is the only honest option.
+		// A silent fallback would leave the user believing in an alarm that dies with the window.
 		expect(outcome.ok).toBe(false);
 		expect(sendNotification).not.toHaveBeenCalled();
 	});
@@ -180,8 +174,7 @@ describe('degraded probes', () => {
 
 		const probe = await new DesktopScheduler().currentMode();
 
-		// A crashing reconcile would leave every alarm silently un-armed. The safe
-		// answer is a visible downgrade.
+		// A crashing reconcile would leave every alarm un-armed; the safe answer is a visible downgrade.
 		expect(probe.mode).toBe('timer');
 		expect(probe.detail).toMatch(/in-process/i);
 	});
@@ -200,9 +193,7 @@ describe('notification permission', () => {
 		expect(await new DesktopScheduler().ensureReady()).toEqual({
 			notifications: 'granted',
 			exact: 'unsupported',
-			// Desktop has no full-screen-takeover concept at all -- see the
-			// comment in desktop-scheduler.ts. 'unsupported' is what keeps the
-			// banner from offering a settings screen that cannot exist here.
+			// No full-screen takeover exists on desktop; 'unsupported' stops the UI offering a settings screen.
 			fullScreenIntent: 'unsupported'
 		});
 		expect(requestPermission).toHaveBeenCalled();

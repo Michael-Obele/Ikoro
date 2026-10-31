@@ -9,18 +9,7 @@ import {
 	RINGTONE_STORAGE_KEY
 } from '#lib/alarms/ringtone';
 
-/**
- * SOUND PRECEDENCE, THE PART THAT DECIDES WHAT AN ALARM RINGS WITH.
- *
- * Two levels — a per-task pick and a device-wide default — meet in exactly one
- * function, `ringtoneFor()`, and both the task sheet and `reconcile()` arm
- * through it. If the precedence ever flips, alarms ring with the wrong sound
- * silently, so it is asserted here rather than read off the code.
- *
- * Also guards the platform gate: outside native Android the picker must report
- * "cancelled" rather than throw, or the sheet's change button becomes a dead
- * end that swallows the tap.
- */
+/** Guards ringtone precedence (task > global > system) and that the picker answers "cancelled" off-platform. */
 
 beforeEach(() => {
 	localStorage.clear();
@@ -53,9 +42,6 @@ describe('ringtoneFor', () => {
 
 describe('pickRingtone off-platform', () => {
 	it('answers "cancelled" on the web instead of throwing', async () => {
-		// jsdom is not a native shell, which is exactly the case the sheet must
-		// survive: the Change button must resolve to a no-op, not an unhandled
-		// rejection from a plugin that does not exist.
 		expect(ringtoneSupported()).toBe(false);
 		expect(await pickRingtone()).toEqual({ cancelled: true, uri: null });
 	});

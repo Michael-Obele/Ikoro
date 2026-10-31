@@ -1,13 +1,6 @@
 /**
- * The health check. No session, by design — a load balancer and the deploy smoke
- * test cannot present a bearer token.
- *
- * It reports the current `rev` from the SEQUENCE, not from the user's rows,
- * because the question being asked is "is the database reachable and is this the
- * process serving traffic" rather than "does this account have changes".
- *
- * A failure to reach the database is a 503 with a plain reason, never a stack
- * trace and never the connection string.
+ * The health check. No session, by design — a load balancer cannot present a bearer token. It
+ * reports the SEQUENCE's rev and never a stack trace or the connection string.
  */
 
 import type { RequestHandler } from './$types';
@@ -20,8 +13,7 @@ export const GET: RequestHandler = async () => {
 			headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
 		});
 	} catch (cause) {
-		// The message is deliberately generic. The cause may be a driver error
-		// carrying the connection string, and this route is unauthenticated.
+		// Deliberately generic: the cause may carry the connection string, and this route is public.
 		void cause;
 		return new Response(
 			JSON.stringify({

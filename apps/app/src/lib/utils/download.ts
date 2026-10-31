@@ -1,11 +1,6 @@
 /**
- * File in, file out — the only place the app touches the download or the
- * filesystem.
- *
- * `readJsonFile` throws a typed error rather than letting a `SyntaxError` reach
- * the UI: "Unexpected token } in JSON at position 412" tells a user nothing about
- * what to do next, and a stack trace rendered on screen is a bug regardless of
- * how small the file was.
+ * The only place the app touches the download or the filesystem. `readJsonFile` throws a typed
+ * error, because a raw `SyntaxError` tells the user nothing.
  */
 import { Capacitor } from '@capacitor/core';
 
@@ -18,17 +13,8 @@ export function fileNameFor(date: Date = new Date()): string {
 }
 
 /**
- * Offer `data` as a file the user can actually keep.
- *
- * WHY THIS IS NOT ONE PATH: an Android WebView has no download manager. The
- * `<a download>` click below works in a browser and in the desktop shell, but on
- * the phone the click is swallowed — no error, no file, and the backup screen
- * cheerfully says it exported. So Android writes the JSON to the app cache and
- * hands it to the SYSTEM SHARE SHEET instead, which is where "Save to Drive",
- * "Files" and "email it to myself" live.
- *
- * The plugins are imported dynamically so the browser and the desktop build
- * never load them, and so the static SPA keeps a single bundle.
+ * Offer `data` as a file. An Android WebView has no download manager and swallows the
+ * `<a download>` click, so Android shares the file instead. Plugins load dynamically.
  */
 export async function exportJson(filename: string, data: unknown): Promise<void> {
 	const json = JSON.stringify(data, null, 2);
@@ -37,8 +23,7 @@ export async function exportJson(filename: string, data: unknown): Promise<void>
 		const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem');
 		const { Share } = await import('@capacitor/share');
 
-		// Cache, not Documents: this is a hand-off copy. Documents would need a
-		// storage permission and would leave a duplicate behind on every export.
+		// Cache, not Documents: this is a hand-off copy, and Documents would leave a duplicate.
 		const { uri } = await Filesystem.writeFile({
 			path: filename,
 			data: json,
@@ -61,8 +46,7 @@ export async function exportJson(filename: string, data: unknown): Promise<void>
 	anchor.click();
 	anchor.remove();
 
-	// Revoked on the next tick, after the click has been dispatched: revoking
-	// synchronously cancels a download some browsers have not started yet.
+	// Revoked on the next tick: revoking synchronously cancels a download some browsers have not started.
 	setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 

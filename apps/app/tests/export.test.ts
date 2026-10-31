@@ -8,16 +8,7 @@ import { createList, createTask, deleteTask } from '#lib/db/repo';
 import { exportSchema } from '#lib/valibot/task';
 
 /**
- * Backup is the one feature where a quiet bug destroys somebody's work, so the
- * cases below are mostly about what must NOT happen:
- *
- *   - a device-scoped field leaking into the file (an `alarmId` from this phone
- *     means nothing on another, and a `rev` from a server means nothing offline);
- *   - a task silently vanishing because its list was missing;
- *   - an older copy of a record overwriting a newer one.
- *
- * Every error path is asserted on its MESSAGE, not just its type — the message is
- * what the user reads when their import fails.
+ * Guards what backup must NOT do: leak device-scoped fields, drop a task whose list is missing, or let an older copy overwrite a newer one. Error paths assert on the message the user reads.
  */
 
 beforeEach(async () => {
@@ -120,15 +111,12 @@ describe('importAll', () => {
 		await importAll(dump);
 		const second = await importAll(dump);
 
-		// Nothing is written either time: the local rows are already identical, and
-		// reporting 0 is the honest answer. "Imported 2" would imply the file
-		// changed something it did not.
+		// Nothing changes, so 0 is the honest count; "imported 2" would imply otherwise.
 		expect(second.tasks).toBe(0);
 		expect(second.lists).toBe(0);
 		expect(await db.tasks.count()).toBe(2);
 
-		// Compare content, not the envelope — `exportedAt` is re-stamped on every
-		// export and is not part of the data.
+		// `exportedAt` is re-stamped each time, so compare content only.
 		const after = await exportAll();
 		expect(after.tasks).toEqual(before.tasks);
 		expect(after.lists).toEqual(before.lists);
@@ -141,7 +129,6 @@ describe('importAll', () => {
 		const dump = await exportAll();
 		dump.tasks[0] = { ...dump.tasks[0], title: 'stale title' };
 
-		// Make the local copy newer than the file's.
 		const now = new Date(Date.now() + 60_000).toISOString();
 		await db.tasks.put({
 			...((await db.tasks.get(task.id)) as object),
@@ -159,8 +146,7 @@ describe('importAll', () => {
 		const list = await createList('Tasks');
 		await createTask({ listId: list.id, title: 'only on this device' });
 
-		// Importing an EMPTY backup is the strongest form of this: nothing in the
-		// file can overwrite the local row, so the row must survive.
+		// An empty backup is the strongest form: it can overwrite nothing locally.
 		const result = await importAll(await exportAll());
 		expect(result.tasks).toBe(0);
 	});
@@ -177,7 +163,6 @@ describe('importAll', () => {
 
 		const before = JSON.parse(JSON.stringify(await exportAll()));
 
-		// Simulate a restore onto an empty device.
 		await db.tasks.clear();
 		await db.lists.clear();
 		const result = await importAll(before);
@@ -198,7 +183,6 @@ describe('importAll', () => {
 		expect(restoredChild.color).toBe('red');
 		expect(restoredChild.parentId).toBe(parent.id);
 
-		// And the file the restored store exports is byte-identical in content.
 		const after = await exportAll();
 		expect(after.tasks).toEqual(before.tasks);
 	});
@@ -209,15 +193,13 @@ describe('importAll', () => {
 		const child = await createTask({ listId: list.id, title: 'child', parentId: parent.id });
 
 		const dump = await exportAll();
-		// Simulate a partial backup: the parent row is gone, the child remains.
 		dump.tasks = dump.tasks.filter((t) => t.id !== parent.id);
 
 		await db.tasks.clear();
 		await db.lists.clear();
 		const result = await importAll(dump);
 
-		// The child SURVIVES — it is user data — but as a top-level task, never
-		// as a dangling reference into a parent that does not exist.
+		// The child survives as a top-level task, never a dangling parentId.
 		expect(result.tasks).toBe(1);
 		expect(result.skipped).toBe(0);
 		const restored = (await db.tasks.get(child.id)) as unknown as { parentId: string | null };
@@ -234,7 +216,6 @@ describe('importAll', () => {
 		if (!row) throw new Error('task missing from export');
 		row.parentId = parent.id;
 		row.color = 'teal';
-		// Make the file copy strictly newer than the local one.
 		row.updatedAt = new Date(Date.now() + 60_000).toISOString();
 
 		await importAll(dump);
@@ -258,9 +239,7 @@ describe('importAll', () => {
 
 		const dump = await exportAll();
 
-		// Import onto a DIFFERENT device: wipe, then restore. An alarm armed on one
-		// phone means nothing on another, so the restored row must have neither
-		// the platform id nor the fired timestamp.
+		// An alarm armed on one phone means nothing on another.
 		await db.tasks.clear();
 		await importAll(dump);
 
@@ -276,7 +255,6 @@ describe('importAll', () => {
 		const list = await createList('Tasks');
 		await createTask({ listId: list.id, title: 'orphan' });
 
-		// A file with tasks but no lists: every task has nowhere to live.
 		const dump = await exportAll();
 		dump.lists = [];
 
@@ -302,8 +280,7 @@ describe('importAll', () => {
 		await seed();
 		const dump = await exportAll();
 
-		// Two independent violations, in two different records. Reporting only the
-		// first would send the user round the loop fixing one field at a time.
+		// Reporting only the first path would send the user round the loop.
 		dump.tasks[0] = { ...dump.tasks[0], title: '' };
 		dump.lists[0] = { ...dump.lists[0], name: '' };
 
@@ -331,15 +308,13 @@ describe('soft-deleted rows', () => {
 		const task = await createTask({ listId: list.id, title: 'deleted' });
 		await deleteTask(task.id);
 
-		// A tombstone is not user data: it exists so a sync peer can learn about
-		// the delete. Shipping it would be shipping sync bookkeeping.
+		// A tombstone is sync bookkeeping, not user data.
 		const dump = await exportAll();
 		expect(dump.tasks).toHaveLength(0);
 
 		await importAll(dump);
 
-		// The tombstone itself stays (it is still a local row), but it must still
-		// be a tombstone — never resurrected into a live task.
+		// The row stays a tombstone; import must never resurrect it.
 		const row = (await db.tasks.get(task.id)) as unknown as { deletedAt: string | null };
 		expect(row.deletedAt).not.toBeNull();
 	});

@@ -1,22 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-// A script, not app code — there is no `#lib` alias for `scripts/`, so this is
-// the one relative import in the suite.
+// Script, not app code — `scripts/` has no `#lib` alias, so this import is relative.
 import { checkCargoVersion, readCargoVersion, setCargoVersion } from '../scripts/tauri-version';
 
-/**
- * Pure logic — the Cargo.toml version sync — so this stays on the default
- * `node` environment. Importing `scripts/tauri-version` also proves the CLI
- * stays behind its "invoked directly" guard: if it did not, this file would try
- * to read package.json and Cargo.toml on import.
- *
- * The bug class this exists to stop: the desktop version drifting from the
- * app version. release-please only touches apps/app/package.json, so without
- * the sync the Tauri bundles ship whatever Cargo.toml last said (0.1.0 while
- * package.json said 0.3.2). A second, quieter failure is the sync rewriting
- * the wrong line — a dependency's `version = "2"` instead of the package's —
- * which builds fine and reports the wrong number everywhere.
- */
+/** Guards the Cargo.toml version sync: only the [package] version moves, never a dependency's. */
 
 const SAMPLE = [
 	'[package]',

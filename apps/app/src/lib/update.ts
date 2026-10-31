@@ -1,17 +1,6 @@
 /**
- * "Is there a newer Ikoro?" — a throttled check against the GitHub releases
- * that release-please publishes.
- *
- * WHY THE API AND NOT A TAG PAGE. `GET /repos/{owner}/{repo}/releases/latest`
- * answers JSON with `tag_name` and `html_url`, needs no auth for a public repo,
- * and skips prereleases and drafts by definition — exactly the set a user should
- * be offered. The comparison is numeric per segment, because `0.3.10` is newer
- * than `0.3.9` and a string compare says otherwise.
- *
- * FAILURE IS SILENT AND CHEAP. Offline, rate-limited, or a 404 all mean "no
- * news", never an error the user has to see; the throttle timestamp is written
- * BEFORE the fetch so a failing network does not turn every resume into a new
- * request. The banner component owns the UI; this module owns only the facts.
+ * "Is there a newer Ikoro?" — a throttled check against the GitHub latest-release API.
+ * Failure is silent: offline, rate-limited and 404 all mean "no news".
  */
 export const RELEASES_API = 'https://api.github.com/repos/Michael-Obele/Ikoro/releases/latest';
 export const RELEASES_PAGE = 'https://github.com/Michael-Obele/Ikoro/releases/latest';
@@ -54,11 +43,7 @@ function storage(): Storage | null {
 	}
 }
 
-/**
- * The update newer than `current`, or null when there is none — including when
- * the check was throttled, the network failed, or the release does not exist.
- * Callers treat null as "nothing to say".
- */
+/** The update newer than `current`, or null. Callers treat null as "nothing to say". */
 export async function checkForUpdate(
 	current: string,
 	fetchImpl: typeof fetch = fetch
@@ -66,8 +51,7 @@ export async function checkForUpdate(
 	const store = storage();
 	const last = Number(store?.getItem(CHECKED_KEY) ?? '0');
 	if (Date.now() - last < CHECK_INTERVAL_MS) return null;
-	// Written BEFORE the fetch: a phone with no signal must not retry on every
-	// single resume, it must wait out the window like a successful check does.
+	// Written before the fetch, so a phone with no signal waits out the window too.
 	store?.setItem(CHECKED_KEY, String(Date.now()));
 
 	try {

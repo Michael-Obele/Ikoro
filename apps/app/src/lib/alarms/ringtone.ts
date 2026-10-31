@@ -1,17 +1,4 @@
-/**
- * Choosing and resolving alarm sounds, in one tiny module.
- *
- * TWO LEVELS, BOTH DELIBERATE. A global default lives in `localStorage` — it is
- * a device preference, not task data, so it never touches the database or the
- * sync wire. A per-task override lives on the task row (`Task.ringtone`) and
- * wins when present. `ringtoneFor()` is the single place that precedence is
- * decided, so the sheet and `reconcile()` can never disagree about what an
- * alarm was armed with.
- *
- * The actual LISTING and PREVIEWING of sounds is the system ringtone picker
- * (Android's `ACTION_RINGTONE_PICKER`, bridged by `IkoroAlarm.pickRingtone`):
- * it already knows every sound the device has and previews each one on tap.
- */
+/** Choosing and resolving alarm sounds: device-wide default in `localStorage`, per-task override on the row, precedence decided only in `ringtoneFor()`. */
 import { Capacitor } from '@capacitor/core';
 import { IkoroAlarm, type IkoroRingtonePick } from './plugin';
 
@@ -42,18 +29,12 @@ export function setGlobalRingtone(uri: string | null): void {
 	else store.removeItem(RINGTONE_STORAGE_KEY);
 }
 
-/**
- * The sound this task's alarm should be armed with: its own pick, else the
- * device-wide default, else null (the system default alarm sound).
- */
+/** Per-task pick, else the device-wide default, else null (the system default alarm sound). */
 export function ringtoneFor(task: { ringtone?: string | null }): string | null {
 	return task.ringtone ?? globalRingtone();
 }
 
-/**
- * Open the system picker. Resolves `{ cancelled: true }` on every platform
- * without a picker, so callers need no platform branch of their own.
- */
+/** Open the system picker. Answers `{ cancelled: true }` on platforms without one, so callers need no branch. */
 export async function pickRingtone(existing?: string | null): Promise<IkoroRingtonePick> {
 	if (!ringtoneSupported()) return { cancelled: true, uri: null };
 	try {

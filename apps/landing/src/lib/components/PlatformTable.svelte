@@ -9,14 +9,8 @@
 	let { rows }: Props = $props();
 
 	/**
-	 * The honest platform table.
-	 *
-	 * A real `<table>` rather than a grid of cards: the rows are comparable, the
-	 * columns are categories, and a screen reader can say "Status, unsupported"
-	 * for a cell instead of reading three unlabelled boxes in order.
-	 *
-	 * Status is a word, never a colour. `Badge` ships the colour; the word is what
-	 * carries the meaning, and the two are never allowed to disagree.
+	 * A real `<table>` so a screen reader says "Status, unsupported" per cell. Status
+	 * is a word, never a colour: the word carries the meaning and the two never disagree.
 	 */
 	const STATUS: Record<Platform['status'], { text: string; variant: BadgeVariant }> = {
 		released: { text: 'Available', variant: 'default' },

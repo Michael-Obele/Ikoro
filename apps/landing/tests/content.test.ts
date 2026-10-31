@@ -1,9 +1,6 @@
 /**
- * Guards on the claims this site makes.
- *
- * A marketing page is the one file in the repo with no failing test to stop it:
- * nothing crashes if the download page promises an alarm the app cannot schedule.
- * These are the checks that would notice.
+ * Guards the claims this site makes: nothing crashes if the download page promises an
+ * alarm the app cannot schedule.
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -39,10 +36,7 @@ function sourceFiles(dir: string): Array<[string, string]> {
 
 const sources = sourceFiles(SRC);
 
-/**
- * A release that really exists, with all five files on it — the only shape
- * that may claim a download. Sizes are the ones GitHub reported for v0.3.4.
- */
+/** A release that really exists, carrying all five files -- the only shape that may claim a download. */
 const COMPLETE_RELEASE = parseLatestRelease({
 	tag_name: `v${appPkg.version}`,
 	published_at: '2026-10-29T12:58:00Z',
@@ -71,11 +65,7 @@ describe('the platform table', () => {
 		}
 	});
 
-	/**
-	 * The table is the site's honesty instrument, so its statuses must be facts
-	 * about the release rather than adjectives about the platform. An offline
-	 * build knows a version number and nothing else, so it releases nothing.
-	 */
+	/** Statuses must be facts about the release: an offline build knows a version and nothing else. */
 	it('releases nothing at all when the release could not be checked', () => {
 		const released = platformRows(deriveRelease(appPkg.version)).filter(
 			(p) => p.status === 'released'
@@ -89,7 +79,6 @@ describe('the platform table', () => {
 			.map((p) => p.id);
 		expect(released).toEqual(['android', 'linux-desktop']);
 
-		// And a release that carries Android only releases Android only.
 		const androidOnly = parseLatestRelease({
 			tag_name: `v${appPkg.version}`,
 			published_at: '2026-10-29T12:58:00Z',
@@ -120,13 +109,7 @@ describe('the platform table', () => {
 		expect(releaseNotice(deriveRelease('9.9.9')).title).toContain('9.9.9');
 	});
 
-	/**
-	 * The download page must never build a URL. Every link it renders comes out of
-	 * `release.assets`, which only ever holds what GitHub reported — a literal or
-	 * interpolated `.../releases/download/...` anywhere else is the 404 waiting to
-	 * happen again. (The one legal home for that string is release.ts, which
-	 * `tests/no-hardcoded-release.test.ts` exempts by name.)
-	 */
+	/** The download page must never build a URL; every link comes from `release.assets`. */
 	it('links the release page, never a guessed download URL', () => {
 		const derived = deriveRelease(appPkg.version);
 		for (const row of platformRows(derived)) {
@@ -134,7 +117,6 @@ describe('the platform table', () => {
 		}
 		const android = platformRows(derived).find((p) => p.id === 'android');
 		expect(android?.action).toBe(`v${appPkg.version} release`);
-		// A derived release carries no file, so it can render no download button.
 		expect(Object.keys(derived.assets)).toEqual([]);
 	});
 
@@ -212,8 +194,7 @@ describe('what the site says about itself', () => {
 
 	it('makes no network calls from markup', () => {
 		for (const [path, text] of sources) {
-			// A script tag with a src, or an import from a URL, is the app asking
-			// somebody else's server for something.
+			// A script with a src, or an import from a URL, is the app asking another server for something.
 			expect(text, path).not.toMatch(/<script[^>]+src=/);
 			expect(text, path).not.toMatch(/https?:\/\/[^"'\s]+<\/script>/);
 		}
@@ -233,12 +214,7 @@ describe('the content itself', () => {
 		expect(limits.length).toBeGreaterThanOrEqual(4);
 	});
 
-	/**
-	 * The curated `releases` array is gone on purpose: an entry is GitHub's
-	 * release, so a version cannot be listed here and missing there. A re-added
-	 * array — or a re-added "latest was 0.3.4" helper — puts a second source of
-	 * truth back on the page.
-	 */
+	/** No curated `releases` array: a second source of truth cannot creep back in. */
 	it('holds no changelog of its own', () => {
 		const text = readFileSync(join(SRC, 'lib/content.ts'), 'utf8');
 		expect(text).not.toMatch(/export const releases\b/);
@@ -246,8 +222,6 @@ describe('the content itself', () => {
 	});
 
 	it('derives the release from the app version, structurally in step', () => {
-		// No site.version anymore: both sides derive from the same place, so
-		// the test asserts the derivation, not equality of two hand-kept numbers.
 		const derived = deriveRelease(appPkg.version);
 		expect(derived.version).toBe(appPkg.version);
 		const android = platformRows(derived).find((p) => p.id === 'android');

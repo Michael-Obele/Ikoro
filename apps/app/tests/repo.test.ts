@@ -1,8 +1,5 @@
 // @vitest-environment jsdom
-//
-// `fake-indexeddb/auto` MUST be imported before the module under test: schema.ts
-// calls `createReactiveDB()` at module scope, so IndexedDB has to already exist
-// by the time that runs or the import throws.
+// `fake-indexeddb/auto` must load first: schema.ts calls createReactiveDB() at module scope.
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from '#lib/db/schema';
@@ -10,15 +7,7 @@ import { ensureSeeded } from '#lib/db/seed';
 import * as repo from '#lib/db/repo';
 
 /**
- * These cases are the contract for the data layer. Three of them encode the
- * design decisions that follow from svelte-idb having no transaction API:
- *
- *   - `createTask` with a duplicate id must THROW (it uses `add()`, not `put()`),
- *     otherwise a colliding id would silently overwrite somebody's task.
- *   - `deleteTask` must leave the row readable by `getTask` — soft delete, so an
- *     interrupted sync can still see the tombstone.
- *   - `deleteList` must be a sequential, idempotent cascade rather than one
- *     atomic operation, so running it twice is safe.
+ * The data-layer contract. Three cases encode the svelte-idb constraints: duplicate ids throw (add, not put), deletes stay readable (tombstones), cascades are sequential and idempotent (no transactions).
  */
 
 /** Local-time YYYY-MM-DD, which is how `dueDate` is stored (never an instant). */
@@ -197,10 +186,7 @@ describe('updateTask', () => {
 
 describe('task color', () => {
 	/**
-	 * `color` is OPTIONAL-BY-DESIGN (no version bump, no index), so these cases
-	 * pin the two properties that make that safe: it defaults to null on create,
-	 * and it round-trips through updateTask like any other field — including the
-	 * explicit null that "None" writes.
+	 * `color` is optional-by-design (no version bump, no index): null on create, and it round-trips through updateTask including an explicit null.
 	 */
 	it('defaults to null on create, and survives a create/read round trip when set', async () => {
 		const listId = await freshList();
@@ -223,8 +209,7 @@ describe('task color', () => {
 		await repo.updateTask(id, { color: 'red' });
 		expect((await repo.getTask(id))?.color).toBe('red');
 
-		// The sheet's "None" swatch writes an explicit null; the field must come
-		// back as null, not as the string 'null' or a stale colour.
+		// "None" writes an explicit null; it must not come back as 'null' or a stale colour.
 		await repo.updateTask(id, { color: null });
 		expect((await repo.getTask(id))?.color).toBeNull();
 	});
@@ -271,15 +256,7 @@ describe('markAllDirty', () => {
 
 describe('subtasks', () => {
 	/**
-	 * The subtask contract, one level deep by design:
-	 *
-	 *   - a subtask is created against a TOP-LEVEL parent only (repo enforces it,
-	 *     so no UI or future sync writer can nest deeper);
-	 *   - a parent with open subtasks cannot be completed — the thrown MESSAGE is
-	 *     the contract the UI surfaces, so it is asserted verbatim;
-	 *   - deleting a parent soft-deletes its children (sequential + idempotent,
-	 *     like deleteList, because svelte-idb has no transaction);
-	 *   - a subtask always inherits its parent's listId, whatever the caller passed.
+	 * Subtasks, one level deep by design: a parent with open subtasks cannot be completed (message asserted verbatim), deleting a parent soft-deletes children, and a subtask always inherits its parent's listId.
 	 */
 	async function parentWithChildren(): Promise<{ parentId: string; childIds: string[] }> {
 		const listId = await freshList();
@@ -296,7 +273,6 @@ describe('subtasks', () => {
 		expect(subs.map((t) => t.id)).toEqual(childIds);
 		expect(subs.every((t) => t.parentId === parentId)).toBe(true);
 
-		// Another parent's child must not leak in.
 		const listId = (await repo.getTask(parentId))!.listId;
 		const stranger = await repo.createTask({ listId, title: 'stranger' });
 		await repo.createTask({ listId, title: 'other child', parentId: stranger.id });
@@ -354,7 +330,6 @@ describe('subtasks', () => {
 		const { parentId } = await parentWithChildren();
 
 		await expect(repo.toggleTask(parentId)).rejects.toThrow('Complete its subtasks first');
-		// The refusal must not have half-applied: the parent is still open.
 		expect((await repo.getTask(parentId))?.completedAt).toBeNull();
 	});
 
@@ -371,8 +346,7 @@ describe('subtasks', () => {
 		for (const id of childIds) await repo.toggleTask(id);
 		await repo.toggleTask(parentId);
 
-		// Children are done, so this is legal — but reopen must work even if a
-		// future edit loosens the gate, hence asserting both directions.
+		// Reopen must work even if a future edit loosens the gate.
 		await repo.toggleTask(parentId);
 		expect((await repo.getTask(parentId))?.completedAt).toBeNull();
 	});
@@ -386,7 +360,6 @@ describe('subtasks', () => {
 		for (const id of childIds) {
 			expect((await repo.getTask(id))?.deletedAt).not.toBeNull();
 		}
-		// And the cascade is visible to the read model: no orphans anywhere.
 		expect(await repo.subtasksOf(parentId)).toHaveLength(0);
 	});
 
@@ -400,8 +373,6 @@ describe('subtasks', () => {
 	it('completing a subtask never gates on siblings and never blocks itself', async () => {
 		const { childIds } = await parentWithChildren();
 
-		// A subtask is not a parent: the gate must not apply to it even though
-		// its sibling is still open.
 		await expect(repo.toggleTask(childIds[0])).resolves.toBeUndefined();
 		expect((await repo.getTask(childIds[0]))?.completedAt).not.toBeNull();
 	});

@@ -12,17 +12,9 @@ import {
 } from '#lib/sync/cursor';
 import type { WireChangeRow } from '#lib/sync/merge';
 
-/**
- * The pull cursor is the one number a client STORES and trusts forever.
- *
- * Every bug in this file is silent: a cursor that rewinds re-pulls history
- * forever, and one that advances too far skips changes the user will never see
- * again. Neither throws, neither logs, and neither is recoverable without
- * reinstalling the app. So the edge cases are the tests — not the happy path.
- */
+/** Cursor arithmetic: every bug here is silent — it skips or replays changes forever. */
 
-// The payload is irrelevant to every cursor assertion here — `computeNextRev`
-// reads only `rev` — so it is cast once rather than spelled out 500 times.
+// `computeNextRev` reads only `rev`, so the payload is cast rather than spelled out.
 const row = (rev: number): WireChangeRow => ({
 	kind: 'task',
 	entityId: `t${rev}`,
@@ -44,16 +36,14 @@ describe('parseSince', () => {
 	});
 
 	it('resets rather than 400s on a garbage cursor', () => {
-		// The asymmetry is the point. A 400 strands the client until reinstall;
-		// resetting to 0 costs a redundant pull that merges to identical rows.
+		// A 400 strands the client; a reset costs one redundant pull that merges to identical rows.
 		for (const bad of ['abc', '-1', '1.5', 'NaN', 'Infinity', '1e999', '<script>']) {
 			expect(parseSince(bad), `since=${bad}`).toBe(INITIAL_CURSOR);
 		}
 	});
 
 	it('does not clamp a huge cursor', () => {
-		// Some clients park at MAX_SAFE_INTEGER to mean "caught up forever".
-		// Clamping that to MAX_LIMIT would replay the entire history.
+		// MAX_SAFE_INTEGER is some clients' "caught up forever"; clamping it would replay everything.
 		expect(parseSince(String(Number.MAX_SAFE_INTEGER))).toBe(Number.MAX_SAFE_INTEGER);
 	});
 });
@@ -69,8 +59,7 @@ describe('clampLimit', () => {
 	});
 
 	it('never returns less than 1', () => {
-		// limit=0 would make the query `LIMIT 1` (the +1 probe) and the client
-		// would read an empty page as "no changes" forever.
+		// limit=0 would query `LIMIT 1` and read as "no changes" forever.
 		expect(clampLimit('0')).toBe(1);
 		expect(clampLimit('-5')).toBe(1);
 	});
@@ -78,9 +67,7 @@ describe('clampLimit', () => {
 
 describe('computeNextRev', () => {
 	it('is the highest rev RETURNED, not since + count', () => {
-		// The bug this prevents: a user's feed is sparse. Revs 7 and 900 can
-		// belong to the same user with 892 values in between that are nobody's.
-		// Advancing by row count would jump the cursor past them permanently.
+		// A user's feed is sparse, so advancing by row count skips whole rev ranges.
 		expect(computeNextRev([row(7), row(900)], 0)).toBe(900);
 		expect(computeNextRev([row(7), row(900)], 5)).toBe(900);
 	});
@@ -90,8 +77,7 @@ describe('computeNextRev', () => {
 	});
 
 	it('ignores a row below the cursor', () => {
-		// Defensive: should be unreachable, since the query filters `rev > since`.
-		// But if it ever happens, the cursor must not move backwards.
+		// Should be unreachable, but the cursor must never move backwards.
 		expect(computeNextRev([row(10), row(4)], 50)).toBe(50);
 	});
 });

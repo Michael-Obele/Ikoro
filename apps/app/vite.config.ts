@@ -6,22 +6,16 @@ import { defineConfig } from 'vitest/config';
 import pkg from './package.json' with { type: 'json' };
 
 export default defineConfig({
-	// shadcn-svelte's CLI and its generated components still speak `$lib/...`.
-	// SvelteKit 3 deprecated the `sveltekit({ alias })` option in favour of `#lib`
-	// subpath imports, so `$lib` is resolved here by Vite, while tsconfig `paths`
-	// covers the CLI's preflight check and `tsc`. Both are required.
+	// shadcn-svelte emits `$lib/...`, so Vite resolves it here; tsconfig `paths`
+	// covers the CLI preflight and `tsc`. Both are required.
 	resolve: {
 		alias: { $lib: path.resolve('./src/lib') },
-		// Under Vitest, `svelte` must resolve its CLIENT build. Without this,
-		// `mount()` comes from `svelte/internal/server` and every component test
-		// fails with `lifecycle_function_unavailable` — a green-looking suite that
-		// silently tests nothing. Gated on VITEST so the real build is untouched.
+		// Vitest needs svelte's CLIENT build, or `mount()` comes from internal/server
+		// and every component test fails. Gated on VITEST so the real build is untouched.
 		...(process.env.VITEST ? { conditions: ['browser'] } : {})
 	},
-	// Kit 3 has no `$app/version`, so the app version is baked in from
-	// package.json at build time. One source of truth: Settings, the About box,
-	// and the APK's `versionName` all read the same field, so they cannot drift
-	// into reporting different numbers for the same build.
+	// Kit 3 has no `$app/version`; bake it from package.json so Settings, About and
+	// the APK's versionName cannot drift.
 	define: {
 		__IKORO_VERSION__: JSON.stringify(pkg.version)
 	},
@@ -43,8 +37,7 @@ export default defineConfig({
 				strict: true
 			}),
 
-			// Svelte inspector — always on. SvelteKit 3 removed `vitePlugin`, so
-			// vite-plugin-svelte options sit directly on the sveltekit() plugin.
+			// Svelte inspector, always on; Kit 3 dropped `vitePlugin`, so options sit here.
 			inspector: {
 				toggleKeyCombo: 'alt-x',
 				showToggleButton: 'active',

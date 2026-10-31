@@ -2,15 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as v from 'valibot';
 import { exportSchema, taskInputSchema, taskSchema } from '#lib/valibot/task';
 
-/**
- * Pure logic — no database, no DOM — so it stays on the default `node`
- * environment and runs in milliseconds.
- *
- * The length limits are not arbitrary: 1024/8192 are Google's own task title and
- * notes caps, and Ikoro is meant to be a drop-in for someone whose tasks already
- * live there. Rejecting a 1025th character on import would silently lose data on
- * a round-trip.
- */
+/** Guards the schemas' bounds -- 1024/8192 are Google's own title and notes caps, so import stays lossless. */
 
 /** `taskSchema` is the complete form shape, so the base must be complete too. */
 const minimal = {

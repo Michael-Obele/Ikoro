@@ -1,12 +1,5 @@
 <script lang="ts">
-	/**
-	 * Four states as a badge group: none, low, medium, high.
-	 *
-	 * A segmented control rather than a `<select>` because every state has a
-	 * colour, and a dropdown hides the colour until you have already committed to
-	 * opening it. Tapping the active one clears it — priority 0 is a real choice,
-	 * not a starting state.
-	 */
+	/** Four states as chips: none, low, medium, high. Tapping the active one clears it. */
 	import type { Priority } from '$lib/db/schema';
 
 	let {
@@ -18,20 +11,8 @@
 	} = $props();
 
 	/**
-	 * Each chip is a token pairing this palette already measures, so a chip cannot
-	 * drift into a colour nothing audits. The picker only ever renders inside a
-	 * Sheet or a Dialog, and both paint `bg-popover`.
-	 *
-	 *   None     accent      + accent-foreground      15.0:1 / 14.5:1
-	 *   Low      input/50    + foreground             10.8:1 /  9.1:1
-	 *   Medium   primary     + primary-foreground     17.2:1 / 14.2:1
-	 *   High     destructive + destructive-foreground  8.8:1 / 12.6:1
-	 *
-	 * (light / dark.) It is a four-step ramp — pale, grey, ink, red — rather than
-	 * four hues, because `destructive` is the only chromatic token in the palette;
-	 * three hues would mean raw Tailwind colours, which is what used to be here
-	 * (2.77 / 2.15 / 4.70:1, identical in both themes because a hardcoded hex
-	 * never changes).
+	 * Token pairs the contrast test already audits; a ramp, not four hues — `destructive` is
+	 * the palette's only chromatic token.
 	 */
 	const OPTIONS: { value: Priority; label: string; class: string }[] = [
 		{
@@ -64,11 +45,7 @@
 
 <div class="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Priority">
 	{#each OPTIONS as option (option.value)}
-		<!--
-			Square chips, not pills. A pill here was the only rounded control left in
-			the sheet once the shape scale went boxy, and it read as a leftover. The
-			chips are `min-h-9` so each is a comfortable tap target on a phone.
-		-->
+		<!-- Square chips, `min-h-9` so each is a comfortable tap target on a phone. -->
 		<button
 			type="button"
 			role="radio"

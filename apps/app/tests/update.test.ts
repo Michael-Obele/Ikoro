@@ -2,18 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CHECK_INTERVAL_MS, checkForUpdate, isNewer, RELEASES_API } from '#lib/update';
 
-/**
- * THE UPDATE CHECK, INCLUDING ITS TWO FAILURE MODES.
- *
- * This file catches the bugs a user would feel but no build would show:
- *  - a LEXICAL version compare ("0.3.10" < "0.3.9" is true as strings, which
- *    would hide a newer release behind an older-looking tag);
- *  - a check that hammers the network: the throttle timestamp must be written
- *    BEFORE the fetch, so an offline phone retries once per window, not once
- *    per resume.
- *
- * fetch is injected, so no request ever leaves the process.
- */
+/** Guards the update check: numeric version compare, and a throttle stamped before the fetch so an offline device retries once per window. */
 
 const STORAGE_KEY = 'ikoro:update-checked';
 
@@ -30,7 +19,6 @@ beforeEach(() => {
 
 describe('isNewer', () => {
 	it('compares numerically per segment, not as strings', () => {
-		// The whole point: as strings "0.3.10" < "0.3.9".
 		expect(isNewer('0.3.10', '0.3.9')).toBe(true);
 		expect(isNewer('0.10.0', '0.9.9')).toBe(true);
 	});
@@ -82,12 +70,9 @@ describe('checkForUpdate', () => {
 		const asFetch = fetchImpl as unknown as typeof fetch;
 
 		expect(await checkForUpdate('0.3.2', asFetch)).not.toBeNull();
-		// Second call in the same window: throttled, so the network is not touched
-		// even though the last result would qualify again.
 		expect(await checkForUpdate('0.3.2', asFetch)).toBeNull();
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 
-		// A failed check throttles the same way a successful one does.
 		localStorage.clear();
 		const failing = vi.fn(async () => {
 			throw new Error('offline');
@@ -96,7 +81,6 @@ describe('checkForUpdate', () => {
 		expect(await checkForUpdate('0.3.2', failing as unknown as typeof fetch)).toBeNull();
 		expect(failing).toHaveBeenCalledTimes(1);
 
-		// Outside the window the check runs again.
 		localStorage.setItem(STORAGE_KEY, String(Date.now() - CHECK_INTERVAL_MS - 1));
 		expect(await checkForUpdate('0.3.2', asFetch)).not.toBeNull();
 	});

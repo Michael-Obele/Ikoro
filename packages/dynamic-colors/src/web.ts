@@ -1,14 +1,7 @@
 /**
- * The web implementation.
- *
- * Dynamic colour is an Android SYSTEM capability: the palette is derived from the
- * wallpaper by the OS, and a browser has no wallpaper to read. So this answers
- * `available: false` and nothing else — it does not guess a palette from the
- * page, and it does not reject, because a caller on the web is not making a
- * mistake.
- *
- * `sdkInt: 0` rather than a made-up number: there is no Android API level here,
- * and 0 is the value that cannot be mistaken for a real one.
+ * The web implementation. Palettes come from the OS wallpaper, which a browser has
+ * none of, so this answers `available: false` and `sdkInt: 0` -- a value that cannot
+ * be mistaken for a real API level.
  */
 import { WebPlugin } from '@capacitor/core';
 import type {

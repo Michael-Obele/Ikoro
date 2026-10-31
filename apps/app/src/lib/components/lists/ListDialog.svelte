@@ -1,20 +1,12 @@
 <script lang="ts">
-	/**
-	 * Create / rename / delete a list.
-	 *
-	 * One dialog, three modes. Delete is behind a confirmation and explains what
-	 * it costs — deleting a list cascades to every task inside it, and "it will be
-	 * back" is not something this app can promise.
-	 */
+	/** Create / rename / delete a list. Deleting cascades to every task inside it. */
 	import Button from '$lib/components/ui/button/button.svelte';
 	import Input from '$lib/components/ui/input/input.svelte';
 	import Label from '$lib/components/ui/label/label.svelte';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as repo from '$lib/db/repo';
 
-	// `open` is what shows the dialog; `mode` only says what it is for. They are
-	// separate because 'create' is a real mode, and overloading it as "closed"
-	// made opening the create dialog set the very value that kept it shut.
+	// `open` shows the dialog; `mode` only says what for — 'create' is a real mode, not "closed".
 	let {
 		open = $bindable(false),
 		mode = $bindable<'create' | 'rename' | 'delete'>('create'),

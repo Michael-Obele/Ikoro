@@ -1,13 +1,4 @@
-/**
- * The shared styling helpers every shadcn component imports.
- *
- * It lives in the package rather than in an app because that is what makes the
- * components shared: `cn()` is not a project convention, it is part of how these
- * components are written.
- *
- * The `Without*` types are the shapes the bits-ui-backed components need to drop
- * props they re-implement themselves.
- */
+/** Shared styling helpers: `cn()` plus the `Without*` prop shapes the bits-ui-backed components need. */
 export { cn } from 'cn';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

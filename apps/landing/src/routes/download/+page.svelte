@@ -9,21 +9,12 @@
 
 	const release = $derived(page.data.release);
 
-	/**
-	 * The release in words — and the only place this page decides what it may
-	 * promise. `ready` means GitHub listed every file; anything else means some
-	 * or all of them have not landed, and the page says so rather than offering a
-	 * link that 404s.
-	 */
+	/** The only place this page decides what it may promise; `ready` means GitHub listed every file. */
 	const notice = $derived(releaseNotice(release));
 
 	const rows = $derived(platformRows(release));
 
-	/**
-	 * The one primary action. It is a real file or it is not there: there is no
-	 * "probably this URL" branch, because that is how a download page ends up
-	 * sending people to a GitHub 404 eighteen seconds after a tag is cut.
-	 */
+	/** A real file or nothing -- no "probably this URL" branch, which is how a download page ends up 404ing. */
 	const apk = $derived(release.assets.apk);
 
 	/** The install steps are only worth printing while there is something to install. */
@@ -67,9 +58,8 @@
 	lede="Two builds publish this release minutes apart. This is where each file is."
 >
 	<div class="max-w-3xl">
-		<!-- `role="note"`: a standing statement about the release, not a live
-		     update. Alert's own `role="alert"` would make assistive technology
-		     interrupt whatever is being read to announce it. -->
+		<!-- `role="note"`: a standing statement, not a live update. Alert's own
+		     `role="alert"` would interrupt the reader. -->
 		<Alert role="note">
 			<CircleAlert aria-hidden="true" />
 			<AlertTitle>{notice.title}</AlertTitle>

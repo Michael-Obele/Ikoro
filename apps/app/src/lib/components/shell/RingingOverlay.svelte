@@ -1,12 +1,7 @@
 <script lang="ts">
 	/**
-	 * The in-app ringing screen.
-	 *
-	 * Shown only when an alarm rings while Ikoro is in front — the case Android
-	 * refuses to give a full-screen takeover. Everything here mirrors the native
-	 * `IkoroAlarmActivity`: the task, its notes, Snooze and Dismiss, nothing else.
-	 * A ringing alarm with no visible control is the one UX failure this product
-	 * cannot afford, so this is a full-screen overlay rather than a banner.
+	 * The in-app ringing screen, for when Android will not take over: a full-screen overlay,
+	 * never a banner.
 	 */
 	import Button from '$lib/components/ui/button/button.svelte';
 	import Bell from 'lucide-svelte/icons/bell';
@@ -29,10 +24,8 @@
 			const options = { id: hashId(id), taskId: id, title: task?.title ?? '' };
 			await (action === 'snooze' ? IkoroAlarm.snooze(options) : IkoroAlarm.dismiss(options));
 		} finally {
-			// The native side is the source of truth for the sound, but the overlay
-			// must not stay up if the bridge call failed — the user pressed a button
-			// and needs the screen back either way. `alarmSnoozed`/`alarmDismissed`
-			// would normally clear it; this is the belt-and-braces.
+			// The overlay must come down even if the bridge call failed — `alarmSnoozed` /
+			// `alarmDismissed` normally clear it.
 			stopRinging();
 			busy = false;
 		}

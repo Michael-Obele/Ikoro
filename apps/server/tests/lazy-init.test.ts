@@ -1,28 +1,6 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 
-/**
- * The lazy-initialisation contract, which exists because of a build.
- *
- * SvelteKit's post-build `analyse` step IMPORTS the built server module to trace
- * its routes. Anything read at module scope therefore runs during `vite build` —
- * on a machine with no `.env`, no database and no secrets. A top-level
- * `neon(process.env.DATABASE_URL)`, or a top-level `betterAuth({ secret })`,
- * fails the build of code that has nothing wrong with it.
- *
- * Both of those happened, in that order, while writing this milestone. These
- * tests assert the property that prevents a third, so the next person to
- * "simplify" a lazy getter back into a top-level read finds a red test rather
- * than a broken pipeline.
- *
- * `vi.resetModules()` before each import is load-bearing: the memoised instance
- * lives in module scope, so without it the first test to touch the Proxy decides
- * the outcome of every test after it — which is a test that passes or fails
- * depending on alphabetical luck.
- *
- * WHAT IS NOT TESTED HERE: that a real query succeeds against a real database.
- * There is no `DATABASE_URL` in this environment, and inventing one would be
- * worse than documenting the gap.
- */
+/** Lazy init: module import must be inert, or `vite build` fails on an unconfigured machine. */
 
 const KEYS = ['DATABASE_URL', 'BETTER_AUTH_SECRET', 'APP_ORIGIN'];
 let saved: Record<string, string | undefined>;
@@ -42,9 +20,7 @@ afterEach(() => {
 
 describe('the database client is inert until a query runs', () => {
 	it('imports with DATABASE_URL unset', async () => {
-		// Reaching this line IS the assertion: a top-level `neon(...)` would have
-		// thrown during the import and failed `vite build` on an unconfigured
-		// machine.
+		// Reaching this line IS the assertion: a top-level `neon(...)` would throw during import.
 		const { db } = await import('#lib/db');
 		expect(db).toBeDefined();
 	});
@@ -63,10 +39,7 @@ describe('the database client is inert until a query runs', () => {
 	});
 
 	it('is not poisoned by a failed attempt', async () => {
-		// `instance ??= create()` leaves `instance` undefined when `create()` throws,
-		// so a later call with the variable set still succeeds. If a failed attempt
-		// stuck, fixing the env would need a process restart — on a deployed
-		// instance, a redeploy.
+		// `instance ??= create()` stays undefined when `create()` throws, so a retry can succeed.
 		const { db } = await import('#lib/db');
 		expect(() => db.select).toThrow(/DATABASE_URL/);
 
@@ -75,9 +48,7 @@ describe('the database client is inert until a query runs', () => {
 	});
 
 	it('treats an unfilled .env.example as unconfigured', async () => {
-		// The realistic first-run failure: someone copies `.env.example`, fills in
-		// nothing, and runs. That must say "not set", not attempt DNS for a host
-		// literally named `<host>`.
+		// The realistic first-run failure: copied and never filled in.
 		process.env.DATABASE_URL = 'postgresql://<user>:<password>@<host>/<db>?sslmode=require';
 		const { db } = await import('#lib/db');
 		expect(() => db.select).toThrow(/DATABASE_URL/);
@@ -93,8 +64,7 @@ describe('the auth instance is inert until a property is read', () => {
 
 	it('builds on first property access, and names the missing secret', async () => {
 		const { auth } = await import('#lib/server/auth');
-		// `secret` is a plain `string` option — there is no lazy form of it — so
-		// this is exactly where `requireEnv` fires.
+		// `secret` is a plain string option — there is no lazy form, so `requireEnv` fires here.
 		expect(() => auth.handler).toThrow(/BETTER_AUTH_SECRET/);
 	});
 
@@ -120,8 +90,7 @@ describe('the auth instance is inert until a property is read', () => {
 describe('the synthetic account email is unrouteable and unique', () => {
 	it('uses the RFC 2606 .invalid TLD', async () => {
 		const { syntheticEmailFor } = await import('#lib/server/auth');
-		// `.invalid` can never resolve and can never be registered, so a synthetic
-		// address can neither reach a real inbox nor collide with a real account.
+		// `.invalid` can never resolve or be registered, so it cannot reach a real inbox.
 		const email = syntheticEmailFor('abc-123');
 		expect(email).toBe('passkey-abc-123@ikoro.invalid');
 		expect(email.endsWith('.invalid')).toBe(true);

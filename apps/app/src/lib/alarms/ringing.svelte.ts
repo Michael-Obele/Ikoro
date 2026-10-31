@@ -1,16 +1,6 @@
 /**
- * Whether an alarm is ringing RIGHT NOW, as far as the web UI knows.
- *
- * WHY THIS EXISTS: Android only lets an app take over the screen when it is
- * locked or off. With Ikoro in the foreground the full-screen intent becomes a
- * heads-up notification and the native ringing screen is never started — the
- * phone rings and the user sees nothing they can act on. This is the in-app
- * counterpart: the service announces `alarmRinging`, an overlay appears, and its
- * two buttons deliver the same intents the native screen sends.
- *
- * Deliberately module-level state, not a store: there is exactly one possible
- * ringing alarm, and every writer is an event handler that already lives for the
- * app's lifetime.
+ * Whether an alarm is ringing RIGHT NOW. Android only starts the native ringing screen when locked, so
+ * in the foreground this overlay is the only control left. Module-level: exactly one alarm can ring.
  */
 let taskId = $state<string | null>(null);
 

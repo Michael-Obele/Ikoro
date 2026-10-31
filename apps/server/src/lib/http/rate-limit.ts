@@ -1,26 +1,6 @@
 /**
- * A naive per-IP in-memory rate limit for `/api/v1/*`.
- *
- * ── What this is NOT ────────────────────────────────────────────────────────
- * It is not a defence against a distributed flood, and it will not stop anyone
- * determined. It is per INSTANCE: two Fly machines have two independent
- * buckets, and restarting the process empties them. The only thing it reliably
- * stops is a misbehaving client in a loop and a bored script against a single
- * host, which is the realistic case for a personal sync server.
- *
- * Documented here rather than left to be discovered, because a rate limiter that
- * looks load-bearing and is not is worse than none.
- *
- * ── Why a fixed window and not a sliding one ─────────────────────────────────
- * A fixed window is O(1) memory and trivially correct. The known burst at the
- * boundary (2x the limit across a window edge) is acceptable here because the
- * limit is already generous relative to real sync traffic.
- *
- * ── Why the buckets sweep themselves ─────────────────────────────────────────
- * A `Map` keyed by IP that only ever grows is a memory leak with an IP-scan
- * attack's shape: every distinct address leaves an entry that lives until the
- * process restarts. `sweep()` is called on every request; it is O(1) amortised
- * because it only walks when the current window has turned over.
+ * A naive per-IP, per-instance rate limit for `/api/v1/*`. It stops a looping client, not a flood;
+ * `sweep()` runs per request because an unswept IP-keyed Map is a leak.
  */
 
 import { envInt } from '#lib/server/env';
@@ -45,10 +25,8 @@ function limitFor(scope: string): number {
 }
 
 /**
- * Count one request against an IP within a scope.
- *
- * `scope` is part of the key so the health check — which a load balancer hits
- * every few seconds — cannot exhaust the bucket the sync routes draw from.
+ * Count one request against an IP within a scope. `scope` is in the key so health checks cannot
+ * exhaust the sync routes' bucket.
  */
 export function check(ip: string, scope = 'v1'): RateDecision {
 	const limit = limitFor(scope);

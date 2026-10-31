@@ -1,20 +1,6 @@
 /**
- * LIVE verification of the systemd alarm path — the part of M6 that can be
- * observed without a Tauri binary.
- *
- * ⚠️ WHY THIS EXISTS: the Tauri desktop binary cannot be compiled on this
- * machine. Tauri's Linux build needs libwebkit2gtk and libgtk-3 development
- * packages, and `sudo` on this machine requires a password, so the system
- * libraries cannot be installed non-interactively. That leaves the Rust IPC
- * wrapper uncompiled.
- *
- * Everything BELOW the wrapper is not unverified, though. This script performs
- * the exact same filesystem writes and `systemctl` invocations the Rust commands
- * perform, using the exact same unit text the TypeScript generator produces — so
- * the milestone's central claim ("an alarm fires with the app closed") is checked
- * against the real operating system, not against a string in a test file.
- *
- *   bun scripts/verify-systemd.ts [--wait <minutes>]
+ * Live-verifies the systemd alarm path by writing the same units and running the same
+ * `systemctl` calls the Rust commands do. Usage: `bun scripts/verify-systemd.ts [--wait <minutes>]`
  */
 
 import { mkdirSync, existsSync, readdirSync, writeFileSync, rmSync } from 'node:fs';

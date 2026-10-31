@@ -9,8 +9,7 @@
 	let { children } = $props();
 </script>
 
-<!-- The site ships light and dark token sets; ModeWatcher applies the stored
-     or system theme to <html> and owns color-scheme from there. -->
+<!-- ModeWatcher applies the stored or system theme to <html> and owns color-scheme. -->
 <ModeWatcher />
 
 <a
