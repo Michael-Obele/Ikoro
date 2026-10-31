@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.7](https://github.com/Michael-Obele/Ikoro/compare/v0.3.6...v0.3.7) (2026-10-31)
+
+
+### Features
+
+* **alarms:** ring audibly, wake, and answer from the app ([b96cba9](https://github.com/Michael-Obele/Ikoro/commit/b96cba972c8809c6f6c1f54d810dedf32a1d5d30))
+* **backup:** export through the system share sheet on Android ([4c55630](https://github.com/Michael-Obele/Ikoro/commit/4c55630292d710df065a2eca2a8a8f3575d8b4d7))
+
+
+### Bug Fixes
+
+* **ui:** stop the keyboard hiding the sheet, and the grid widening the page ([a606df6](https://github.com/Michael-Obele/Ikoro/commit/a606df607e51d3aacb833892181c42f3299c8fe4))
+
 ## [0.3.6](https://github.com/Michael-Obele/Ikoro/compare/v0.3.5...v0.3.6) (2026-10-31)
 
 
