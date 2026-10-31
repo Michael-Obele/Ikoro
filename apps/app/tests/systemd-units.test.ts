@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { buildServiceUnit, buildTimerUnit, escapeUnitArg, firedDir } from '$lib/alarms/systemd';
+import {
+	ALARM_SOUND_ID,
+	RING_SECONDS,
+	buildServiceUnit,
+	buildTimerUnit,
+	escapeUnitArg,
+	firedDir
+} from '$lib/alarms/systemd';
 
 /**
  * Pure string generation — no systemd, no Rust, no Tauri. This is the layer
@@ -77,7 +84,7 @@ describe('buildTimerUnit', () => {
 });
 
 describe('buildServiceUnit', () => {
-	it('has exactly two ExecStart lines: notify, then stamp', () => {
+	it('has exactly three ExecStart lines: stamp, notify, ring', () => {
 		const unit = buildServiceUnit({
 			hash: 'abc123',
 			title: 'Call the dentist',
@@ -85,14 +92,51 @@ describe('buildServiceUnit', () => {
 		});
 		const execLines = unit.split('\n').filter((line) => line.startsWith('ExecStart='));
 
-		// Two, not one and not three. The second creates the state directory AND
-		// drops the stamp in one shell line: systemd gives each ExecStart its own
-		// shell, so a separate `mkdir` line would be a third directive and would
-		// make the count of real commands misleading.
-		expect(execLines).toHaveLength(2);
-		expect(execLines[0]).toContain('notify-send');
-		expect(execLines[1]).toContain(firedDir('/home/tester'));
-		expect(execLines[1]).toContain('abc123');
+		// Three, and the ORDER is the specification. The stamp is the record that
+		// this alarm reached the OS, so it must exist before a 30 second ring can be
+		// interrupted by a suspend or by the user cancelling.
+		expect(execLines).toHaveLength(3);
+		expect(execLines[0]).toContain(firedDir('/home/tester'));
+		expect(execLines[0]).toContain('abc123');
+		expect(execLines[1]).toContain('notify-send');
+		expect(execLines[2]).toContain('timeout');
+	});
+
+	it('rings, because a single chime is not an alarm', () => {
+		const unit = buildServiceUnit({ hash: 'abc123', title: 'x', home: '/home/tester' });
+		const ring = unit.split('\n').find((line) => line.includes('/usr/bin/timeout'));
+
+		expect(ring).toBeDefined();
+		expect(ring).toContain(`/usr/bin/timeout ${RING_SECONDS}`);
+		expect(ring).toContain('while :; do');
+		expect(ring).toContain(`--id=${ALARM_SOUND_ID}`);
+		// A failing player must not become a busy loop for the whole window.
+		expect(ring).toContain('|| sleep 1');
+	});
+
+	it('keeps the ring command free of the characters systemd mangles', () => {
+		const unit = buildServiceUnit({ hash: 'abc123', title: 'x', home: '/home/tester' });
+		const ring = unit.split('\n').find((line) => line.includes('/usr/bin/timeout')) ?? '';
+
+		// `%` is a systemd specifier and `"` inside a single-quoted argument stays
+		// literal, so a backslash-escaped quote would reach the shell as a literal
+		// backslash. Neither may appear in the generated ring.
+		expect(ring).not.toContain('%');
+		expect(ring).not.toContain('"');
+	});
+
+	it('treats the end of the ring as success, not as a failed unit', () => {
+		const unit = buildServiceUnit({ hash: 'abc123', title: 'x', home: '/home/tester' });
+
+		// `timeout` reports 124 when it stops the loop, and a cancel arrives as
+		// SIGTERM; neither is a failure. Stopping the ring is the intended ending.
+		expect(unit).toContain('SuccessExitStatus=124 143 SIGTERM SIGKILL');
+	});
+
+	it('asks the daemon for the alarm sound on the banner itself', () => {
+		const unit = buildServiceUnit({ hash: 'abc123', title: 'x', home: '/home/tester' });
+
+		expect(unit).toContain(`-h string:sound-name:${ALARM_SOUND_ID}`);
 	});
 
 	it('runs the whole thing as a oneshot, so systemd does not try to keep it alive', () => {
@@ -125,7 +169,7 @@ describe('buildServiceUnit', () => {
 			home: '/home/tester'
 		});
 		const execLines = unit.split('\n').filter((line) => line.startsWith('ExecStart='));
-		expect(execLines).toHaveLength(2);
+		expect(execLines).toHaveLength(3);
 	});
 
 	it('escapes the home directory placeholder rather than expanding it', () => {

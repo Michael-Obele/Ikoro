@@ -78,12 +78,62 @@ export const serviceUnitName = (hash: string) => `${UNIT_PREFIX}${hash}.service`
 export const timerUnitName = (hash: string) => `${UNIT_PREFIX}${hash}.timer`;
 
 /**
- * The oneshot that fires the notification and then records that it fired.
+ * The freedesktop event id for "the alarm went off".
  *
- * The stamp is the important part. `systemctl list-timers` forgets a timer once
- * its moment passes, so "the timer is gone" cannot distinguish fired from
- * deleted from never-existed. The stamp file can: it outlives the timer, and it
- * is what lets the app tell a miss from a delivery after the fact.
+ * An EVENT ID, not a file path, so the sound comes from whatever theme the user
+ * actually has. Every Linux sound theme inherits it from `freedesktop`.
+ */
+export const ALARM_SOUND_ID = 'alarm-clock-elapsed';
+
+/**
+ * The fallback file, used only when `canberra-gtk-play` is not installed.
+ *
+ * From the freedesktop sound theme, which ships on any system that has a sound
+ * theme at all. It is not a release-specific path, and the generated command
+ * checks that it exists before using it.
+ */
+export const ALARM_SOUND_FILE =
+	'/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga';
+
+/**
+ * How long the alarm rings for.
+ *
+ * A notification chime is not an alarm. On Android the alarm loops a MediaPlayer
+ * on STREAM_ALARM until it is dismissed; this is the desktop equivalent. A
+ * wall-clock duration is deliberate: the sound file's own length never has to be
+ * known here, and `alarm_cancel` cuts the ring short by stopping the service.
+ */
+export const RING_SECONDS = 30;
+
+/**
+ * The command that keeps ringing until `timeout` kills it.
+ *
+ * Deliberately free of `$`, `%` and `"`. This text is placed inside a
+ * single-quoted systemd argument, where a backslash escape stays literal and a
+ * percent sign is read as a systemd specifier: `$(date +%s)` would arrive as
+ * `$(date +%%s)` and quietly stop being arithmetic. Everything here is a
+ * constant, so no user text ever reaches it.
+ */
+function ringCommand(): string {
+	return (
+		'while :; do ' +
+		`if command -v canberra-gtk-play >/dev/null 2>&1; then canberra-gtk-play --id=${ALARM_SOUND_ID} || sleep 1; ` +
+		`elif command -v pw-play >/dev/null 2>&1; then pw-play ${ALARM_SOUND_FILE} || sleep 1; ` +
+		`elif command -v paplay >/dev/null 2>&1; then paplay ${ALARM_SOUND_FILE} || sleep 1; ` +
+		'else sleep 1; fi; done'
+	);
+}
+
+/**
+ * The oneshot that records the delivery, shows the banner, and RINGS.
+ *
+ * Order is not cosmetic. The stamp goes first, because it is the only record
+ * that this alarm reached the OS: if the ring is interrupted or the machine
+ * sleeps mid-ring, reconcile still has to be able to say "this one fired".
+ *
+ * The stamp is also why `list-timers` is not enough. systemd keeps a one-shot
+ * timer listed as `active (elapsed)` after it fires, so "the timer is still
+ * there" cannot distinguish armed from already-rung. The stamp file can.
  */
 export function buildServiceUnit({
 	hash,
@@ -101,8 +151,14 @@ Description=Ikoro reminder
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/notify-send --app-name=Ikoro --urgency=critical --expire-time=0 "Ikoro" "${escapeUnitArg(title)}"
+# Ending the ring is the POINT, not a failure. timeout reports 124 when it
+# stops the loop on time, and SIGTERM is what systemctl stop sends when the
+# user cancels — with neither whitelisted, every alarm left a red "failed" unit
+# in the journal. Measured: a plain stop logged "code=killed, status=15/TERM".
+SuccessExitStatus=124 143 SIGTERM SIGKILL
 ExecStart=/bin/sh -c 'mkdir -p ${statePath} && touch ${stamp}'
+ExecStart=/usr/bin/notify-send --app-name=Ikoro --urgency=critical --expire-time=0 -h string:sound-name:${ALARM_SOUND_ID} -h string:x-canonical-private-synchronous:${UNIT_PREFIX}${hash} "Ikoro" "${escapeUnitArg(title)}"
+ExecStart=/usr/bin/timeout ${RING_SECONDS} /bin/sh -c '${ringCommand()}'
 `;
 }
 

@@ -171,22 +171,74 @@ pub fn alarm_cancel(hash: String) -> Result<(), String> {
 
     // Best-effort; a missing unit is the normal case, not a failure.
     run("systemctl", &["--user", "stop", &timer]);
+    // Stop the SERVICE too. The ring is a `timeout` inside that unit, so stopping
+    // only the timer leaves an alarm sounding for up to 30 seconds after the user
+    // said "cancel" — which is not what cancel means to anyone.
+    run("systemctl", &["--user", "stop", &service]);
     run("systemctl", &["--user", "disable", &timer]);
 
     let dir = unit_dir();
     let _ = fs::remove_file(dir.join(&service));
     let _ = fs::remove_file(dir.join(&timer));
 
+    // The stamp is evidence for THIS alarm. Left behind, the next alarm on the
+    // same task would look already-delivered before it ever rang.
+    let _ = fs::remove_file(fired_dir().join(&hash));
+
     run("systemctl", &["--user", "daemon-reload"]);
     Ok(())
 }
 
-/// Every `ikoro-*` timer the user manager currently knows about.
+fn fired_dir() -> PathBuf {
+    PathBuf::from(home_dir()).join(STATE_DIR)
+}
+
+/// Hashes of `ikoro-*` timers that will STILL fire.
+///
+/// Two measurements make this less trivial than it looks, and both were taken on
+/// a real machine:
+///
+///  - `list-timers` ends each row with the ACTIVATES unit, so "the last
+///    whitespace-separated token" is `<hash>.service`, never the timer. Parsing
+///    that way made this function return an empty list on every machine, which
+///    silently turned "armed" into "nothing is armed".
+///  - a one-shot timer stays loaded as `active (elapsed)` after it fires, so
+///    being listed is not the same as being armed. Only `waiting` (or `running`
+///    while it fires) means it will still run.
+fn armed_hashes(listing: &str) -> Vec<String> {
+    listing
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.split_whitespace();
+            let unit = fields.next()?;
+            let _load_state = fields.next()?;
+            let active_state = fields.next()?;
+            let sub_state = fields.next()?;
+
+            if active_state != "active" || (sub_state != "waiting" && sub_state != "running") {
+                return None;
+            }
+
+            unit.strip_prefix("ikoro-")
+                .and_then(|rest| rest.strip_suffix(".timer"))
+                .map(str::to_string)
+        })
+        .collect()
+}
+
+/// Every `ikoro-*` timer that is still going to fire.
 #[tauri::command]
 pub fn alarm_list() -> Result<Vec<String>, String> {
     let (ok, out) = run(
         "systemctl",
-        &["--user", "list-timers", "--all", "--no-legend", "--plain"],
+        &[
+            "--user",
+            "list-units",
+            "ikoro-*.timer",
+            "--all",
+            "--no-legend",
+            "--plain",
+        ],
     );
     if !ok {
         // An unusable user manager means "nothing is armed", not "throw". A
@@ -194,18 +246,13 @@ pub fn alarm_list() -> Result<Vec<String>, String> {
         return Ok(Vec::new());
     }
 
-    Ok(out.lines()
-        .filter_map(|line| {
-            let unit = line.split_whitespace().last()?;
-            unit.strip_prefix("ikoro-")?.strip_suffix(".timer").map(str::to_string)
-        })
-        .collect())
+    Ok(armed_hashes(&out))
 }
 
 /// Hashes whose stamp file exists — i.e. alarms the OS actually delivered.
 #[tauri::command]
 pub fn alarm_stamps() -> Result<Vec<String>, String> {
-    let dir = PathBuf::from(home_dir()).join(STATE_DIR);
+    let dir = fired_dir();
     let entries = match fs::read_dir(&dir) {
         Ok(entries) => entries,
         // No state directory means nothing has ever fired. Not an error.
@@ -221,7 +268,7 @@ pub fn alarm_stamps() -> Result<Vec<String>, String> {
 /// Clear fired-stamps. Used by "I have dealt with these" after a miss is shown.
 #[tauri::command]
 pub fn alarm_clear_stamps() -> Result<(), String> {
-    let dir = PathBuf::from(home_dir()).join(STATE_DIR);
+    let dir = fired_dir();
     if let Ok(entries) = fs::read_dir(&dir) {
         for entry in entries.filter_map(Result::ok) {
             let _ = fs::remove_file(entry.path());
@@ -244,7 +291,7 @@ fn validate_hash(hash: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::validate_hash;
+    use super::{armed_hashes, validate_hash};
 
     #[test]
     fn accepts_a_decimal_hash() {
@@ -257,5 +304,22 @@ mod tests {
         assert!(validate_hash("123; rm -rf /").is_err());
         assert!(validate_hash("").is_err());
         assert!(validate_hash("abc").is_err());
+    }
+
+    /// Both lines below are copied from a real `systemctl --user list-units`.
+    #[test]
+    fn only_timers_that_will_still_fire_are_armed() {
+        let listing = "\
+ikoro-1234.timer loaded active waiting Ikoro reminder timer\n\
+ikoro-1663646904.timer loaded active elapsed Ikoro reminder timer\n\
+ikoro-999.timer not-found inactive dead ikoro-999.timer\n\
+launchpadlib-cache-clean.timer loaded active waiting launchpadlib cache cleanup\n";
+
+        assert_eq!(armed_hashes(listing), vec!["1234".to_string()]);
+    }
+
+    #[test]
+    fn an_empty_listing_arms_nothing() {
+        assert!(armed_hashes("").is_empty());
     }
 }

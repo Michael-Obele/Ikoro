@@ -88,7 +88,10 @@ console.log(
 );
 
 const injected = service.split('\n').filter((l) => l.startsWith('ExecStart=')).length;
-console.log(`\n  ExecStart lines after a newline-injection attempt: ${injected} (must be 2)`);
+console.log(`\n  ExecStart lines after a newline-injection attempt: ${injected} (must be 3)`);
+console.log(
+	`  RING_SECONDS in the unit?                        ${/timeout \d+ \/bin\/sh/.test(service) ? 'yes' : 'NO — BROKEN'}`
+);
 console.log(
 	`  raw "%" survives in the unit?                     ${service.includes('50% done') ? 'YES — BROKEN' : 'no'}`
 );

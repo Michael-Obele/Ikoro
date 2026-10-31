@@ -59,6 +59,21 @@ export interface AlarmScheduler {
 	getPending(): Promise<Set<string>>;
 	/** Resolves when a notification is tapped; yields the taskId. */
 	onAction(handler: (taskId: string) => void): void;
+	/**
+	 * Hashes whose stamp file exists — alarms the OS actually DELIVERED.
+	 *
+	 * Optional, because only a scheduler that leaves a trace outside the process
+	 * can answer. The systemd scheduler can: its unit writes a stamp before it
+	 * rings. Android does not need it (the receiver reports delivery directly),
+	 * and the browser has nothing to report.
+	 *
+	 * Without this, an alarm that fired while the app was closed comes back as
+	 * "missed" on the next open, which is the fastest way to teach a user to
+	 * distrust the reminder screen.
+	 */
+	firedStamps?(): Promise<Set<string>>;
+	/** Forget the stamps, once reconcile has accounted for them. */
+	clearStamps?(): Promise<void>;
 }
 
 /** How the schedule attempt actually went — never just a boolean. */

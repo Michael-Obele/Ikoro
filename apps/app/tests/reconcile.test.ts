@@ -57,6 +57,16 @@ class FakeScheduler implements AlarmScheduler {
 	async getPending() {
 		return new Set(this.pending);
 	}
+	/** Delivery stamps, as the systemd scheduler reports them. */
+	stamps = new Set<string>();
+	cleared = 0;
+	async firedStamps() {
+		return new Set(this.stamps);
+	}
+	async clearStamps() {
+		this.cleared += 1;
+		this.stamps.clear();
+	}
 	onAction() {}
 }
 
@@ -98,6 +108,8 @@ beforeEach(async () => {
 	scheduler.outcomes = [];
 	scheduler.scheduled = [];
 	scheduler.cancelled = [];
+	scheduler.stamps = new Set();
+	scheduler.cleared = 0;
 	scheduler.permission = {
 		notifications: 'granted',
 		exact: 'granted',
@@ -146,6 +158,68 @@ describe('reconcile — missed alarms', () => {
 		await reconcile({ scheduler, now: NOW });
 
 		expect(scheduler.scheduled).toHaveLength(0);
+	});
+});
+
+/**
+ * The desktop scheduler leaves a stamp file when the OS actually fires the unit.
+ * These cases cover the difference between "the time passed and nothing rang" and
+ * "the time passed and it rang while the app was closed".
+ *
+ * The ids here are systemd-shaped even though the fake reports `android`; the
+ * mapping is by id shape, not by platform, so one fake covers both.
+ */
+describe('reconcile — delivered while the app was closed', () => {
+	it('does NOT report a stamped alarm as missed', async () => {
+		await putTask({ alarmAt: PAST, alarmId: 'systemd:4242' });
+		scheduler.stamps = new Set(['4242']);
+
+		const report = await reconcile({ scheduler, now: NOW });
+
+		expect(report.missed).toEqual([]);
+		expect((await readTask('t1'))?.alarmFiredAt).toBe(PAST);
+	});
+
+	it('still retires the alarm once it has been delivered', async () => {
+		await putTask({ alarmAt: PAST, alarmId: 'systemd:4242' });
+		scheduler.stamps = new Set(['4242']);
+
+		await reconcile({ scheduler, now: NOW });
+
+		expect((await readTask('t1'))?.alarmAt).toBeNull();
+		expect((await readTask('t1'))?.alarmId).toBeNull();
+	});
+
+	it('cancels the elapsed timer so the next open does not see it as armed', async () => {
+		await putTask({ alarmAt: PAST, alarmId: 'systemd:4242' });
+		scheduler.pending.add('systemd:4242');
+		scheduler.stamps = new Set(['4242']);
+
+		const report = await reconcile({ scheduler, now: NOW });
+
+		expect(report.cancelled).toEqual(['systemd:4242']);
+		// The app opened while the unit was still listed: cancelling deletes the
+		// stamp, so the delivery has to be read BEFORE the cancel — otherwise this
+		// exact case comes back as a miss.
+		expect(report.missed).toEqual([]);
+	});
+
+	it('clears the stamps it consumed', async () => {
+		await putTask({ alarmAt: PAST, alarmId: 'systemd:4242' });
+		scheduler.stamps = new Set(['4242']);
+
+		await reconcile({ scheduler, now: NOW });
+
+		expect(scheduler.cleared).toBe(1);
+	});
+
+	it('a stamp for a DIFFERENT alarm does not excuse this one', async () => {
+		await putTask({ alarmAt: PAST, alarmId: 'systemd:4242' });
+		scheduler.stamps = new Set(['9999']);
+
+		const report = await reconcile({ scheduler, now: NOW });
+
+		expect(report.missed.map((m) => m.taskId)).toEqual(['t1']);
 	});
 });
 

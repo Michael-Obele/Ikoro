@@ -64,6 +64,17 @@ export interface ReconcileOptions {
 
 const asTask = (row: Record<string, unknown>) => row as unknown as Task;
 
+/**
+ * The bare hash inside a platform id — `systemd:1663646904` becomes
+ * `1663646904`. Null for anything that is not a systemd hash, so no other
+ * platform can ever be mistaken for a delivered stamp.
+ */
+function platformHash(platformId: string | null): string | null {
+	if (!platformId) return null;
+	const bare = platformId.replace(/^systemd:/, '');
+	return /^\d+$/.test(bare) ? bare : null;
+}
+
 /** A task that WANTS an alarm: has one, is open, and is not deleted. */
 function wantsAlarm(task: Task): boolean {
 	return task.alarmAt !== null && task.completedAt === null && task.deletedAt === null;
@@ -95,6 +106,10 @@ export async function reconcile({
 }: ReconcileOptions): Promise<ReconcileReport> {
 	const tasks = await loadAlarmableTasks();
 	const pending = await scheduler.getPending();
+
+	// Stamps the OS left behind. Only a scheduler that schedules outside the
+	// process can answer; everywhere else this is empty and nothing below changes.
+	const delivered = (await scheduler.firedStamps?.()) ?? new Set<string>();
 
 	// Every platform id the store believes is armed, so an id that appears in
 	// `pending` but in nobody's `alarmId` is an orphan worth cancelling.
@@ -128,11 +143,27 @@ export async function reconcile({
 		// case it is a genuine miss, because the time came and went — or it has
 		// gone, in which case it fired and we simply were not awake to hear it.
 		if (dueAt.getTime() <= now.getTime()) {
+			// Read the delivery evidence FIRST. Cancelling below deletes the stamp,
+			// so asking afterwards would turn a delivered alarm into a "missed" one
+			// whenever the app happens to open while the unit is still ringing.
+			const stampHash = platformHash(task.alarmId);
+			const wasDelivered = stampHash !== null && delivered.has(stampHash);
+
 			const stillPending = task.alarmId !== null && pending.has(task.alarmId);
 			if (stillPending) {
 				await scheduler.cancel(task.alarmId as string);
 				report.cancelled.push(task.alarmId as string);
 			}
+
+			// A stamp is the OS saying "I rang this before I stopped". That is a
+			// delivery, not a miss, and reporting it as a miss was exactly what the
+			// desktop path got wrong: the alarm rang, the user opened the app, and the
+			// app told them it never happened.
+			if (wasDelivered) {
+				await markFired(task.id, task.alarmFiredAt ?? (alarmAt as string));
+				continue;
+			}
+
 			await markFired(task.id, task.alarmFiredAt ?? (alarmAt as string));
 			if (now.getTime() - dueAt.getTime() <= MISSED_REPORT_WINDOW_MS) {
 				report.missed.push({ taskId: task.id, title: task.title, dueAt: alarmAt as string });
@@ -166,6 +197,10 @@ export async function reconcile({
 			report.armed.push(task.id);
 		}
 	}
+
+	// Stamps have been read. Clear them, so the same stamp cannot later be read
+	// as evidence for a different alarm on the same task.
+	if (delivered.size > 0) await scheduler.clearStamps?.();
 
 	// Anything armed on the platform that no live task claims.
 	for (const platformId of pending) {
