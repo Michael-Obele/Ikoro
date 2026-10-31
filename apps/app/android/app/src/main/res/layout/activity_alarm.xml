@@ -64,22 +64,6 @@
         android:textColor="#FFB4B4C2"
         android:textSize="18sp" />
 
-    <!--
-      The task's notes, when it has any. At 6am "Call the dentist" often is not
-      enough to decide what to do; the reason belongs on this screen. GONE when
-      empty, so a task without notes leaves no gap.
-    -->
-    <TextView
-        android:id="@+id/alarm_description"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:gravity="center"
-        android:maxLines="6"
-        android:textColor="#FFB9B9C6"
-        android:textSize="16sp"
-        android:visibility="gone" />
-
     <Space
         android:layout_width="match_parent"
         android:layout_height="0dp"
