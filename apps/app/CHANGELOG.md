@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.6](https://github.com/Michael-Obele/Ikoro/compare/v0.3.5...v0.3.6) (2026-10-31)
+
+
+### Bug Fixes
+
+* **desktop:** ring the alarm and track delivery ([0f8059d](https://github.com/Michael-Obele/Ikoro/commit/0f8059d13371263c52f53e2106a6262787fddd9c))
+
 ## [0.3.5](https://github.com/Michael-Obele/Ikoro/compare/v0.3.4...v0.3.5) (2026-10-30)
 
 
