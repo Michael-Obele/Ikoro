@@ -5,6 +5,10 @@ buildscript {
     repositories {
         google()
         mavenCentral()
+        // ktlint-gradle is published to the Gradle Plugin Portal only, not to
+        // Maven Central -- resolving it from the two repos above fails with
+        // "Could not find org.jlleitschuh.gradle.ktlint:ktlint-gradle:14.2.0".
+        gradlePluginPortal()
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:8.13.0'
@@ -16,6 +20,14 @@ buildscript {
         // dangerously, in Kotlin than in Java. Resolved from the
         // mavenCentral() repository declared above.
         classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.2.0'
+
+        // ktlint, so the Kotlin in src/main/java/.../alarm is held to one
+        // style that anybody can check without opening Android Studio:
+        // `./gradlew ktlintCheck` (wired into `bun run check:android`).
+        // Pinned ktlint itself lives in app/build.gradle, because the plugin
+        // may change its default across patch releases. This is the plugin's
+        // marker coordinate -- the portal's form of the plugin id + version.
+        classpath 'org.jlleitschuh.gradle.ktlint:org.jlleitschuh.gradle.ktlint.gradle.plugin:14.2.0'
 
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files

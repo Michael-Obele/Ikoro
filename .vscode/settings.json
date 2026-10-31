@@ -1,0 +1,8 @@
+{
+	// The Android/Capacitor Kotlin lives in apps/app/android and is held to
+	// ktlint by `bun run check:android`. Formatting it with anything else just
+	// creates a diff the next check undoes.
+	"[kotlin]": {
+		"editor.defaultFormatter": "mskelton.ktlint"
+	}
+}

@@ -7,6 +7,22 @@ apply plugin: 'com.android.application'
 // is Kotlin; the pre-existing Java sources are untouched.
 apply plugin: 'kotlin-android'
 
+// ktlint on the Kotlin sources. It only activates in a module that has a
+// Kotlin plugin applied, which is why it belongs here and not at the root.
+// `./gradlew ktlintCheck` is what CI and `bun run check:android` run;
+// `./gradlew ktlintFormat` is the fixer.
+apply plugin: 'org.jlleitschuh.gradle.ktlint'
+
+ktlint {
+    // Pinned, not inherited: the plugin's default ktlint version moves between
+    // its own patch releases, and a lint rule appearing in a build nobody
+    // touched is exactly the kind of surprise this file exists to avoid.
+    version = '1.8.0'
+    // Print findings straight to the console so a failing `bun run check` says
+    // what is wrong without opening build/reports/ktlint.
+    outputToConsole = true
+}
+
 // The APK's version is the app's version. Read from package.json rather than
 // hard-coded here, because the two drifting apart is how a release ships with
 // Settings reporting "0.1.0" and the package manager reporting "1.0".

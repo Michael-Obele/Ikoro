@@ -158,6 +158,14 @@ jobs:
         working-directory: apps/app
         run: bunx cap sync android
 
+      # Style gate for the Kotlin in src/main/java/.../alarm. Cheap (seconds)
+      # and it runs before the eight-minute release build, so a stray import or
+      # a misindented block costs a minute instead of a whole run. Rules and
+      # the pinned ktlint version live in apps/app/android/app/build.gradle.
+      - name: Lint Kotlin (ktlint)
+        working-directory: apps/app/android
+        run: ./gradlew :app:ktlintCheck --no-daemon --console=plain
+
       - name: Assemble signed APK + AAB
         working-directory: apps/app/android
         env:

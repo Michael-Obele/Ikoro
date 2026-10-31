@@ -1,0 +1,20 @@
+{
+	// Extensions this repo assumes. Accept the prompt when VS Code offers them;
+	// a Kotlin file with no language server is only syntax colouring, and a
+	// Kotlin file with no formatter drifts from what `bun run check:android`
+	// insists on.
+	"recommendations": [
+		// Official Kotlin LSP (IntelliJ-backed). It imports the Gradle project, so
+		// the Android + Capacitor classes resolve and a red squiggle means a real
+		// error. The community `fwcd.kotlin` server does not read Gradle
+		// classpaths here and reports every `Plugin`/`PluginCall` as unresolved.
+		"JetBrains.kotlin-server",
+		// ktlint as the Kotlin formatter. Needs the `ktlint` CLI on PATH --
+		// see the Kotlin section of AGENTS.md.
+		"mskelton.ktlint",
+		"svelte.svelte-vscode",
+		"bradlc.vscode-tailwindcss",
+		"esbenp.prettier-vscode",
+		"dbaeumer.vscode-eslint"
+	]
+}
