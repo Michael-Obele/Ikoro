@@ -54,6 +54,14 @@ android {
         }
     }
     buildTypes {
+        debug {
+            // Lets a debug build install ALONGSIDE the release one. A phone used
+            // for hardware testing carries a release-signed Ikoro, and `adb
+            // install -r` refuses a package signed with a different key -- so
+            // without this, testing the current tree would mean uninstalling the
+            // app and losing the user's local data.
+            applicationIdSuffix ".debug"
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
