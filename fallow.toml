@@ -1,0 +1,62 @@
+# Fallow — codebase intelligence for TS/JS. Docs: https://docs.fallow.tools
+# Installed as a root devDependency; cache lives in .fallow/ (gitignored).
+#   bunx fallow                    full report (dead code + dupes + complexity)
+#   bunx fallow audit --base main  changed-code review for a PR
+#   bunx fallow dead-code --trace <file>:<export>   before deleting anything
+
+# CLI entry points: these run via `bun <script>`, they are never imported.
+entry = [
+    "scripts/**/*.mjs",
+    "apps/app/scripts/**/*.ts",
+    "apps/landing/scripts/**/*.ts",
+]
+
+# Kept on purpose but never imported from TypeScript:
+#  - @capacitor/android is the platform package `cap sync` writes into android/, not an import
+#  - @capacitor/local-notifications is held for the uncleared M4-S1 device-gate spike
+ignoreDependencies = ["@capacitor/android", "@capacitor/local-notifications"]
+
+# An export referenced inside its own file is not dead code (knip parity).
+ignoreExportsUsedInFile = true
+
+# shadcn `index.ts` barrels re-export their folder by design, so the same name
+# legitimately appears in the component barrel and the folder barrel. A
+# duplicate-export finding carries no single path, so a `[[overrides]]` block
+# cannot suppress it — this is the documented namespace-barrel exemption.
+ignoreExports = [{ file = "**/src/lib/components/ui/**", exports = ["*"] }]
+
+[rules]
+unused-files = "error"
+unused-dependencies = "error"
+unresolved-imports = "error"
+unlisted-dependencies = "error"
+unused-dev-dependencies = "warn"
+unused-exports = "warn"
+unused-types = "warn"
+duplicate-exports = "warn"
+circular-dependencies = "warn"
+# AGENTS.md keeps architecture boundaries in review, not in tooling, and there
+# are no rule packs. Off = "not wanted", so a zero count means zero, not unmeasured.
+boundary-violation = "off"
+policy-violation = "off"
+# Schedulers are invoked through the AlarmScheduler interface
+# (`scheduler.openExactAlarmSettings()`), which a syntactic pass cannot resolve —
+# this rule only ever reports the interface method as unused here.
+unused-class-members = "off"
+
+# shadcn-svelte output is CLI-managed, not hand-written (AGENTS.md "DON'T TOUCH").
+# Each barrels its whole folder as the import surface, so "unused" here just means
+# "not added yet"; remove components with `bunx shadcn-svelte remove`, not by hand.
+[[overrides]]
+files = ["**/src/lib/components/ui/**"]
+[overrides.rules]
+unused-files = "off"
+unused-exports = "off"
+unused-types = "off"
+duplicate-exports = "off"
+circular-dependencies = "off"
+
+[duplicates]
+mode = "mild"
+# The same generated components are vendored into apps/app and apps/landing.
+ignore = ["**/src/lib/components/ui/**"]

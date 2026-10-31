@@ -20,6 +20,7 @@
 		"format:check": "prettier --check ."
 	},
 	"devDependencies": {
+		"fallow": "^3.38.0",
 		"prettier": "^3.9.9"
 	}
 }
