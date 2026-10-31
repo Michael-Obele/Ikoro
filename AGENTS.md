@@ -136,6 +136,41 @@ that could contain them.
 
 ---
 
+## LAYOUT — NOTHING MAY SCROLL THE SHELL (`apps/app`)
+
+The app shell is `fixed inset-0` with `main` as the only page scroller and the bottom
+nav as its sibling. One class of bug has already broken this on a real device, twice in
+spirit, and it is invisible to `check` and `test`:
+
+> **`overflow-hidden` does not mean "cannot scroll".** It still makes the box a scroll
+> container — it only hides the scrollbar — so the browser will scroll it
+> *programmatically* to reveal a focused element, and nothing can scroll it back.
+
+What happened: a scheme card's `<input class="sr-only">` (`position: absolute`) had no
+positioned ancestor, so its containing block was the **shell**. The input escaped
+`main`'s scroller and inflated the shell to 1735 px of content in an 896 px box. Tapping
+the card focused it, the shell scrolled 545 px, the bottom nav landed mid-screen and the
+rest was dead space until a cold restart.
+
+The rules, in order of preference:
+
+1. **The shell never scrolls.** It uses `overflow-clip`, not `overflow-hidden` — `clip`
+   creates no scroll container at all. Do not "simplify" that back to `hidden`.
+2. **`main` is `relative`, on purpose.** Every absolutely positioned descendant with no
+   closer positioned ancestor is then contained by the *page scroller*, whose overflow is
+   clipped and user-scrollable. Do not remove it.
+3. **Any element that is `sr-only`/`absolute` inside a component gets its own `relative`
+   parent** — a `<label>`, a `<form>`, a chip. `sr-only` is `position: absolute`; on a
+   static parent it silently escapes to whatever ancestor happens to be positioned.
+4. **Never put `overflow-hidden` on a box that is not meant to scroll.** If it only needs
+   to clip, it is `overflow-clip`.
+
+`tests/` cannot catch this — jsdom has no layout. Verify it on the device: read
+`document.querySelector('.fixed.inset-0').scrollTop` after tapping the control (WebView
+CDP; see issue notes) and require `0`.
+
+---
+
 ## THE IMPORT ALIAS — `#lib` IN TESTS, `$lib` IN SHADCN-GENERATED CODE
 
 This is the single most fragile wiring in the repo. It is declared in **three** places and all
@@ -323,6 +358,36 @@ milestone that has not been built yet.
 | Stores | plural `camelCase` | `lists`, `tasks`, `meta` |
 
 Formatting: tabs, single quotes, semicolons. Don't hand-format — run `bun run format`.
+
+---
+
+## COMMENTS — SHORT, AND ONLY WHEN THE CODE CANNOT SAY IT
+
+The user wants **short, to-the-point comments**: just as much information as the reader needs at that
+line, and no more. The code should be the readable thing; a comment is a last resort, not a narration.
+
+- **Record new knowledge in Sepia memory, not in the source.** A gotcha, a platform/API fact, a
+  decision and its reason, why a workaround exists — `manage_memory` it (Sepia MCP). The comment keeps
+  only the minimum needed locally to stop someone re-breaking the line.
+- **One line, ideally.** A comment that needs a paragraph means the code needs renaming or splitting instead.
+- **Never restate the code.** `// increment i` above `i++` is noise. Delete it.
+- **Never narrate history or plans in source.** No "changed from X", no "TODO: later we might" unless it is
+  a real, tracked `TODO:` with a reason.
+- **Keep the why, drop the what.** A surprising workaround earns one line naming the constraint. Anything
+  the types, names or structure already convey does not.
+- **Long explanatory blocks belong in `docs/` or Sepia,** not above a function.
+- **JSDoc:** allowed only on exported API where the signature is genuinely not self-evident, and even then
+  one line. No `@param` tables that repeat the parameter names.
+- Existing comment blocks are fair game to shorten whenever you touch the file. Do not add new long ones.
+- Never drop a functional comment while shortening: `@ts-expect-error`, `eslint-disable*`,
+  `svelte-ignore`, `@vitest-environment` and `ponytail:` stay verbatim.
+
+### USE THE PONYTAIL SKILL
+
+Invoke the **ponytail** skill (`skill ponytail`) for any implementation work. It enforces the lazy ladder:
+YAGNI, stdlib before custom code, native platform features before dependencies, one line before fifty.
+Shortest working diff wins. Mark deliberate simplifications with a `ponytail:` comment so simple reads as
+intent, not ignorance.
 
 ---
 
