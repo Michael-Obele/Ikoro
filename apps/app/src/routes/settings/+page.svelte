@@ -32,7 +32,7 @@
 <div class="mx-auto w-full min-w-0 max-w-2xl px-4 py-6">
 	<h1 class="mb-6 text-xl font-semibold tracking-tight">Settings</h1>
 
-	<div class="grid min-w-0 gap-8">
+	<div class="grid min-w-0 grid-cols-1 gap-8">
 		<section class="min-w-0">
 			<h2 class="mb-1 text-sm font-medium">Appearance</h2>
 			<p class="mb-3 text-sm text-muted-foreground">
@@ -48,7 +48,7 @@
 
 		<section class="min-w-0">
 			<h2 class="mb-1 text-sm font-medium">Notifications</h2>
-			<div class="grid gap-3">
+			<div class="grid grid-cols-1 gap-3">
 				<RingtoneSetting />
 				<SnoozeSetting />
 				<AlarmHealth />

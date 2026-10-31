@@ -101,8 +101,8 @@
 				<Button variant="destructive" onclick={confirmDelete}>Delete</Button>
 			</Dialog.Footer>
 		{:else}
-			<form method="dialog" class="grid gap-4" onsubmit={submit}>
-				<div class="grid gap-1.5">
+			<form method="dialog" class="grid grid-cols-1 gap-4" onsubmit={submit}>
+				<div class="grid grid-cols-1 gap-1.5">
 					<Label for="list-name">Name</Label>
 					<Input
 						id="list-name"

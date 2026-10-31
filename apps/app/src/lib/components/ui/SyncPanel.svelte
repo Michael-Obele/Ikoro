@@ -69,7 +69,7 @@
 	const enabled = $derived(status.state !== 'off');
 </script>
 
-<div class="grid gap-4">
+<div class="grid grid-cols-1 gap-4">
 	{#if !enabled && !editing}
 		<div class="flex items-start gap-2 text-sm text-muted-foreground">
 			<CloudOff class="mt-0.5 size-4 shrink-0" />
@@ -133,7 +133,7 @@
 	{/if}
 
 	{#if editing}
-		<div class="grid gap-2 border-t pt-4">
+		<div class="grid grid-cols-1 gap-2 border-t pt-4">
 			<Label for="sync-url" class="text-sm">Your sync server</Label>
 			<Input
 				id="sync-url"

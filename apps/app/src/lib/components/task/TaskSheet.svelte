@@ -31,6 +31,7 @@
 	import { getScheduler, armAlarm } from '$lib/alarms/scheduler';
 	import { ringtoneFor } from '$lib/alarms/ringtone';
 	import { deriveAlarmAt } from '$lib/utils/time';
+	import { dismissKeyboard } from '$lib/utils/keyboard';
 	import { toast } from 'svelte-sonner';
 	import type { Task } from '$lib/db/schema';
 
@@ -222,7 +223,8 @@
 			taskId: row.id,
 			title: row.title,
 			at,
-			ringtone: ringtoneFor(row)
+			ringtone: ringtoneFor(row),
+			description: row.notes
 		});
 
 		if (!outcome.ok) {
@@ -294,7 +296,11 @@
 		// parent's own listId keeps the call honest if that inheritance ever moves.
 		await repo.createTask({ listId: task.listId, title, parentId: task.id });
 		form.reset();
-		form.querySelector('input')?.focus();
+		// Committing a subtask is a small, finished action, and the keyboard was
+		// hiding the list it just grew. Close it and let the new row be visible;
+		// "Add subtask" reopens the field for another one.
+		dismissKeyboard();
+		addingSubtask = false;
 	}
 
 	function clearSubtaskAdd(event: FocusEvent) {
@@ -316,6 +322,9 @@
 	 */
 	async function close() {
 		saveNotes.cancel();
+		// Before anything else: an input that keeps focus keeps the keyboard up,
+		// and a keyboard over a closing sheet is a sheet that looks stuck.
+		dismissKeyboard();
 		if (task && notes !== lastSavedNotes) {
 			await repo.updateTask(task.id, { notes: notes || null });
 		}
@@ -359,7 +368,7 @@
 				body measured 608px against a 564px box.
 			-->
 			<div class="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-6">
-				<div class="grid gap-1.5 border-b border-outline-variant py-4">
+				<div class="grid grid-cols-1 gap-1.5 border-b border-outline-variant py-4">
 					<Label for="task-title">Title</Label>
 					<Input
 						id="task-title"
@@ -372,7 +381,7 @@
 					/>
 				</div>
 
-				<div class="grid gap-1.5 border-b border-outline-variant py-4">
+				<div class="grid grid-cols-1 gap-1.5 border-b border-outline-variant py-4">
 					<Label for="task-notes">Notes</Label>
 					<Textarea
 						id="task-notes"
@@ -388,7 +397,7 @@
 					<DuePicker {dueDate} {dueTime} ondatechange={onDateChange} ontimechange={onTimeChange} />
 				</div>
 
-				<div class="grid gap-1.5 border-b border-outline-variant py-4">
+				<div class="grid grid-cols-1 gap-1.5 border-b border-outline-variant py-4">
 					<!--
 						The picker's chips already carry their own labels; this line states
 						the CURRENT value in prose so the section answers "what is it now?"
@@ -412,7 +421,7 @@
 					a real choice, not the absence of one — and sits first so clearing
 					is always one tap to the left.
 				-->
-				<div class="grid gap-1.5 border-b border-outline-variant py-4">
+				<div class="grid grid-cols-1 gap-1.5 border-b border-outline-variant py-4">
 					<div class="flex items-center justify-between">
 						<span class="text-sm font-medium">Color</span>
 						<span class="text-sm text-muted-foreground" aria-live="polite">

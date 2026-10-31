@@ -167,7 +167,7 @@
 			Ikoro
 		</a>
 
-		<ul class="grid gap-0.5">
+		<ul class="grid grid-cols-1 gap-0.5">
 			{#each VIEWS as view (view.href)}
 				{@render navRow(view)}
 			{/each}

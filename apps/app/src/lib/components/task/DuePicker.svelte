@@ -39,7 +39,7 @@
 </script>
 
 <div class="grid grid-cols-2 gap-3">
-	<div class="grid gap-1.5">
+	<div class="grid grid-cols-1 gap-1.5">
 		<Label for="due-date">Due date</Label>
 		<Input
 			id="due-date"
@@ -51,7 +51,7 @@
 		/>
 	</div>
 
-	<div class="grid gap-1.5">
+	<div class="grid grid-cols-1 gap-1.5">
 		<Label for="due-time" class={dueDate ? '' : 'opacity-50'}>Time</Label>
 		<Input
 			id="due-time"

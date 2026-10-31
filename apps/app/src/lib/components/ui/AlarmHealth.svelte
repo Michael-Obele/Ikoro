@@ -116,8 +116,8 @@
 	}
 </script>
 
-<div class="grid gap-3">
-	<ul class="grid gap-1.5 text-sm">
+<div class="grid grid-cols-1 gap-3">
+	<ul class="grid grid-cols-1 gap-1.5 text-sm">
 		<li class="flex items-center gap-2">
 			{#if notificationsOk}
 				<CircleCheck class="size-4 text-emerald-600" />
@@ -173,7 +173,7 @@
 	{#if missed.length > 0}
 		<div class="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:bg-amber-950/30">
 			<p class="font-medium">Missed while Ikoro was closed</p>
-			<ul class="mt-1 grid gap-0.5 text-muted-foreground">
+			<ul class="mt-1 grid grid-cols-1 gap-0.5 text-muted-foreground">
 				{#each missed as item (item.taskId)}
 					<li>{item.title} — was due {new Date(item.dueAt).toLocaleString()}</li>
 				{/each}
@@ -184,7 +184,7 @@
 	{#if degraded.length > 0}
 		<div class="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:bg-amber-950/30">
 			<p class="font-medium">These reminders may run late</p>
-			<ul class="mt-1 grid gap-0.5 text-muted-foreground">
+			<ul class="mt-1 grid grid-cols-1 gap-0.5 text-muted-foreground">
 				{#each degraded as item (item.taskId)}
 					<li>{item.title} — {item.warning}</li>
 				{/each}
@@ -195,7 +195,7 @@
 	{#if failed.length > 0}
 		<div class="rounded-md border border-rose-300 bg-rose-50 p-3 text-sm dark:bg-rose-950/30">
 			<p class="font-medium">These reminders could not be armed</p>
-			<ul class="mt-1 grid gap-0.5 text-muted-foreground">
+			<ul class="mt-1 grid grid-cols-1 gap-0.5 text-muted-foreground">
 				{#each failed as item (item.taskId)}
 					<li>{failureText(item.reason)}</li>
 				{/each}

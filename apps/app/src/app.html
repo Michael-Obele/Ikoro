@@ -3,7 +3,21 @@
 
 <head>
 	<meta charset="utf-8" />
-	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+		<!--
+			`interactive-widget=resizes-content` is load-bearing on Android.
+
+			The default (`resizes-visual`) lets the keyboard overlay the page: the
+			layout viewport keeps its full height, so a full-screen sheet stays
+			100% tall underneath the keyboard and everything below the focused
+			field — the reminder switch, the subtask list, Delete — becomes
+			unreachable with no way to scroll to it. With `resizes-content` the
+			layout viewport shrinks, the sheet scrolls inside the space that is
+			actually visible, and the keyboard stops hiding controls.
+		-->
+		<meta
+			name="viewport"
+			content="width=device-width, initial-scale=1, interactive-widget=resizes-content"
+		/>
 	<meta name="text-scale" content="scale" />
 	<script>
 		/*

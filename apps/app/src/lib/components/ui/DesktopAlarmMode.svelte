@@ -17,7 +17,7 @@
 	const systemd = $derived(probe.mode === 'systemd');
 </script>
 
-<div class="grid gap-1.5 text-sm">
+<div class="grid grid-cols-1 gap-1.5 text-sm">
 	<p class="flex items-start gap-2">
 		{#if systemd}
 			<CircleCheck class="mt-0.5 size-4 shrink-0 text-emerald-600" />
