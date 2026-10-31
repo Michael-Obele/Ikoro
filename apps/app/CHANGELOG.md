@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.9](https://github.com/Michael-Obele/Ikoro/compare/v0.3.8...v0.3.9) (2026-10-31)
+
+
+### Features
+
+* **app:** resolve M3 palette roles from measured tone ([f63ef03](https://github.com/Michael-Obele/Ikoro/commit/f63ef03cc4c4045c904fdbb479a45c1473ae4657))
+
+
+### Bug Fixes
+
+* **android:** dedicated monochrome layer for themed launcher icons ([ab06c29](https://github.com/Michael-Obele/Ikoro/commit/ab06c29a6f54f00ebef1d0874f9123021f3e8e99))
+* **app:** keep the shell out of the scroll chain ([3409555](https://github.com/Michael-Obele/Ikoro/commit/34095550a3e2a80e8016f61179eff29a1962e0dd))
+* **app:** let the snooze chips wrap instead of squeezing the label ([75262a7](https://github.com/Michael-Obele/Ikoro/commit/75262a77acbebf68ab7fd321369ef2d36d80b359))
+
 ## [0.3.8](https://github.com/Michael-Obele/Ikoro/compare/v0.3.7...v0.3.8) (2026-10-31)
 
 
