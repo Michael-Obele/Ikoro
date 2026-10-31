@@ -38,10 +38,19 @@
 </script>
 
 {#if snoozeSupported()}
-	<div class="flex items-center justify-between gap-3">
-		<div class="flex min-w-0 items-center gap-2">
+	<!--
+		The control WRAPS below the label when it cannot fit beside it.
+
+		Four chips are ~266px of `shrink-0`, which on a 390-443px phone left the
+		label about 90px: "Snooze length" broke across two lines and the hint became
+		a one-word-per-line column. `grow basis-56` gives the text block a sensible
+		minimum before the chips are pushed to their own line, and `min-w-0` on both
+		blocks is what actually lets the text wrap instead of forcing the row wider.
+	-->
+	<div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+		<div class="flex min-w-0 grow basis-56 items-center gap-2">
 			<Clock class="size-4 shrink-0 text-muted-foreground" />
-			<div>
+			<div class="min-w-0">
 				<p class="text-sm font-medium">Snooze length</p>
 				<p class="text-xs text-muted-foreground">How far Snooze pushes a ringing alarm back</p>
 			</div>
