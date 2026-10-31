@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.8](https://github.com/Michael-Obele/Ikoro/compare/v0.3.7...v0.3.8) (2026-10-31)
+
+
+### Features
+
+* **ci:** ktlint and a Kotlin type check in bun run check ([3313f86](https://github.com/Michael-Obele/Ikoro/commit/3313f860cdf85cef719fce279151bdddecfab2a8))
+
+
+### Bug Fixes
+
+* **android:** duplicate alarm_description id broke the release APK ([7b01b27](https://github.com/Michael-Obele/Ikoro/commit/7b01b277f3a86923641920f6b648a3431280f7af))
+
 ## [0.3.7](https://github.com/Michael-Obele/Ikoro/compare/v0.3.6...v0.3.7) (2026-10-31)
 
 
