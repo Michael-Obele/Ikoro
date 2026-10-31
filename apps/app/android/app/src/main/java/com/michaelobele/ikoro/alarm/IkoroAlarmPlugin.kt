@@ -28,6 +28,15 @@ import java.util.Locale
 import java.util.TimeZone
 
 /**
+ * The plugin instance currently attached to a Bridge, if any.
+ *
+ * File-level rather than a companion member so both this class and its companion can read it with
+ * no visibility question in the way, and deliberately weak: this reference must never be the thing
+ * that keeps a torn-down plugin, or its Activity, alive.
+ */
+private var liveInstance: WeakReference<IkoroAlarmPlugin>? = null
+
+/*
  * WHY THIS FILE EXISTS
  *
  * The bridge between the web layer and the real alarm. Everything it does is a thin translation:
@@ -42,29 +51,20 @@ import java.util.TimeZone
  * registerPlugin(IkoroAlarmPlugin.class), and a Kotlin `internal` class mangles its name and cannot
  * be referenced from Java at all.
  */
-/**
- * The plugin instance currently attached to a Bridge, if any.
- *
- * File-level rather than a companion member so both this class and its companion can read it with
- * no visibility question in the way, and deliberately weak: this reference must never be the thing
- * that keeps a torn-down plugin, or its Activity, alive.
- */
-private var liveInstance: WeakReference<IkoroAlarmPlugin>? = null
-
 @CapacitorPlugin(
-        name = "IkoroAlarm",
-        permissions =
-                [
-                        // The alias is "notifications" on purpose: it is what the JS contract
-                        // reports on, and it keeps POST_NOTIFICATIONS from leaking through the
-                        // generic checkPermissions() method under a name JS would not expect.
-                        Permission(
-                                alias = "notifications",
-                                strings = [Manifest.permission.POST_NOTIFICATIONS]
-                        )]
+    name = "IkoroAlarm",
+    permissions =
+        [
+            // The alias is "notifications" on purpose: it is what the JS contract
+            // reports on, and it keeps POST_NOTIFICATIONS from leaking through the
+            // generic checkPermissions() method under a name JS would not expect.
+            Permission(
+                alias = "notifications",
+                strings = [Manifest.permission.POST_NOTIFICATIONS],
+            ),
+        ],
 )
 class IkoroAlarmPlugin : Plugin() {
-
     override fun load() {
         liveInstance = WeakReference(this)
     }
@@ -124,20 +124,20 @@ class IkoroAlarmPlugin : Plugin() {
         // permission phrasing even if the two ever drift apart.
         if (!IkoroAlarms.canScheduleExact(context)) {
             call.reject(
-                    "exact alarm permission is not granted; open the alarm settings to arm this reminder"
+                "exact alarm permission is not granted; open the alarm settings to arm this reminder",
             )
             return
         }
 
         if (!IkoroAlarms.schedule(
-                        context,
-                        id,
-                        taskId,
-                        title,
-                        triggerAtMillis,
-                        ringtone,
-                        description
-                )
+                context,
+                id,
+                taskId,
+                title,
+                triggerAtMillis,
+                ringtone,
+                description,
+            )
         ) {
             call.reject("could not arm the alarm: exact alarm permission was refused")
             return
@@ -243,7 +243,10 @@ class IkoroAlarmPlugin : Plugin() {
     @PluginMethod
     fun dismiss(call: PluginCall) = sendAlarmAction(call, IkoroAlarmService.ACTION_DISMISS)
 
-    private fun sendAlarmAction(call: PluginCall, action: String) {
+    private fun sendAlarmAction(
+        call: PluginCall,
+        action: String,
+    ) {
         val id = call.getInt("id")
         val taskId = call.getString("taskId")
 
@@ -253,12 +256,12 @@ class IkoroAlarmPlugin : Plugin() {
         }
 
         val request =
-                Intent(context, IkoroAlarmService::class.java).apply {
-                    this.action = action
-                    putExtra(IkoroAlarms.EXTRA_ID, id)
-                    putExtra(IkoroAlarms.EXTRA_TASK_ID, taskId)
-                    putExtra(IkoroAlarms.EXTRA_TITLE, call.getString("title").orEmpty())
-                }
+            Intent(context, IkoroAlarmService::class.java).apply {
+                this.action = action
+                putExtra(IkoroAlarms.EXTRA_ID, id)
+                putExtra(IkoroAlarms.EXTRA_TASK_ID, taskId)
+                putExtra(IkoroAlarms.EXTRA_TITLE, call.getString("title").orEmpty())
+            }
 
         try {
             context.startService(request)
@@ -338,10 +341,10 @@ class IkoroAlarmPlugin : Plugin() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             try {
                 context.startActivity(
-                        Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-                            data = Uri.parse("package:" + context.packageName)
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
+                    Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                        data = Uri.parse("package:" + context.packageName)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    },
                 )
             } catch (error: Exception) {
                 Log.w(TAG, "could not open the exact alarm settings screen", error)
@@ -369,10 +372,10 @@ class IkoroAlarmPlugin : Plugin() {
 
         try {
             context.startActivity(
-                    Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
-                        data = Uri.parse("package:" + context.packageName)
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
+                Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
+                    data = Uri.parse("package:" + context.packageName)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                },
             )
             call.resolve(JSObject())
         } catch (error: Exception) {
@@ -399,19 +402,19 @@ class IkoroAlarmPlugin : Plugin() {
         val existing = call.getString("existing")?.takeIf { it.isNotBlank() }?.let(Uri::parse)
 
         val intent =
-                Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
-                    // ALARM, not RINGTONE: this sound loops on the alarm stream, so the
-                    // list should be the sounds meant for alarms.
-                    putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
-                    putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
-                    putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true)
-                    putExtra(
-                            RingtoneManager.EXTRA_RINGTONE_DEFAULT_URI,
-                            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                    )
-                    existing?.let { putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, it) }
-                    putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Reminder sound")
-                }
+            Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+                // ALARM, not RINGTONE: this sound loops on the alarm stream, so the
+                // list should be the sounds meant for alarms.
+                putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
+                putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true)
+                putExtra(
+                    RingtoneManager.EXTRA_RINGTONE_DEFAULT_URI,
+                    RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
+                )
+                existing?.let { putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, it) }
+                putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Reminder sound")
+            }
 
         try {
             startActivityForResult(call, intent, "ringtonePicked")
@@ -430,22 +433,25 @@ class IkoroAlarmPlugin : Plugin() {
      * would wipe the user's sound every time they closed it by mistake.
      */
     @ActivityCallback
-    private fun ringtonePicked(call: PluginCall, result: ActivityResult) {
+    private fun ringtonePicked(
+        call: PluginCall,
+        result: ActivityResult,
+    ) {
         val data = result.data
         if (result.resultCode != Activity.RESULT_OK || data == null) {
             call.resolve(JSObject().put("cancelled", true).put("uri", null as String?))
             return
         }
         val uri: Uri? =
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    data.getParcelableExtra(
-                            RingtoneManager.EXTRA_RINGTONE_PICKED_URI,
-                            Uri::class.java
-                    )
-                } else {
-                    @Suppress("DEPRECATION")
-                    data.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
-                }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                data.getParcelableExtra(
+                    RingtoneManager.EXTRA_RINGTONE_PICKED_URI,
+                    Uri::class.java,
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                data.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+            }
         // A null uri here with RESULT_OK means the user picked Silent.
         call.resolve(JSObject().put("cancelled", false).put("uri", uri?.toString()))
     }
@@ -476,12 +482,12 @@ class IkoroAlarmPlugin : Plugin() {
     fun getBatteryStatus(call: PluginCall) {
         val power = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         call.resolve(
-                JSObject()
-                        .put("powerSaveMode", power.isPowerSaveMode)
-                        .put(
-                                "ignoringBatteryOptimizations",
-                                power.isIgnoringBatteryOptimizations(context.packageName)
-                        )
+            JSObject()
+                .put("powerSaveMode", power.isPowerSaveMode)
+                .put(
+                    "ignoringBatteryOptimizations",
+                    power.isIgnoringBatteryOptimizations(context.packageName),
+                ),
         )
     }
 
@@ -492,10 +498,10 @@ class IkoroAlarmPlugin : Plugin() {
     fun requestIgnoreBatteryOptimizations(call: PluginCall) {
         try {
             context.startActivity(
-                    Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                        data = Uri.parse("package:" + context.packageName)
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
+                Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = Uri.parse("package:" + context.packageName)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                },
             )
             call.resolve(JSObject())
         } catch (error: Exception) {
@@ -514,9 +520,9 @@ class IkoroAlarmPlugin : Plugin() {
     fun openBatterySaverSettings(call: PluginCall) {
         try {
             context.startActivity(
-                    Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
+                Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                },
             )
             call.resolve(JSObject())
         } catch (error: Exception) {
@@ -592,7 +598,9 @@ class IkoroAlarmPlugin : Plugin() {
 
         return when (getPermissionState("notifications")) {
             PermissionState.GRANTED -> GRANTED
+
             PermissionState.DENIED -> DENIED
+
             // PROMPT, PROMPT_WITH_RATIONALE, or null if the alias went missing.
             // All three mean "not granted, and asking is still worth trying".
             else -> PROMPT
@@ -620,7 +628,10 @@ class IkoroAlarmPlugin : Plugin() {
      * lookup -- and so nothing is queued up to be delivered, late and out of context, the next time
      * JS attaches.
      */
-    internal fun emitAlarmEvent(taskId: String, event: String) {
+    internal fun emitAlarmEvent(
+        taskId: String,
+        event: String,
+    ) {
         if (taskId.isEmpty()) return
         if (!hasListeners(event)) return
         notifyListeners(event, JSObject().put("taskId", taskId))
@@ -650,7 +661,10 @@ class IkoroAlarmPlugin : Plugin() {
          * that is mid-teardown must all be silent no-ops rather than a crash inside a ringing
          * alarm.
          */
-        fun notifyAlarmEvent(taskId: String, event: String) {
+        fun notifyAlarmEvent(
+            taskId: String,
+            event: String,
+        ) {
             val plugin = liveInstance?.get() ?: return
             try {
                 plugin.emitAlarmEvent(taskId, event)

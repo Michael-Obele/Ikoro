@@ -15,11 +15,11 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.os.VibrationEffect
-import androidx.core.app.ServiceCompat
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import com.michaelobele.ikoro.R
 
 /**
@@ -35,7 +35,6 @@ import com.michaelobele.ikoro.R
  * screen are. The notification is the price of staying alive.
  */
 class IkoroAlarmService : Service() {
-
     private var player: MediaPlayer? = null
     private var vibrator: Vibrator? = null
 
@@ -49,7 +48,11 @@ class IkoroAlarmService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    override fun onStartCommand(
+        intent: Intent?,
+        flags: Int,
+        startId: Int,
+    ): Int {
         if (intent == null) {
             // A START_STICKY restart delivers a null intent: the process was killed
             // and the alarm that caused it is gone, so there is no title to show and
@@ -71,6 +74,7 @@ class IkoroAlarmService : Service() {
                 stopRinging()
                 return START_NOT_STICKY
             }
+
             ACTION_SNOOZE -> {
                 // Re-arm BEFORE stopping the ring, so a failure to re-arm still
                 // leaves the user with silence rather than a ringing phone they
@@ -94,7 +98,12 @@ class IkoroAlarmService : Service() {
         super.onDestroy()
     }
 
-    private fun startRinging(id: Int, taskId: String, title: String, description: String) {
+    private fun startRinging(
+        id: Int,
+        taskId: String,
+        title: String,
+        description: String,
+    ) {
         // A second alarm arriving while one is already ringing must not stack a
         // second ringtone on top of the first -- two players at once is louder,
         // and neither of them is independently stoppable.
@@ -102,63 +111,64 @@ class IkoroAlarmService : Service() {
         ensureChannel()
 
         val alarmIntent =
-                Intent(this, IkoroAlarmActivity::class.java).apply {
-                    putExtra(IkoroAlarms.EXTRA_ID, id)
-                    putExtra(IkoroAlarms.EXTRA_TASK_ID, taskId)
-                    putExtra(IkoroAlarms.EXTRA_TITLE, title)
-                    if (description.isNotEmpty()) {
-                        putExtra(IkoroAlarms.EXTRA_DESCRIPTION, description)
-                    }
-                    flags =
-                            Intent.FLAG_ACTIVITY_NEW_TASK or
-                                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                                    Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
+            Intent(this, IkoroAlarmActivity::class.java).apply {
+                putExtra(IkoroAlarms.EXTRA_ID, id)
+                putExtra(IkoroAlarms.EXTRA_TASK_ID, taskId)
+                putExtra(IkoroAlarms.EXTRA_TITLE, title)
+                if (description.isNotEmpty()) {
+                    putExtra(IkoroAlarms.EXTRA_DESCRIPTION, description)
                 }
+                flags =
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
+            }
 
         val fullScreen =
-                PendingIntent.getActivity(
-                        this,
-                        id,
-                        alarmIntent,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
+            PendingIntent.getActivity(
+                this,
+                id,
+                alarmIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
 
         // The notes ride along under the title: at 6am "Call the dentist" is not
         // enough context on its own.
         val body = if (description.isBlank()) title else "$title\n$description"
 
         val notification =
-                NotificationCompat.Builder(this, CHANNEL_ID)
-                        // A DEDICATED monochrome glyph, not the launcher icon. The platform
-                        // draws a small icon as a SILHOUETTE: it keeps only the alpha channel
-                        // and repaints the shape. The coloured adaptive foreground
-                        // (ic_launcher_foreground) is opaque everywhere, so it rendered as a
-                        // featureless white blob in the status bar. ic_stat_alarm.xml carries
-                        // the glyph in its alpha, which is what the platform wants here.
-                        .setSmallIcon(R.drawable.ic_stat_alarm)
-                        .setContentTitle(getString(R.string.app_name))
-                        .setContentText(body)
-                        .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-                        // CATEGORY_ALARM is what tells the system, and any smartwatch or car
-                        // head unit in the loop, that this is an alarm and not a chat ping.
-                        .setCategory(NotificationCompat.CATEGORY_ALARM)
-                        .setPriority(NotificationCompat.PRIORITY_MAX)
-                        .setOngoing(true)
-                        .setAutoCancel(false)
-                        // Silent: the channel is silent and we own the sound, so the system
-                        // must not add a second copy of it.
-                        //
-                        // NOT `.setSilent(true)`. A silent notification is not an
-                        // ALERTING one, and Android never launches a full-screen intent
-                        // for a non-alerting notification — that single call was why the
-                        // ringing screen never appeared and the phone simply sat black
-                        // while it rang. The channel already carries no sound and no
-                        // vibration, so removing it adds none.
-                        .setContentIntent(fullScreen)
-                        // THE line that makes this an alarm rather than a banner. Without it the
-                        // reminder waits in the shade until the user happens to look.
-                        .setFullScreenIntent(fullScreen, true)
-                        .build()
+            NotificationCompat
+                .Builder(this, CHANNEL_ID)
+                // A DEDICATED monochrome glyph, not the launcher icon. The platform
+                // draws a small icon as a SILHOUETTE: it keeps only the alpha channel
+                // and repaints the shape. The coloured adaptive foreground
+                // (ic_launcher_foreground) is opaque everywhere, so it rendered as a
+                // featureless white blob in the status bar. ic_stat_alarm.xml carries
+                // the glyph in its alpha, which is what the platform wants here.
+                .setSmallIcon(R.drawable.ic_stat_alarm)
+                .setContentTitle(getString(R.string.app_name))
+                .setContentText(body)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                // CATEGORY_ALARM is what tells the system, and any smartwatch or car
+                // head unit in the loop, that this is an alarm and not a chat ping.
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setOngoing(true)
+                .setAutoCancel(false)
+                // Silent: the channel is silent and we own the sound, so the system
+                // must not add a second copy of it.
+                //
+                // NOT `.setSilent(true)`. A silent notification is not an
+                // ALERTING one, and Android never launches a full-screen intent
+                // for a non-alerting notification — that single call was why the
+                // ringing screen never appeared and the phone simply sat black
+                // while it rang. The channel already carries no sound and no
+                // vibration, so removing it adds none.
+                .setContentIntent(fullScreen)
+                // THE line that makes this an alarm rather than a banner. Without it the
+                // reminder waits in the shade until the user happens to look.
+                .setFullScreenIntent(fullScreen, true)
+                .build()
 
         // The TWO-argument form, deliberately. Per the Android 14 foreground
         // service types docs, "if the foreground service type is not specified in
@@ -179,12 +189,12 @@ class IkoroAlarmService : Service() {
         // USAGE_ALARM". Naming `mediaPlayback` here is what makes the alarm
         // audible from a locked screen.
         val types =
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SYSTEM_EXEMPTED or
-                            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-                } else {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SYSTEM_EXEMPTED or
                     ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-                }
+            } else {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+            }
 
         ServiceCompat.startForeground(this, id, notification, types)
 
@@ -241,13 +251,14 @@ class IkoroAlarmService : Service() {
      */
     private fun startPlayer() {
         val fallback =
-                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                        ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
 
-        val candidates = buildList {
-            ringtone?.let { add(Uri.parse(it)) }
-            fallback?.let { add(it) }
-        }
+        val candidates =
+            buildList {
+                ringtone?.let { add(Uri.parse(it)) }
+                fallback?.let { add(it) }
+            }
 
         if (candidates.isEmpty()) {
             Log.w(TAG, "no alarm or ringtone sound configured; ringing silently")
@@ -260,10 +271,11 @@ class IkoroAlarmService : Service() {
             val created = MediaPlayer()
             try {
                 created.setAudioAttributes(
-                        AudioAttributes.Builder()
-                                .setUsage(AudioAttributes.USAGE_ALARM)
-                                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                                .build()
+                    AudioAttributes
+                        .Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build(),
                 )
                 created.setDataSource(this, uri)
                 created.isLooping = true
@@ -277,9 +289,9 @@ class IkoroAlarmService : Service() {
             } catch (error: Exception) {
                 val which = if (index == 0 && candidates.size > 1) "the chosen" else "the default"
                 Log.w(
-                        TAG,
-                        "could not play $which alarm ringtone; ${if (index == 0) "falling back" else "the alarm still shows"}",
-                        error
+                    TAG,
+                    "could not play $which alarm ringtone; ${if (index == 0) "falling back" else "the alarm still shows"}",
+                    error,
                 )
                 // Release the half-configured player rather than leaking it: it was
                 // never assigned to the field, so nothing else can clean it up.
@@ -297,14 +309,14 @@ class IkoroAlarmService : Service() {
     private fun startVibration() {
         try {
             val hardware: Vibrator =
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        val manager =
-                                getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as
-                                        VibratorManager
-                        manager.defaultVibrator
-                    } else {
-                        getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-                    }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    val manager =
+                        getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as
+                            VibratorManager
+                    manager.defaultVibrator
+                } else {
+                    getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                }
             vibrator = hardware
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

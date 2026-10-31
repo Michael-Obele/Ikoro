@@ -18,27 +18,26 @@ import org.json.JSONObject
  * few hundred bytes, and nothing here is on a hot path.
  */
 internal data class StoredAlarm(
-        val id: Int,
-        val taskId: String,
-        val title: String,
-        val triggerAtMillis: Long,
-        /**
-         * The sound this alarm should ring with, as a `content://` uri the user picked in the
-         * system ringtone picker, or null for "the device default". Read back with `optString` and
-         * mapped to null when absent, so blobs written before ringtones existed still parse.
-         */
-        val ringtone: String? = null,
-        /**
-         * The task's notes, shown on the ringing screen so the user can tell WHAT
-         * this is without unlocking and opening the app. Null when the task has no
-         * notes; parsed with `optString` so blobs written before it existed still
-         * load.
-         */
-        val description: String? = null
+    val id: Int,
+    val taskId: String,
+    val title: String,
+    val triggerAtMillis: Long,
+    /**
+     * The sound this alarm should ring with, as a `content://` uri the user picked in the
+     * system ringtone picker, or null for "the device default". Read back with `optString` and
+     * mapped to null when absent, so blobs written before ringtones existed still parse.
+     */
+    val ringtone: String? = null,
+    /**
+     * The task's notes, shown on the ringing screen so the user can tell WHAT
+     * this is without unlocking and opening the app. Null when the task has no
+     * notes; parsed with `optString` so blobs written before it existed still
+     * load.
+     */
+    val description: String? = null,
 )
 
 internal object AlarmStore {
-
     private const val TAG = "IkoroAlarmStore"
 
     private const val PREFS_NAME = "ikoro.alarms"
@@ -75,8 +74,7 @@ internal object AlarmStore {
      * Always the application context: a store must never be the thing that keeps an Activity alive,
      * and the boot receiver has no Activity to hand it anyway.
      */
-    private fun prefs(context: Context) =
-            context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private fun prefs(context: Context) = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     /**
      * Every alarm we believe is armed, oldest write first.
@@ -100,16 +98,16 @@ internal object AlarmStore {
         val recovered = backup?.let { parse(it) }
         if (recovered != null) {
             Log.w(
-                    TAG,
-                    "the armed-alarm blob is corrupt; recovered ${recovered.size} alarm(s) from the backup copy"
+                TAG,
+                "the armed-alarm blob is corrupt; recovered ${recovered.size} alarm(s) from the backup copy",
             )
             return recovered
         }
 
         Log.e(
-                TAG,
-                "the armed-alarm blob is corrupt and no usable backup exists; " +
-                        "reporting an empty store rather than throwing"
+            TAG,
+            "the armed-alarm blob is corrupt and no usable backup exists; " +
+                "reporting an empty store rather than throwing",
         )
         return emptyList()
     }
@@ -134,12 +132,18 @@ internal object AlarmStore {
      * section. Cost is a few-hundred-byte string under a lock on a non-hot path.
      */
     @Synchronized
-    fun put(context: Context, alarm: StoredAlarm) {
+    fun put(
+        context: Context,
+        alarm: StoredAlarm,
+    ) {
         write(context, all(context).filterNot { it.id == alarm.id } + alarm)
     }
 
     @Synchronized
-    fun remove(context: Context, id: Int) {
+    fun remove(
+        context: Context,
+        id: Int,
+    ) {
         val current = all(context)
         val remaining = current.filterNot { it.id == id }
         // Nothing matched, so nothing changed -- skip the disk write.
@@ -157,20 +161,26 @@ internal object AlarmStore {
      * reads back as the default rather than arming something nobody chose.
      */
     fun snoozeMinutes(context: Context): Int =
-            prefs(context).getInt(KEY_SNOOZE_MINUTES, DEFAULT_SNOOZE_MINUTES).takeIf {
-                it in SNOOZE_CHOICES
-            }
-                    ?: DEFAULT_SNOOZE_MINUTES
+        prefs(context).getInt(KEY_SNOOZE_MINUTES, DEFAULT_SNOOZE_MINUTES).takeIf {
+            it in SNOOZE_CHOICES
+        }
+            ?: DEFAULT_SNOOZE_MINUTES
 
     /** Store [minutes] if it is one of the offered choices; returns what was ACTUALLY stored. */
-    fun setSnoozeMinutes(context: Context, minutes: Int): Int {
+    fun setSnoozeMinutes(
+        context: Context,
+        minutes: Int,
+    ): Int {
         val stored = if (minutes in SNOOZE_CHOICES) minutes else DEFAULT_SNOOZE_MINUTES
         prefs(context).edit().putInt(KEY_SNOOZE_MINUTES, stored).apply()
         return stored
     }
 
     @Synchronized
-    private fun write(context: Context, alarms: List<StoredAlarm>) {
+    private fun write(
+        context: Context,
+        alarms: List<StoredAlarm>,
+    ) {
         val stored = prefs(context)
         val editor = stored.edit()
 
@@ -199,8 +209,8 @@ internal object AlarmStore {
      * A row with no taskId cannot be rung and cannot be traced back to anything the user
      * recognises, so it is not an alarm -- skipped, not fatal.
      */
-    private fun parse(raw: String): List<StoredAlarm>? {
-        return try {
+    private fun parse(raw: String): List<StoredAlarm>? =
+        try {
             val array = JSONArray(raw)
             val entries = mutableListOf<StoredAlarm>()
             for (index in 0 until array.length()) {
@@ -208,14 +218,14 @@ internal object AlarmStore {
                 val taskId = entry.optString(KEY_TASK_ID, "")
                 if (taskId.isEmpty()) continue
                 entries.add(
-                        StoredAlarm(
-                                id = entry.optInt(KEY_ID, 0),
-                                taskId = taskId,
-                                title = entry.optString(KEY_TITLE, ""),
-                                triggerAtMillis = entry.optLong(KEY_TRIGGER, 0L),
-                                ringtone = entry.optString(KEY_RINGTONE, "").ifEmpty { null },
-                                description = entry.optString(KEY_DESCRIPTION, "").ifEmpty { null }
-                        )
+                    StoredAlarm(
+                        id = entry.optInt(KEY_ID, 0),
+                        taskId = taskId,
+                        title = entry.optString(KEY_TITLE, ""),
+                        triggerAtMillis = entry.optLong(KEY_TRIGGER, 0L),
+                        ringtone = entry.optString(KEY_RINGTONE, "").ifEmpty { null },
+                        description = entry.optString(KEY_DESCRIPTION, "").ifEmpty { null },
+                    ),
                 )
             }
             entries
@@ -223,22 +233,21 @@ internal object AlarmStore {
             Log.w(TAG, "could not read the armed-alarm blob", error)
             null
         }
-    }
 
     private fun serialize(alarms: List<StoredAlarm>): String {
         val array = JSONArray()
         for (alarm in alarms) {
             array.put(
-                    JSONObject().apply {
-                        put(KEY_ID, alarm.id)
-                        put(KEY_TASK_ID, alarm.taskId)
-                        put(KEY_TITLE, alarm.title)
-                        put(KEY_TRIGGER, alarm.triggerAtMillis)
-                        // Omitted entirely when null: an older app reading this blob
-                        // still parses it, and "no key" is the same fact as "null".
-                        alarm.ringtone?.let { put(KEY_RINGTONE, it) }
-                        alarm.description?.let { put(KEY_DESCRIPTION, it) }
-                    }
+                JSONObject().apply {
+                    put(KEY_ID, alarm.id)
+                    put(KEY_TASK_ID, alarm.taskId)
+                    put(KEY_TITLE, alarm.title)
+                    put(KEY_TRIGGER, alarm.triggerAtMillis)
+                    // Omitted entirely when null: an older app reading this blob
+                    // still parses it, and "no key" is the same fact as "null".
+                    alarm.ringtone?.let { put(KEY_RINGTONE, it) }
+                    alarm.description?.let { put(KEY_DESCRIPTION, it) }
+                },
             )
         }
         return array.toString()

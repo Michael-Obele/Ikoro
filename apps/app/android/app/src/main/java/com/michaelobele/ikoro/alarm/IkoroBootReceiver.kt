@@ -17,8 +17,10 @@ import android.util.Log
  * system delivers these events as broadcasts, and the work is small.
  */
 class IkoroBootReceiver : BroadcastReceiver() {
-
-    override fun onReceive(context: Context, intent: Intent) {
+    override fun onReceive(
+        context: Context,
+        intent: Intent,
+    ) {
         when (intent.action) {
             // BOOT_COMPLETED, not QUICKBOOT_POWERON: the latter is a
             // manufacturer-specific extra that does not exist on AOSP.

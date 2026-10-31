@@ -20,7 +20,6 @@ import com.michaelobele.ikoro.MainActivity
  * product rests on.
  */
 internal object IkoroAlarms {
-
     private const val TAG = "IkoroAlarms"
 
     const val EXTRA_ID = "ikoro.id"
@@ -57,13 +56,13 @@ internal object IkoroAlarms {
      * telling the user their promise was quietly broken.
      */
     fun schedule(
-            context: Context,
-            id: Int,
-            taskId: String,
-            title: String,
-            triggerAtMillis: Long,
-            ringtone: String? = null,
-            description: String? = null
+        context: Context,
+        id: Int,
+        taskId: String,
+        title: String,
+        triggerAtMillis: Long,
+        ringtone: String? = null,
+        description: String? = null,
     ): Boolean {
         if (!canScheduleExact(context)) return false
         val alarm = StoredAlarm(id, taskId, title, triggerAtMillis, ringtone, description)
@@ -79,14 +78,17 @@ internal object IkoroAlarms {
      * uses FLAG_NO_CREATE and is null-checked, because cancelling a PendingIntent that does not
      * exist is a no-op that some platforms treat as a NullPointerException.
      */
-    fun cancel(context: Context, id: Int) {
+    fun cancel(
+        context: Context,
+        id: Int,
+    ) {
         val existing =
-                operation(
-                        context,
-                        id,
-                        null,
-                        PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
-                )
+            operation(
+                context,
+                id,
+                null,
+                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
+            )
         if (existing != null) alarmManager(context).cancel(existing)
         AlarmStore.remove(context, id)
     }
@@ -123,13 +125,13 @@ internal object IkoroAlarms {
                 continue
             }
             schedule(
-                    context,
-                    alarm.id,
-                    alarm.taskId,
-                    alarm.title,
-                    alarm.triggerAtMillis,
-                    alarm.ringtone,
-                    alarm.description
+                context,
+                alarm.id,
+                alarm.taskId,
+                alarm.title,
+                alarm.triggerAtMillis,
+                alarm.ringtone,
+                alarm.description,
             )
         }
     }
@@ -141,19 +143,25 @@ internal object IkoroAlarms {
      * old one in both AlarmManager and the store and a snoozed task can never end up with two
      * pending alarms.
      */
-    fun snooze(context: Context, id: Int, taskId: String, title: String, ringtone: String? = null) {
+    fun snooze(
+        context: Context,
+        id: Int,
+        taskId: String,
+        title: String,
+        ringtone: String? = null,
+    ) {
         schedule(
-                context,
-                id,
-                taskId,
-                title,
-                System.currentTimeMillis() + snoozeMillis(context),
-                ringtone
+            context,
+            id,
+            taskId,
+            title,
+            System.currentTimeMillis() + snoozeMillis(context),
+            ringtone,
         )
     }
 
     private fun alarmManager(context: Context): AlarmManager =
-            context.applicationContext.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        context.applicationContext.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
     /**
      * Arm [alarm] as a user-visible clock alarm.
@@ -169,27 +177,30 @@ internal object IkoroAlarms {
      * MainActivity rather than the ringing screen because by then the alarm is finished and the
      * user wants their list.
      */
-    private fun arm(context: Context, alarm: StoredAlarm): Boolean {
+    private fun arm(
+        context: Context,
+        alarm: StoredAlarm,
+    ): Boolean {
         val manager = alarmManager(context)
 
         val operation =
-                operation(
-                        context,
-                        alarm.id,
-                        alarm,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-                        ?: return false
+            operation(
+                context,
+                alarm.id,
+                alarm,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+                ?: return false
 
         val show =
-                PendingIntent.getActivity(
-                        context.applicationContext,
-                        alarm.id,
-                        Intent(context, MainActivity::class.java).apply {
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                        },
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
+            PendingIntent.getActivity(
+                context.applicationContext,
+                alarm.id,
+                Intent(context, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
 
         // AlarmClockInfo(triggerTime, showIntent) -- trigger time FIRST. The
         // arguments are both "a time" and "a PendingIntent" shaped enough to be
@@ -197,8 +208,8 @@ internal object IkoroAlarms {
         // the intent in the wrong slot.
         return try {
             manager.setAlarmClock(
-                    AlarmManager.AlarmClockInfo(alarm.triggerAtMillis, show),
-                    operation
+                AlarmManager.AlarmClockInfo(alarm.triggerAtMillis, show),
+                operation,
             )
             true
         } catch (error: Exception) {
@@ -222,10 +233,10 @@ internal object IkoroAlarms {
      * still matches the PendingIntent that was armed.
      */
     private fun operation(
-            context: Context,
-            id: Int,
-            alarm: StoredAlarm?,
-            flags: Int
+        context: Context,
+        id: Int,
+        alarm: StoredAlarm?,
+        flags: Int,
     ): PendingIntent? {
         val intent = Intent(context, IkoroAlarmReceiver::class.java)
         if (alarm != null) {

@@ -30,7 +30,6 @@ import com.michaelobele.ikoro.R
  * activity at.
  */
 class IkoroAlarmActivity : AppCompatActivity() {
-
     private var id = -1
     private var taskId = ""
     private var title = ""
@@ -102,7 +101,7 @@ class IkoroAlarmActivity : AppCompatActivity() {
         // A ringing alarm with no title would be a noise the user cannot place, so
         // fall back to the app name rather than showing an empty screen.
         findViewById<TextView>(R.id.alarm_title).text =
-                title.ifEmpty { getString(R.string.app_name) }
+            title.ifEmpty { getString(R.string.app_name) }
 
         // The notes, when the task has any. Hidden rather than blank so a task
         // without notes does not leave a gap the user reads as a missing field.
@@ -115,7 +114,7 @@ class IkoroAlarmActivity : AppCompatActivity() {
         // so a settings change made while this screen is up still cannot desync the
         // label from what the service will do.
         findViewById<Button>(R.id.alarm_snooze).text =
-                getString(R.string.alarm_snooze, AlarmStore.snoozeMinutes(this))
+            getString(R.string.alarm_snooze, AlarmStore.snoozeMinutes(this))
 
         // Best-effort: a no-op when no bridge or listener is attached. Emitted per
         // bind, so a second alarm is reported as ringing too.
@@ -137,8 +136,8 @@ class IkoroAlarmActivity : AppCompatActivity() {
             setTurnScreenOn(true)
         } else {
             window.addFlags(
-                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON,
             )
         }
         // Keep the display on while the user decides: an alarm on a screen that
@@ -174,12 +173,12 @@ class IkoroAlarmActivity : AppCompatActivity() {
      */
     private fun sendToService(action: String) {
         val request =
-                Intent(this, IkoroAlarmService::class.java).apply {
-                    this.action = action
-                    putExtra(IkoroAlarms.EXTRA_ID, id)
-                    putExtra(IkoroAlarms.EXTRA_TASK_ID, taskId)
-                    putExtra(IkoroAlarms.EXTRA_TITLE, title)
-                }
+            Intent(this, IkoroAlarmService::class.java).apply {
+                this.action = action
+                putExtra(IkoroAlarms.EXTRA_ID, id)
+                putExtra(IkoroAlarms.EXTRA_TASK_ID, taskId)
+                putExtra(IkoroAlarms.EXTRA_TITLE, title)
+            }
         try {
             startService(request)
         } catch (error: Exception) {

@@ -19,8 +19,10 @@ import androidx.core.content.ContextCompat
  * hand-off.
  */
 class IkoroAlarmReceiver : BroadcastReceiver() {
-
-    override fun onReceive(context: Context, intent: Intent) {
+    override fun onReceive(
+        context: Context,
+        intent: Intent,
+    ) {
         val taskId = intent.getStringExtra(IkoroAlarms.EXTRA_TASK_ID)
         if (taskId.isNullOrEmpty()) {
             // Without a task id there is nothing to name on the ringing screen and
@@ -39,24 +41,24 @@ class IkoroAlarmReceiver : BroadcastReceiver() {
         AlarmStore.remove(context, id)
 
         val ring =
-                Intent(context, IkoroAlarmService::class.java).apply {
-                    putExtra(IkoroAlarms.EXTRA_ID, id)
-                    putExtra(IkoroAlarms.EXTRA_TASK_ID, taskId)
-                    putExtra(IkoroAlarms.EXTRA_TITLE, title)
-                    putExtra(
-                            IkoroAlarms.EXTRA_TRIGGER,
-                            intent.getLongExtra(IkoroAlarms.EXTRA_TRIGGER, 0L)
-                    )
-                    intent.getStringExtra(IkoroAlarms.EXTRA_RINGTONE)?.let {
-                        putExtra(IkoroAlarms.EXTRA_RINGTONE, it)
-                    }
-                    // Forwarded like every other extra. Without this hop the
-                    // description dies here: the ringing screen reads it off the
-                    // service's intent, so a missing copy shows the title alone.
-                    intent.getStringExtra(IkoroAlarms.EXTRA_DESCRIPTION)?.let {
-                        putExtra(IkoroAlarms.EXTRA_DESCRIPTION, it)
-                    }
+            Intent(context, IkoroAlarmService::class.java).apply {
+                putExtra(IkoroAlarms.EXTRA_ID, id)
+                putExtra(IkoroAlarms.EXTRA_TASK_ID, taskId)
+                putExtra(IkoroAlarms.EXTRA_TITLE, title)
+                putExtra(
+                    IkoroAlarms.EXTRA_TRIGGER,
+                    intent.getLongExtra(IkoroAlarms.EXTRA_TRIGGER, 0L),
+                )
+                intent.getStringExtra(IkoroAlarms.EXTRA_RINGTONE)?.let {
+                    putExtra(IkoroAlarms.EXTRA_RINGTONE, it)
                 }
+                // Forwarded like every other extra. Without this hop the
+                // description dies here: the ringing screen reads it off the
+                // service's intent, so a missing copy shows the title alone.
+                intent.getStringExtra(IkoroAlarms.EXTRA_DESCRIPTION)?.let {
+                    putExtra(IkoroAlarms.EXTRA_DESCRIPTION, it)
+                }
+            }
 
         try {
             ContextCompat.startForegroundService(context, ring)
