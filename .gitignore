@@ -75,3 +75,4 @@ Thumbs.db
 *.jks
 *.keystore.b64
 .act/
+.whole-product/
