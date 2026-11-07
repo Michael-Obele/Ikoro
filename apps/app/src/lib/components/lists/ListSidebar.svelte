@@ -32,9 +32,12 @@
 	const path = $derived(page.url.pathname);
 
 	// Pulled out of VIEWS so the drawer can render it below the lists.
+	const CALENDAR = { href: '/calendar', label: 'Calendar', icon: CalendarDays } as const;
+
 	const VIEWS = [
 		{ href: '/today', label: 'Today', icon: CalendarClock },
 		{ href: '/upcoming', label: 'Upcoming', icon: CalendarDays },
+		CALENDAR,
 		{ href: '/done', label: 'Done', icon: CheckCheck }
 	] as const;
 
@@ -159,9 +162,10 @@
 
 	{@render listsSection()}
 
-	<!-- Settings has no bottom-bar slot, so the drawer must carry it. -->
+	<!-- Settings and Calendar have no bottom-bar slot, so the drawer carries them. -->
 	{#if variant === 'drawer'}
 		<ul class="mt-5 grid gap-0.5">
+			{@render navRow(CALENDAR)}
 			{@render navRow(SETTINGS)}
 		</ul>
 	{/if}
