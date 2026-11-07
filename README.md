@@ -13,7 +13,7 @@
 Local-first task and reminder app for **Android (Capacitor)** and **desktop (Tauri)**, in one **Bun-workspaces monorepo**, with a landing site and a self-hosted sync server.
 
 <p align="center">
-	<a href="#testing"><img src="https://img.shields.io/badge/tests-424%20passing-brightgreen" alt="424 tests passing"></a>
+    <a href="#testing"><img src="https://img.shields.io/badge/tests-1154%20passing-brightgreen" alt="1154 tests passing"></a>
 	<a href="#build-the-android-app"><img src="https://img.shields.io/badge/platform-Android%20%7C%20Linux-blue" alt="Platforms: Android and Linux"></a>
 	<a href="https://bun.sh"><img src="https://img.shields.io/badge/bun-1.4.0-black" alt="Built with Bun 1.4.0"></a>
 	<a href="https://svelte.dev"><img src="https://img.shields.io/badge/SvelteKit-3-ff3e00" alt="SvelteKit 3"></a>
@@ -143,15 +143,15 @@ bun run test         # every workspace
 cd apps/app && bun run test:watch   # while iterating on one file
 ```
 
-Current state, measured 2026-10-04:
+Current state, measured 2026-11-07:
 
 | Workspace | Files | Tests |
 | --- | --- | --- |
-| `apps/app` | 14 | 265 |
+| `apps/app` | 25 | 959 |
 | `apps/server` | 9 | 128 |
 | `@ikoro/sync` | 1 | 17 |
-| `apps/landing` | 1 | 14 |
-| **Total** | **25** | **424** |
+| `apps/landing` | 4 | 50 |
+| **Total** | **39** | **1154** |
 
 A green run that executed nothing is worse than a red one. Check that the test count is not zero, and that the files you expected actually ran.
 
@@ -168,7 +168,8 @@ What that does **not** mean, stated plainly:
 - Rows for screen-off, battery saver, reboot and tap-through have not been run.
 - The Google Tasks parity walkthrough has not happened.
 - Nobody has looked at both themes by eye.
-- `v0.1.0` is deliberately **not tagged**, because tagging a version whose headline feature is only partly verified makes the tag itself the claim.
+- Releases are cut by release-please (latest: `v0.3.9`), but `v1` still waits on the whole
+  QA matrix passing, not on the code compiling.
 
 `v1` ships when the whole QA matrix passes, not when the code compiles.
 

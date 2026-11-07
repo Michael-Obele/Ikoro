@@ -55,24 +55,27 @@ before. Checked 2026-10-03 against `git log`:
 | Milestone | State |
 | --- | --- |
 | M0–M5, M7 | built and committed |
-| M9 (landing + `packages/ui`) | built and committed — `b011f81` |
-| **M6 (Tauri desktop)** | **in flight, uncommitted.** `apps/app/src-tauri/` exists (`alarms.rs`, `lib.rs`, `tauri.conf.json`), plus `src/lib/alarms/desktop-scheduler.ts` and `systemd.ts` implementing D16's per-alarm systemd user timers. |
-| M8 (QA gate + release) | not started — blocked on M6 |
-| M10, M11 | scaffolded only, not built |
+| M6 (Tauri desktop) | built and committed, including D16's per-alarm systemd user timers |
+| M9 (landing) | built and committed — `b011f81`. The `packages/ui` package it mentions was later removed; shadcn components live per app. |
+| M8 (QA gate + release) | **in progress.** `docs/QA.md` records a partial matrix; release-please tags and the android/desktop release workflows exist. |
+| M10, M11 | built — `apps/server`, `packages/sync` and the client sync layer all have tests |
+| M12 | partly built — release pipeline, colour themes and subtasks shipped; backlog views and the UX polish pass outstanding |
 
-**Two deviations from the plan's stated order**, recorded so the next agent does not "correct"
+**Deviations from the plan's stated order**, recorded so the next agent does not "correct"
 them by accident:
 
 - **M9 shipped before M8.** The plan says Phase B must not start before the Phase A QA gate.
   It did. That is a done decision, not an oversight to revert — but M8 is now a larger gate than
   it was written to be, because it must cover work that skipped it.
-- **M6 is the only uncommitted work in the tree.** Do not assume it is finished just because it
-  is present; check `git status` before reasoning about what is done.
 
-> **The M4-S1 device gate has NOT been cleared.** An exact alarm has never been observed firing
-> on a physical device. `apps/app/src/routes/spike/+page.svelte` is **not** a throwaway route —
-> it is the instrument that clears the gate, and it stays until someone runs it on hardware.
-> Do not delete it, and do not report the alarm promise as verified.
+> **The M4-S1 device gate is only PARTLY cleared.** `docs/QA.md` records an exact alarm firing
+> on a real Pixel 10 Pro XL (`+1s` drift, app force-stopped, Doze forced) and the permission
+> banner clearing on resume — rows 3, 5 and 8. That does **not** mean the whole matrix
+> passes: app foreground/background, screen off, battery saver, reboot with a pending alarm,
+> missed-detection and tap-through are still **not run**.
+> `apps/app/src/routes/spike/+page.svelte` is **not** a throwaway route — it is the instrument
+> that clears the gate, and it stays until someone runs it on hardware.
+> Do not delete it, and do not report the whole alarm promise as verified.
 
 ---
 
@@ -286,8 +289,8 @@ or it is not done.
 > wrong `include` glob or a `.gitignore` rule produces "0 tests, exit 0" and looks perfect.
 > Check the count every time.
 
-Current baseline: **`apps/app` 18 test files, 895 tests**; `apps/landing` 1 file, 14 tests. Root
-`bun run test` is green.
+Current baseline: **`apps/app` 25 test files, 959 tests**; `apps/landing` 4 files, 50 tests. Root
+`bun run test` is green at **1154 tests** across 39 files (measured 2026-11-07).
 
 ### WRITING TESTS HERE
 
