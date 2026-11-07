@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.10](https://github.com/Michael-Obele/Ikoro/compare/v0.3.9...v0.3.10) (2026-11-07)
+
+
+### Features
+
+* month calendar view ([0d9afa3](https://github.com/Michael-Obele/Ikoro/commit/0d9afa3fe43f96c7857315d783c5902253674165))
+* recurring tasks advance on completion ([10b22e9](https://github.com/Michael-Obele/Ikoro/commit/10b22e9f006950569cdb6332e108b060fdb76ad4))
+
+
+### Bug Fixes
+
+* **android:** keep bottom actions above the navigation bar ([a4f6bbf](https://github.com/Michael-Obele/Ikoro/commit/a4f6bbf035258c884dc8817ade49882880258e04))
+
 ## [0.3.9](https://github.com/Michael-Obele/Ikoro/compare/v0.3.8...v0.3.9) (2026-10-31)
 
 
