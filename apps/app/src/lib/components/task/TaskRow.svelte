@@ -5,7 +5,7 @@
 	import Checkbox from '$lib/components/ui/checkbox/checkbox.svelte';
 	import BellRing from 'lucide-svelte/icons/bell-ring';
 	import ChevronRight from 'lucide-svelte/icons/chevron-right';
-	import * as repo from '$lib/db/repo';
+	import { completeTask } from '$lib/tasks/complete';
 	import { taskColorValue } from '$lib/task-colors';
 	import type { Task } from '$lib/db/schema';
 	import { formatDue } from '$lib/utils/time';
@@ -45,10 +45,18 @@
 
 	async function toggle() {
 		try {
-			await repo.toggleTask(task.id);
-			blocked = null;
+			const outcome = await completeTask(task);
+			blocked = !outcome
+				? null
+				: outcome.ok
+					? outcome.exact
+						? null
+						: (outcome.warning ?? 'Reminder may be late.')
+					: 'Could not re-arm the reminder — check alarm permissions.';
 		} catch (error) {
 			blocked = error instanceof Error ? error.message : String(error);
+		}
+		if (blocked) {
 			clearTimeout(blockedTimer);
 			blockedTimer = setTimeout(() => (blocked = null), 4000);
 		}

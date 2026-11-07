@@ -22,7 +22,7 @@
 	import TaskGroup from '$lib/components/task/TaskGroup.svelte';
 	import TaskSheet from '$lib/components/task/TaskSheet.svelte';
 	import EmptyState from '$lib/components/shell/EmptyState.svelte';
-	import * as repo from '$lib/db/repo';
+	import { completeTask } from '$lib/tasks/complete';
 	import type { Task } from '$lib/db/schema';
 	import { liveTasks } from '$lib/stores/view';
 	import { formatDayHeading, groupByDay } from '$lib/utils/time';
@@ -95,7 +95,7 @@
 							size="icon-sm"
 							class="pointer-fine:opacity-0 transition-opacity pointer-fine:group-hover:opacity-100 focus-visible:opacity-100"
 							aria-label="Restore {task.title}"
-							onclick={() => repo.toggleTask(task.id)}
+							onclick={() => completeTask(task)}
 						>
 							<RotateCcw class="size-4" />
 						</Button>

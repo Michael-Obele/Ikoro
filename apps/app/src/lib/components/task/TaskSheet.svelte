@@ -12,6 +12,7 @@
 	import PriorityPicker from './PriorityPicker.svelte';
 	import AlarmSheet from './AlarmSheet.svelte';
 	import * as repo from '$lib/db/repo';
+	import { completeTask } from '$lib/tasks/complete';
 	import { TASK_COLOR_IDS, TASK_COLORS, taskColorValue } from '$lib/task-colors';
 	import { liveSubtasksByParent, liveTasks } from '$lib/stores/view';
 	import { getScheduler, armAlarm } from '$lib/alarms/scheduler';
@@ -68,6 +69,21 @@
 	// No draft here: `DuePicker` is controlled by these two, so picker, alarm and row cannot disagree.
 	const dueDate = $derived(liveTask?.dueDate ?? null);
 	const dueTime = $derived(liveTask?.dueTime ?? null);
+	const repeat = $derived(liveTask?.repeat ?? null);
+
+	const REPEAT_OPTIONS = [
+		{ value: null, label: 'Never' },
+		{ value: 'daily', label: 'Daily' },
+		{ value: 'weekdays', label: 'Weekdays' },
+		{ value: 'weekly', label: 'Weekly' },
+		{ value: 'monthly', label: 'Monthly' }
+	] as const;
+
+	/** Autosave, same as `savePriority`. */
+	async function saveRepeat(value: Task['repeat']) {
+		if (!task) return;
+		await repo.updateTask(task.id, { repeat: value });
+	}
 
 	const saveNotes = useDebounce(async (value: string) => {
 		if (!task) return;
@@ -237,8 +253,8 @@
 		addingSubtask = false;
 	}
 
-	async function toggleSubtask(id: string) {
-		await repo.toggleTask(id);
+	async function toggleSubtask(sub: Task) {
+		await completeTask(sub);
 	}
 
 	async function removeSubtask(id: string) {
@@ -302,6 +318,23 @@
 
 				<div class="border-b border-outline-variant py-4">
 					<DuePicker {dueDate} {dueTime} ondatechange={onDateChange} ontimechange={onTimeChange} />
+					<div class="mt-3 grid grid-cols-1 gap-1.5">
+						<Label for="task-repeat">Repeat</Label>
+						<select
+							id="task-repeat"
+							name="repeat"
+							class="h-11 w-full border border-input bg-transparent px-2.5 text-xs outline-none focus-visible:border-ring"
+							value={repeat ?? ''}
+							onchange={(e) =>
+								saveRepeat((e.currentTarget.value || null) as Task['repeat'])}
+						>
+							{#each REPEAT_OPTIONS as opt (opt.label)}
+								<option value={opt.value ?? ''} selected={(repeat ?? '') === (opt.value ?? '')}>
+									{opt.label}
+								</option>
+							{/each}
+						</select>
+					</div>
 				</div>
 
 				<div class="grid grid-cols-1 gap-1.5 border-b border-outline-variant py-4">
@@ -385,7 +418,7 @@
 										<label class="flex size-8 shrink-0 cursor-pointer items-center justify-center">
 											<Checkbox
 												checked={sub.completedAt !== null}
-												onCheckedChange={() => toggleSubtask(sub.id)}
+												onCheckedChange={() => toggleSubtask(sub)}
 												aria-label={sub.completedAt !== null
 													? `Mark "${sub.title}" as not done`
 													: `Mark "${sub.title}" as done`}
