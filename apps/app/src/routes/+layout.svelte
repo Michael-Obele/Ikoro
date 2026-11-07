@@ -4,7 +4,6 @@
 	import { browser, dev } from '$app/env';
 	import { onNavigate } from '$app/navigation';
 	import { App as CapApp } from '@capacitor/app';
-	import { StatusBar } from '@capacitor/status-bar';
 	import { Agentation } from 'sv-agentation';
 	import { PersistedState } from 'runed';
 	import { Toaster } from 'svelte-sonner';
@@ -67,11 +66,9 @@
 
 		/*
 		 * Android 15+ draws under the status bar and `env(safe-area-inset-top)` reports 0
-		 * there, so the platform plugin has to own the layout.
+		 * there, so Capacitor's SystemBars inset handling pads the WebView instead.
 		 */
 		if (detectPlatform() === 'android') {
-			void StatusBar.setOverlaysWebView({ overlay: false });
-
 			// Android only takes over the screen while locked; these events let the app show
 			// its own ringing screen in the foreground.
 			void IkoroAlarm.addListener('alarmRinging', ({ taskId }) => startRinging(taskId));

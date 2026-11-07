@@ -3,7 +3,7 @@
 
 <head>
 	<meta charset="utf-8" />
-		<!--
+	<!--
 			`interactive-widget=resizes-content` is load-bearing on Android.
 
 			The default (`resizes-visual`) lets the keyboard overlay the page: the
@@ -13,11 +13,12 @@
 			unreachable with no way to scroll to it. With `resizes-content` the
 			layout viewport shrinks, the sheet scrolls inside the space that is
 			actually visible, and the keyboard stops hiding controls.
+
+			`viewport-fit=cover` is what makes env(safe-area-inset-*) report the
+			gesture-navigation bar instead of 0; every bottom inset depends on it.
 		-->
-		<meta
-			name="viewport"
-			content="width=device-width, initial-scale=1, interactive-widget=resizes-content"
-		/>
+	<meta name="viewport"
+		content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
 	<meta name="text-scale" content="scale" />
 	<script>
 		/*

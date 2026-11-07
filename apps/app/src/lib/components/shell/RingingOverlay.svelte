@@ -34,7 +34,7 @@
 
 {#if ringingTaskId()}
 	<div
-		class="fixed inset-0 z-55 flex flex-col justify-center gap-6 bg-background px-6 py-10 text-center"
+		class="fixed inset-0 z-55 flex flex-col justify-center gap-6 bg-background px-6 pt-[calc(2.5rem_+_env(safe-area-inset-top))] pb-[calc(2.5rem_+_env(safe-area-inset-bottom))] text-center"
 		role="alertdialog"
 		aria-modal="true"
 		aria-label="Alarm ringing"

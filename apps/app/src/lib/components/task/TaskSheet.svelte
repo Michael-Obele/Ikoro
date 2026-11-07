@@ -272,7 +272,9 @@
 			</Sheet.Header>
 
 			<!-- `min-h-0` makes `overflow-y-auto` mean anything: a flex child defaults to min-height auto. -->
-			<div class="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-6">
+			<div
+				class="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-[calc(1.5rem_+_max(env(safe-area-inset-bottom),3rem))]"
+			>
 				<div class="grid grid-cols-1 gap-1.5 border-b border-outline-variant py-4">
 					<Label for="task-title">Title</Label>
 					<Input

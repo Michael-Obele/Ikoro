@@ -84,3 +84,43 @@ describe('pre-paint theme script', () => {
 		expect(script).toContain('colorScheme');
 	});
 });
+
+/**
+ * Guards the Android safe-area contract: `viewport-fit=cover` is what makes every
+ * `env(safe-area-inset-*)` report a real value, and dropping it — or one of the insets —
+ * silently puts bottom actions under the gesture bar. Zero on desktop, so only this catches it.
+ */
+describe('Android safe areas', () => {
+	const viewportTag = /<meta\s+[^>]*name="viewport"[^>]*>/.exec(appHtml)?.[0] ?? '';
+	const viewport = /content="([^"]*)"/.exec(viewportTag)?.[1] ?? '';
+
+	it('keeps the keyboard option AND opts into the display cutouts', () => {
+		expect(viewport).toContain('interactive-widget=resizes-content');
+		expect(viewport).toContain('viewport-fit=cover');
+	});
+
+	it.each([
+		[
+			'shell/BottomNav.svelte',
+			read('../src/lib/components/shell/BottomNav.svelte'),
+			'pb-[env(safe-area-inset-bottom)]'
+		],
+		[
+			'task/TaskSheet.svelte',
+			read('../src/lib/components/task/TaskSheet.svelte'),
+			'pb-[calc(1.5rem_+_max(env(safe-area-inset-bottom),3rem))]'
+		],
+		[
+			'lists/ListSidebar.svelte',
+			read('../src/lib/components/lists/ListSidebar.svelte'),
+			'pb-[calc(0.75rem_+_max(env(safe-area-inset-bottom),3rem))]'
+		],
+		[
+			'shell/RingingOverlay.svelte',
+			read('../src/lib/components/shell/RingingOverlay.svelte'),
+			'pb-[calc(2.5rem_+_env(safe-area-inset-bottom))]'
+		]
+	])('%s reserves the bottom inset', (_name, source, utility) => {
+		expect(source).toContain(utility);
+	});
+});

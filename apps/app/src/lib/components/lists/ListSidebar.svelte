@@ -136,7 +136,12 @@
 	</ul>
 {/snippet}
 
-<nav class="flex h-full flex-col gap-1 p-3" aria-label="Main">
+<nav
+	class="flex h-full flex-col gap-1 p-3 {variant === 'drawer'
+		? 'pb-[calc(0.75rem_+_max(env(safe-area-inset-bottom),3rem))]'
+		: ''}"
+	aria-label="Main"
+>
 	<!-- Sidebar carries the brand and the views; the drawer drops both — they already sit in the bottom bar. -->
 	{#if variant === 'sidebar'}
 		<a href="/today" class="mb-3 flex items-center gap-2 px-2 text-sm font-semibold tracking-tight">
